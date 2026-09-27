@@ -6,7 +6,13 @@ import { normalizeProject } from "./project-model.js";
 export function repositoryIdentity(value) {
   try {
     const u = new URL(value);
-    if (u.hostname !== "github.com" || u.username || u.password) return "";
+    if (
+      !["http:", "https:"].includes(u.protocol) ||
+      u.hostname !== "github.com" ||
+      u.username ||
+      u.password
+    )
+      return "";
     return githubRepository(
       u.pathname.replace(/^\/|\/$/g, "").replace(/\.git$/i, ""),
     ).toLowerCase();
@@ -162,7 +168,16 @@ export function applyRepository(repo, fields, existing = null) {
     if (
       existing &&
       (!Object.hasOwn(generated, key) ||
-        JSON.stringify(p[key]) !== JSON.stringify(generated[key]))
+        JSON.stringify(
+          key === "technologies"
+            ? normalizeProject({ technologies: p[key] }).technologies
+            : p[key],
+        ) !==
+          JSON.stringify(
+            key === "technologies"
+              ? normalizeProject({ technologies: generated[key] }).technologies
+              : generated[key],
+          ))
     ) {
       preserved.push(key);
       continue;
@@ -207,4 +222,14 @@ export function filterRepositories(
           ? b.updated_at.localeCompare(a.updated_at)
           : a.full_name.localeCompare(b.full_name),
     );
+}
+
+export function repositoryChanges(repo, existing) {
+  const next = applyRepository(repo, importedFields).project;
+  return importedFields.filter(
+    (k) =>
+      Object.hasOwn(existing.metadata.github?.generatedFields || {}, k) &&
+      JSON.stringify(existing.metadata.github.generatedFields[k]) !==
+        JSON.stringify(next[k]),
+  );
 }

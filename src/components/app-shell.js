@@ -195,6 +195,13 @@ export class AppShell extends HTMLElement {
     this.addEventListener("collections-save", (e) =>
       this.saveCollections(e.detail),
     );
+    this.addEventListener("project-pack-export", (e) =>
+      this.download(
+        JSON.stringify(e.detail, null, 2),
+        "projects.showcase.json",
+        "application/json",
+      ),
+    );
     this.addEventListener("collection-export", (e) =>
       this.download(
         JSON.stringify(e.detail, null, 2),

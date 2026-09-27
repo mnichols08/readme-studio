@@ -1761,3 +1761,11 @@ project-studio {
   height: auto;
   max-width: 100%;
 }
+
+.project-entry[hidden] {
+  display: none;
+}
+.project-link-results p,
+.project-guidance li {
+  overflow-wrap: anywhere;
+}

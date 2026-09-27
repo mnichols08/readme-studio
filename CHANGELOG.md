@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3
+
+- Added advisory project Health checks for missing context, links, alt text, roles, repeated names/repositories/technology aliases, large stacks, archived status conflicts, and stale source activity.
+- Added project search, collapse/expand all, bulk reviewed GitHub refresh, copy all, and versioned portable project packs with validation and deterministic collision handling.
+- Added explicit bounded link checks that distinguish unavailable URLs from browser/network restrictions, plus source-change review and last-refreshed dates.
+- Deferred collapsed forms and screenshots, tested 10/25/50-project showcases, and hardened field escaping, ownership preservation, table output, keyboard focus, and offline editing.
+
 ## 0.3.2
 
 - Added compact, detailed, featured, card, two-column, case-study, and featured-first project layouts through pure serializers.
