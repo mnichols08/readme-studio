@@ -13,6 +13,7 @@ import { blockTypes, defaults } from "./builder-form.js";
 import "./markdown-editor.js";
 import "./github-preview.js";
 import "./readme-health.js";
+import "./github-profile-form.js";
 export class AppShell extends HTMLElement {
   connectedCallback() {
     let saved;
@@ -70,6 +71,19 @@ export class AppShell extends HTMLElement {
     this.addEventListener("markdown-change", (e) => this.store.raw(e.detail));
     this.addEventListener("undo", () => this.store.undo());
     this.addEventListener("redo", () => this.store.redo());
+    this.addEventListener("profile-apply", (e) => {
+      if (e.detail.draftId !== this.store.draft.id) {
+        this.notify("The active draft changed. Open GitHub autofill again.");
+        return;
+      }
+      this.store.blocks(e.detail.blocks, e.detail.metadata);
+      this.dialog.close();
+      this.showTab("sections");
+      this.save();
+      this.notify(
+        "GitHub profile applied. Use Undo to restore your previous draft.",
+      );
+    });
     this.addEventListener("commit", (e) => {
       const b = e.detail;
       const blocks = structuredClone(this.store.draft.blocks);
@@ -205,7 +219,7 @@ export class AppShell extends HTMLElement {
       return;
     }
     const blocks = this.store.draft.blocks;
-    this.content.innerHTML = `<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(blockTypes[b.type] || "Section")}</strong><small>${html(b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small></span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p><button class="wide" data-action="split">Split at section headings</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for your GitHub profile</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
+    this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button><div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(blockTypes[b.type] || "Section")}</strong><small>${html(b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small></span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p><button class="wide" data-action="split">Split at section headings</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for your GitHub profile</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
   }
   edit(block) {
     this.tab = "form";
@@ -281,7 +295,7 @@ export class AppShell extends HTMLElement {
   }
   welcome() {
     this.modal(
-      `<div class="eyebrow">WELCOME TO YOUR WORKSPACE</div><h1>A README that feels like you.</h1><p>Start with a little structure. Make every line your own.</p><div class="welcome-options"><button class="primary" data-start="templates">Start from a template <span>→</span></button><button data-start="import">Import GitHub README <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button></div><p class="hint">Your drafts stay in this browser. No sign-in required.</p><button class="text-button" data-start="sample">Explore the sample profile →</button>`,
+      `<div class="eyebrow">WELCOME TO YOUR WORKSPACE</div><h1>A README that feels like you.</h1><p>Start with a little structure. Make every line your own.</p><div class="welcome-options"><button class="primary" data-start="templates">Start from a template <span>→</span></button><button data-action="profile">Autofill from GitHub <span>↗</span></button><button data-start="import">Import GitHub README <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button></div><p class="hint">Your drafts stay in this browser. No sign-in required.</p><button class="text-button" data-start="sample">Explore the sample profile →</button>`,
     );
     this.querySelectorAll("[data-start]").forEach(
       (b) =>
@@ -315,7 +329,7 @@ export class AppShell extends HTMLElement {
   }
   importDialog() {
     this.modal(
-      `<div class="eyebrow">BRING YOUR OWN MARKDOWN</div><h1>Pick up where you left off.</h1><p>Imports open in a new draft and preserve the original Markdown.</p><form id="github-import"><label>GitHub username or owner/repository<input name="repository" placeholder="octocat or owner/repository" required></label><button class="primary">Import GitHub README</button><p class="hint">Public repositories only. No token needed.</p><p class="import-result" role="status"></p></form><div class="divider-label">OR IMPORT A LOCAL FILE</div><label class="file-label">README.md or Studio draft (.json)<input type="file" accept=".md,.markdown,.txt,.json" id="file-import"></label><p class="hint">Remote images in previews contact their hosting services. Relative image paths may need public URLs.</p>`,
+      `<div class="eyebrow">BRING YOUR OWN MARKDOWN</div><h1>Pick up where you left off.</h1><p>Imports open in a new draft and preserve the original Markdown.</p><button class="profile-entry" data-action="profile">Autofill profile details instead ↗</button><form id="github-import"><label>GitHub username or owner/repository<input name="repository" placeholder="octocat or owner/repository" required></label><button class="primary">Import GitHub README</button><p class="hint">Public repositories only. No token needed.</p><p class="import-result" role="status"></p></form><div class="divider-label">OR IMPORT A LOCAL FILE</div><label class="file-label">README.md or Studio draft (.json)<input type="file" accept=".md,.markdown,.txt,.json" id="file-import"></label><p class="hint">Remote images in previews contact their hosting services. Relative image paths may need public URLs.</p>`,
     );
     this.querySelector("#github-import").onsubmit = async (e) => {
       e.preventDefault();
@@ -361,6 +375,11 @@ export class AppShell extends HTMLElement {
         this.notify(error.message);
       }
     };
+  }
+  profileDialog() {
+    this.modal("<github-profile-form></github-profile-form>");
+    this.querySelector("github-profile-form").draft = this.store.draft;
+    this.querySelector("github-profile-form input").focus();
   }
   drafts() {
     this.modal(
@@ -414,6 +433,9 @@ export class AppShell extends HTMLElement {
   }
   action(action) {
     switch (action) {
+      case "profile":
+        this.profileDialog();
+        break;
       case "import":
         this.importDialog();
         break;

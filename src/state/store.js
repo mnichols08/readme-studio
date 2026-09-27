@@ -30,9 +30,10 @@ export class Store extends EventTarget {
     ];
     this.emit("raw");
   }
-  blocks(blocks) {
+  blocks(blocks, metadata = this.draft.metadata) {
     this.checkpoint();
     this.draft.blocks = blocks;
+    this.draft.metadata = metadata;
     this.draft.markdown = serializeBlocks(blocks);
     this.emit("blocks");
   }

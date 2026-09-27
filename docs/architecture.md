@@ -36,6 +36,14 @@ Malformed saved data is not overwritten automatically: the app opens a temporary
 
 GitHub import fetches only the public GitHub README API endpoint, using the raw media type and a timeout. Imports create new drafts. There is no arbitrary HTML fetch/render API, token storage, or authenticated write path.
 
+## GitHub profile autofill
+
+`state/github-profile.js` validates usernames/profile URLs, fetches the public user record and paginated owned repository list, and normalizes a curated set of public data. Requests are limited to GitHub API endpoints, a 30-second timeout, and ten 100-item repository pages. Repository failure returns a usable profile with explicit incomplete-result metadata. Counts of received stars/forks exclude forks; language summaries count primary repository languages. No contribution or private-activity data is fabricated.
+
+`state/profile-autofill.js` is a pure draft transformation. It replaces explicit placeholders, safely escapes external text, fills known sample content, and adds chosen generated sections. Internal block metadata records the last generated Markdown and identity placeholder source/value pairs. Refresh replaces only content that still matches its last generated form; manual changes relinquish ownership. Draft metadata retains detached section kinds to prevent duplicate insertion after raw editing. These records never appear in exported Markdown.
+
+`github-profile-form` loads and previews the transformation without mutating the draft. Request generations discard stale results after input changes or dialog replacement. Applying calls the store with both blocks and metadata in one undo checkpoint. Profile metadata is scoped to the draft and included in JSON backups; no account-wide automatic fetching or background refresh occurs.
+
 ## Performance and future Rust boundary
 
 Editor input is native textarea editing; unrelated component trees do not rerender continuously. Preview and analysis are debounced. Unit coverage includes a Unicode document over 100 KB, with browser workflow coverage separately. Performance depends on markup complexity and device capability; this is not a latency guarantee.

@@ -39,6 +39,19 @@ Drafts and theme/preview settings autosave to this browser’s localStorage. Use
 
 Import accepts a GitHub username (loads `username/username`) or `owner/repository`. It uses GitHub’s public root README endpoint and default branch. GitHub rate limits, missing repositories, and timeouts produce errors. Local `.md`, `.markdown`, `.txt`, and Studio `.json` imports are supported. Imports open new drafts. No token is requested or stored.
 
+## Autofill from GitHub
+
+Choose **Autofill from GitHub** in Sections or on the welcome screen. Enter a username, `@username`, or GitHub profile URL, then review the public profile and select what to apply. “Review resulting Markdown” shows the exact proposed document before applying.
+
+- **Identity:** fills `Your Name`, `https://github.com/your-name` URLs, `{{name}}`, `{{display_name}}`, and `{{username}}` throughout block settings and Custom Markdown. The login is used if there is no display name. Ordinary custom names are preserved.
+- **Bio and links:** uses the public bio, company, location, website, public email, and X/Twitter account when available. Untouched sample introductions and contact URLs are filled; custom text and destinations remain intact.
+- **Stats:** adds a dated, editable snapshot of public repositories, followers, following, public gists, received stars/forks on non-fork repositories, and account creation date. These are static Markdown values, not live counters.
+- **Optional extras:** up to three most-starred eligible public projects, a primary-language summary by repository count, and the GitHub avatar. Forks, archived repositories, and the profile repository are excluded from project suggestions. Languages describe repositories, not proficiency or code-volume percentages.
+
+The flow reads the [public user endpoint](https://docs.github.com/en/rest/users/users#get-a-user) and [public repository list](https://docs.github.com/en/rest/repos/repos#list-repositories-for-a-user). It follows pagination up to 1,000 repositories. Partial results and rate limits are labeled; private activity, contribution totals, and streaks are not inferred. Profile lookup can still succeed if repository loading fails.
+
+Apply is a single undoable change to the current draft, including saved profile metadata. Look up the profile again to refresh untouched generated sections and filled names. Subsequent manual edits are respected. Raw Markdown editing detaches generated sections from automatic refresh; repeating autofill does not append those sections again. All applied content remains ordinary Markdown/HTML after export.
+
 ## Preview and health
 
 The preview supports GFM tables, task lists, highlighted fenced code, details/summary, pictures, and a conservative subset of GitHub-compatible HTML. DOMPurify sanitizes generated preview HTML. Links open in a separate tab with `noopener noreferrer`. Preview width presets are maximum widths, constrained by the available pane: desktop (1012), narrow (760), tablet (640), and mobile (375). The separate preview theme toggle simulates light/dark picture sources.

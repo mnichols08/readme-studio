@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- GitHub profile autofill from a username or profile URL, with a review step and optional fields.
+- Safe name/username placeholder replacement, public bio/contact details, dated public stats, and optional project, language, and avatar suggestions.
+- Conservative refresh of unedited autofill content, undo/redo, persistence, pagination, partial-results handling, and mocked profile API tests.
+
 ## 0.1.0 — 2026-09-27
 
 Initial local-first release.

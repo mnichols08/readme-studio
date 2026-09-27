@@ -1,3 +1,36 @@
+.profile-choice span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 12px;
+}
+.profile-choice input {
+  width: auto;
+  margin: 0;
+}
+.profile-choice small {
+  display: block;
+  margin: 5px 0 0 23px;
+  font-size: 11px;
+}
+.profile-markdown {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+  padding: 14px;
+  background: var(--surface);
+  font:
+    11px/1.6 "IBM Plex Mono",
+    monospace;
+}
+.profile-entry {
+  margin-bottom: 16px;
+  width: 100%;
+  color: var(--accent);
+  background: var(--accent-bg);
+}
 :root {
   font-family: "DM Sans", system-ui, sans-serif;
   color: #242631;
