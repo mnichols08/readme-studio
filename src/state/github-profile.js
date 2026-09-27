@@ -1,3 +1,4 @@
+import { publicRepository } from "../projects/github-project.js";
 import { networkMessage, rateLimitMessage } from "./network-errors.js";
 const count = (value) =>
   Number.isSafeInteger(value) && value >= 0 ? value : null;
@@ -162,6 +163,7 @@ export async function fetchGithubProfile(input, fetcher = fetch, cancellation) {
       complete,
       warning,
       fetchedRepos: unique.length,
+      repositories: unique.map((r) => publicRepository(r)),
       stars: originals.reduce(
         (n, r) => n + (count(r.stargazers_count) || 0),
         0,

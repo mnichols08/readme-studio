@@ -449,6 +449,9 @@ export class AppShell extends HTMLElement {
     this.modal("<project-studio></project-studio>");
     this.dialog.classList.add("import-modal");
     const studio = this.querySelector("project-studio");
+    studio.availableRepositories = structuredClone(
+      this.store.draft.metadata.githubProfile?.repositories || [],
+    );
     studio.collections = structuredClone(this.data.badgeCollections.items);
     try {
       studio.settings = block?.settings || {
