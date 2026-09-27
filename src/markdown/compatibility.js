@@ -94,6 +94,7 @@ export function analyze(markdown) {
       images.push({
         alt: attr(tag, "alt"),
         url: attr(tag, "src"),
+        width: attr(tag, "width"),
         section: segment.section,
       });
       if (Number(attr(tag, "width")) > 900)

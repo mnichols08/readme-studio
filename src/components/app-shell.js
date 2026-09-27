@@ -1,3 +1,4 @@
+import "./widget-hub.js";
 import "./component-library.js";
 import {
   validateComponents,
@@ -94,7 +95,7 @@ export class AppShell extends HTMLElement {
     });
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
@@ -114,7 +115,8 @@ export class AppShell extends HTMLElement {
         this.querySelector("theme-studio")?.isDirty() ||
         this.querySelector("banner-builder")?.isDirty() ||
         this.querySelector("section-style-editor")?.isDirty() ||
-        this.querySelector("component-library")?.isDirty()
+        this.querySelector("component-library")?.isDirty() ||
+        this.querySelector("widget-hub")?.isDirty()
       ) {
         e.preventDefault();
         this.closeDialog();
@@ -545,7 +547,8 @@ export class AppShell extends HTMLElement {
         this.querySelector("theme-studio")?.isDirty() ||
         this.querySelector("banner-builder")?.isDirty() ||
         this.querySelector("section-style-editor")?.isDirty() ||
-        this.querySelector("component-library")?.isDirty()) &&
+        this.querySelector("component-library")?.isDirty() ||
+        this.querySelector("widget-hub")?.isDirty()) &&
       !confirm(
         "Discard unsaved studio edits? Save or export your work to keep it.",
       )
@@ -607,6 +610,7 @@ export class AppShell extends HTMLElement {
         ),
       });
       this.data.componentLibrary = next;
+      this.querySelector("widget-hub")?.accept(next, message);
       this.querySelector("component-library")?.accept(
         next,
         message,
@@ -621,6 +625,13 @@ export class AppShell extends HTMLElement {
       this.notify("Could not save components: " + e.message);
       return false;
     }
+  }
+  openWidgets() {
+    this.componentSnapshot = JSON.stringify(this.store.draft);
+    this.componentCursor = this.editor.input.selectionStart;
+    this.modal("<widget-hub></widget-hub>");
+    this.dialog.classList.add("import-modal");
+    this.querySelector("widget-hub").configure(this.data.componentLibrary);
   }
   openComponents() {
     this.componentSnapshot = JSON.stringify(this.store.draft);
@@ -661,11 +672,15 @@ export class AppShell extends HTMLElement {
         library: usedComponent(this.data.componentLibrary, detail.component.id),
         message: "Component inserted; recent usage saved.",
       });
-      this.querySelector("component-library").dirty = false;
+      if (this.querySelector("component-library"))
+        this.querySelector("component-library").dirty = false;
+      if (this.querySelector("widget-hub"))
+        this.querySelector("widget-hub").dirty = false;
       this.closeDialog();
       this.focusDocument();
     } catch (e) {
       this.querySelector("component-library")?.status(e.message);
+      this.querySelector("widget-hub")?.status(e.message);
     }
   }
   saveVisualLibrary(value, message) {
@@ -1234,6 +1249,7 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (action === "widgets") this.openWidgets();
     if (action === "components") this.openComponents();
     if (action === "visual-presets") this.openVisualPresets();
     if (action === "section-style") this.openSectionStyle();

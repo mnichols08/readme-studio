@@ -1896,3 +1896,22 @@ component-library input,
 component-library select {
   max-width: 100%;
 }
+
+.widget-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 16px;
+}
+.widget-preview {
+  max-height: 420px;
+  overflow: auto;
+}
+.widget-preview img {
+  max-width: 100%;
+}
+widget-hub input,
+widget-hub textarea,
+widget-hub select {
+  max-width: 100%;
+}
