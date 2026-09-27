@@ -232,6 +232,16 @@ export class BuilderForm extends HTMLElement {
           new CustomEvent("open-collections", { bubbles: true }),
         );
     }
+    if (type === "projects") {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = "Open Project Studio";
+      b.onclick = () =>
+        this.dispatchEvent(
+          new CustomEvent("open-project-studio", { bubbles: true }),
+        );
+      this.querySelector("form").prepend(b);
+    }
     this.querySelector("[data-studio]").onclick = () =>
       this.dispatchEvent(
         new CustomEvent("open-badge-studio", { bubbles: true }),

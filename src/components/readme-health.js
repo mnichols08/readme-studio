@@ -75,6 +75,7 @@ export class ReadmeHealth extends HTMLElement {
       "Layout",
       "Structure",
       "Content density",
+      "Projects",
     ]
       .map(
         (c) =>

@@ -99,3 +99,13 @@ The logo catalog derives from data-driven technology records with explicit WebAs
 `contrast.js` and `duplicates.js` are pure advisory analyses. README Health reuses parsed Markdown tokens and performs badge checks in its existing Worker, ignoring fenced code and HTML comments. Duplicate output is bounded to 100 distinct guidance messages. Collection previews cap remote images at twenty and allow three widths; export is never truncated. No new runtime dependency was added.
 
 Badge components use native controls and the app's dialog focus management. Composer clipboard fallback selects its output in place, retaining edits. Collection close prompts protect unsaved changes. Malformed builder settings fail locally; source editing and downloads remain available. Cross-browser tests cover these workflows in Chromium, Firefox and WebKit with mocked image providers.
+
+## Project Showcase Studio (v0.3.x)
+
+`projects/project-model.js` normalizes legacy and version-1 project entries. Legacy blocks retain their existing serializer until the user explicitly saves a studio edit. Custom Markdown remains a raw source block. `project-output.js` provides shared escaped content and URL boundaries; `layouts/` holds pure serializers with ordinary Markdown or GitHub-compatible HTML. Preview sanitization never rewrites exported source.
+
+`github-project.js` fetches only public repository metadata, never README HTML or manifests. Its allowlisted mapping records each generated field value; refresh compares current content with the prior generated value before applying selected changes. The picker reviews all network results before a working-copy mutation, tolerates partial failures, and rejects stale reviews. Studio saves also compare the draft snapshot before writing history. No authentication, proxy, or GitHub writes are involved.
+
+`project-health.js` provides pure advisory analysis, reused by the existing worker and the studio. `project-links.js` is an explicit browser-only HEAD checker with bounded concurrency, timeout, cancellation, and unverified results for network restrictions. `project-pack.js` validates a portable version-1 schema, strips unrelated metadata, and resolves collisions on append. Working copies remain separate until Save showcase; the ordinary draft backup/history paths retain structured project content.
+
+Collapsed editors defer form creation. Preview HTML is prepared in an inert template and screenshot sources for collapsed entries are removed before insertion; this affects only the temporary preview DOM. Layout serializers retain all source URLs. No new runtime dependency was added for project features.
