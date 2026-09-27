@@ -261,7 +261,22 @@ export class BuilderForm extends HTMLElement {
           const j = i + (b.dataset.row === "up" ? -1 : 1);
           [s.items[i], s.items[j]] = [s.items[j], s.items[i]];
         }
+        const next =
+          b.dataset.row === "up"
+            ? i - 1
+            : b.dataset.row === "down"
+              ? i + 1
+              : Math.min(i, s.items.length - 1);
         this.draw();
+        (
+          this.querySelector(
+            `[data-index="${next}"][data-row="${b.dataset.row}"]:not(:disabled)`,
+          ) ||
+          this.querySelectorAll("fieldset")[Math.max(next, 0)]?.querySelector(
+            "input,textarea,select",
+          ) ||
+          this.querySelector("[data-add]")
+        )?.focus();
       }
       if (b.dataset.add) {
         const kind = b.dataset.add;
@@ -281,16 +296,23 @@ export class BuilderForm extends HTMLElement {
                 : { label: "Badge", color: "6558d3", style: "flat" },
           );
         this.draw();
+        (
+          this.querySelectorAll("fieldset")[s.items.length - 1]?.querySelector(
+            "input,textarea,select",
+          ) || this.querySelector("[data-search]")
+        )?.focus();
       }
       if (b.dataset.tech) {
         s.items.push(
           structuredClone(technologies.find((t) => t.id === b.dataset.tech)),
         );
         this.draw();
+        this.querySelector("[data-search]")?.focus();
       }
       if (b.dataset.techRemove !== undefined) {
         s.items.splice(Number(b.dataset.techRemove), 1);
         this.draw();
+        this.querySelector("[data-search]")?.focus();
       }
     };
     this.catalog("");

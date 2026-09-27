@@ -303,19 +303,21 @@ test("large document stays editable and section splitting is lossless", async ({
 test("capture release workspace screenshots", async ({ page }) => {
   await start(page);
   await expect(page.locator("github-preview h1")).toBeVisible();
-  await page.screenshot({
-    path: "docs/screenshots/studio-desktop.png",
-    fullPage: true,
-  });
+  if (test.info().project.name === "chromium")
+    await page.screenshot({
+      path: "docs/screenshots/studio-desktop.png",
+      fullPage: true,
+    });
   await page.setViewportSize({ width: 390, height: 844 });
   await page
     .locator(".mobile-nav")
     .getByRole("button", { name: "Preview", exact: true })
     .click();
-  await page.screenshot({
-    path: "docs/screenshots/studio-mobile.png",
-    fullPage: true,
-  });
+  if (test.info().project.name === "chromium")
+    await page.screenshot({
+      path: "docs/screenshots/studio-mobile.png",
+      fullPage: true,
+    });
 });
 test("raw block controls still work after repeated edits and keyboard reordering", async ({
   page,

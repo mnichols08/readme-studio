@@ -138,7 +138,8 @@ test("GitHub import, exact export, split, re-import merge, undo and source versi
     page.getByLabel("Action for imported section 1", { exact: true }),
   ).toHaveValue("use");
   await page.getByRole("button", { name: "Review merge", exact: true }).click();
-  await page.screenshot({ path: "docs/screenshots/import-merge.png" });
+  if (test.info().project.name === "chromium")
+    await page.screenshot({ path: "docs/screenshots/import-merge.png" });
   await page.getByRole("button", { name: "Apply merge", exact: true }).click();
   const merged = current.replace("Local introduction.", "Remote introduction.");
   await expect(editor(page)).toHaveValue(merged);

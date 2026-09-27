@@ -80,10 +80,11 @@ test("preview does not mutate until applied and undo restores placeholders", asy
   const original = await editor.inputValue();
   await lookup(page);
   await expect(editor).toHaveValue(original);
-  await page.screenshot({
-    path: "docs/screenshots/github-autofill.png",
-    fullPage: true,
-  });
+  if (test.info().project.name === "chromium")
+    await page.screenshot({
+      path: "docs/screenshots/github-autofill.png",
+      fullPage: true,
+    });
   await page.getByRole("button", { name: "Apply to current draft" }).click();
   await expect(editor).toHaveValue(/Mona Octocat/);
   await page.getByRole("button", { name: "Undo", exact: true }).click();

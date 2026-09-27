@@ -1,3 +1,4 @@
+import { safeUrl } from "./url-safety.js";
 export function isRelativeUrl(value = "") {
   return !!value.trim() && !/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(value.trim());
 }
@@ -21,7 +22,7 @@ export function validSourceContext(c) {
   );
 }
 function resolve(value, context, image) {
-  const url = String(value || "").trim();
+  const url = safeUrl(value, { image });
   if (!url || /[\x00-\x1f\x7f\\]/.test(url)) return "";
   if (url.startsWith("#")) return image ? "" : url;
   if (/^(https?:\/\/|\/\/)/i.test(url)) return url;

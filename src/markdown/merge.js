@@ -1,3 +1,4 @@
+import { visitTokens } from "./visit-tokens.js";
 import { marked } from "marked";
 import { detectSections, normalizeHeading } from "./sections.js";
 import { resolveImageUrl, srcsetCandidates } from "./resolve-urls.js";
@@ -16,13 +17,15 @@ export function contentHash(source) {
 }
 export function imageUrls(source, context) {
   const urls = [];
-  marked.walkTokens(marked.lexer(source), (token) => {
+  visitTokens(marked.lexer(source), (token) => {
     if (token.type === "image")
       urls.push(
         resolveImageUrl(token.href, context) || `unresolved:${token.href}`,
       );
     if (token.type === "html")
-      for (const tag of token.raw.matchAll(/<(?:img|source)\b[^>]*>/gi))
+      for (const tag of token.raw
+        .replace(/<!--[\s\S]*?(?:-->|$)/g, "")
+        .matchAll(/<(?:img|source)\b[^>]*>/gi))
         for (const m of tag[0].matchAll(
           /\b(src|srcset)\s*=\s*["']([^"']+)["']/gi,
         ))

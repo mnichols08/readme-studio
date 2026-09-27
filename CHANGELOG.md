@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.3
+
+Foundation Hardening.
+
+- Standardize dialog and action focus, announce selected states, improve contrast, reduced motion, keyboard reordering, and mobile touch targets.
+- Add all-drafts backup/validated restore, deterministic collision handling, original-data recovery downloads, and persistent storage failure notices.
+- Separate preview, Worker Health, and autosave scheduling; remove quadratic token traversal and cap history by count and estimated bytes.
+- Centralize URL validation, restrict untrusted preview classes, expand malicious-markup tests, and preserve exact Markdown exports.
+- Keep editor/export available after preview failures; add runtime recovery actions, clipboard fallback, safe filenames, offline messages, and rate-limit retry times.
+- Harden narrow layouts and long draft names, including WebKit overflow; test Chromium, Firefox, WebKit, 100/250 KB documents, and static subpath hosting.
+- Review the installed dependency tree without unnecessary upgrades; document browser support, recovery, performance, fixtures, and contributor checks.
+
 ## 0.1.2
 
 Import Intelligence.
