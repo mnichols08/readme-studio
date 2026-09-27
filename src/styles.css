@@ -1818,3 +1818,8 @@ project-studio {
 banner-builder textarea {
   max-width: 100%;
 }
+
+.section-style-preview {
+  width: 100%;
+  overflow: auto;
+}
