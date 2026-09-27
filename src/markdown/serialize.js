@@ -1,3 +1,4 @@
+import { serializeShowcase } from "../projects/serialize-project.js";
 import { safeUrl } from "./url-safety.js";
 export { safeUrl } from "./url-safety.js";
 export const html = (value = "") =>
@@ -128,6 +129,7 @@ export function serializeBlock({ type, settings: s }) {
     case "contact":
       return social(s);
     case "projects":
+      if (s.version === 1) return serializeShowcase(s);
       return `## ${text(s.title || "Selected Projects")}\n\n${(s.items || []).map(project).join("\n\n")}`;
     case "widget":
       return widget(s);
