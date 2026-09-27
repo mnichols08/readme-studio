@@ -35,7 +35,7 @@ export class BadgeStudio extends HTMLElement {
       )
       .join(
         "",
-      )}<label>Badge style<select data-badge-field="style">${styles.map((s) => `<option ${s === this.value.style ? "selected" : ""}>${s}</option>`).join("")}</select></label></div><label class="check"><input type="checkbox" data-pair ${this.value.darkColor ? "checked" : ""}> Light / dark badge pair</label><fieldset data-dark ${this.value.darkColor ? "" : "hidden"}><legend>Dark variant (main colors are the light variant)</legend><label>Dark background<input data-badge-field="darkColor" value="${html(this.value.darkColor || "20232A")}"></label><label>Dark logo color<input data-badge-field="darkLogoColor" value="${html(this.value.darkLogoColor || "white")}"></label></fieldset><div class="badge-status" role="status"></div><div class="badge-preview" aria-label="Badge preview"></div><label>Generated Markdown<textarea data-output="markdown" readonly rows="3"></textarea></label><label>Generated HTML<textarea data-output="html" readonly rows="3"></textarea></label><label>Final Shields URL<textarea data-output="url" readonly rows="2"></textarea></label><div class="row-actions"><button data-badge-copy="markdown">Copy Markdown</button><button data-badge-copy="html">Copy HTML</button><button data-duplicate-badge>Duplicate badge</button><button data-reset-badge>Reset</button></div><div class="badge-insertion"></div><button class="primary" data-insert-badge>Add to README</button>`;
+      )}<label>Badge style<select data-badge-field="style">${styles.map((s) => `<option ${s === this.value.style ? "selected" : ""}>${s}</option>`).join("")}</select></label></div><label class="check"><input type="checkbox" data-pair ${this.value.darkColor ? "checked" : ""}> Light / dark badge pair</label><fieldset data-dark ${this.value.darkColor ? "" : "hidden"}><legend>Dark variant (main colors are the light variant)</legend><label>Dark background<input data-badge-field="darkColor" value="${html(this.value.darkColor || "20232A")}"></label><label>Dark logo color<input data-badge-field="darkLogoColor" value="${html(this.value.darkLogoColor || "white")}"></label></fieldset><div class="badge-status" role="status"></div><div class="badge-preview" aria-label="Badge preview"></div><label>Generated Markdown<textarea data-output="markdown" readonly rows="3"></textarea></label><label>Generated HTML<textarea data-output="html" readonly rows="3"></textarea></label><label>Final Shields URL<textarea data-output="url" readonly rows="2"></textarea></label><div class="row-actions"><button data-badge-copy="markdown">Copy Markdown</button><button data-badge-copy="html">Copy HTML</button><button data-duplicate-badge>Duplicate badge</button><button data-reset-badge>Reset</button></div><div class="badge-collection-controls"></div><div class="badge-insertion"></div><button class="primary" data-insert-badge>Add to README</button>`;
     this.querySelector("[data-logo-search]").oninput = (e) =>
       this.search(e.target.value);
     this.querySelector("[data-preset]").onchange = (e) => {
@@ -87,8 +87,28 @@ export class BadgeStudio extends HTMLElement {
         });
     };
     this.search("");
+    this.collectionControls();
     this.targets();
     this.update();
+    if (this.collectionMode) {
+      this.querySelector(".badge-insertion").hidden = true;
+      this.querySelector(".badge-collection-controls").hidden = true;
+      this.querySelector("[data-insert-badge]").textContent =
+        "Use badge in collection";
+    }
+  }
+  collectionControls() {
+    const el = this.querySelector(".badge-collection-controls");
+    if (!el) return;
+    el.innerHTML = `<label>Save badge to collection<select data-save-collection-target><option value="">New collection</option>${(this.collections || []).map((c) => `<option value="${html(c.id)}">${html(c.name)}</option>`).join("")}</select></label><label>New collection name<input data-new-collection-name maxlength="120" value="My collection"></label><button data-save-badge-collection>Save badge to collection</button>`;
+    el.querySelector("[data-save-badge-collection]").onclick = () => {
+      if (this.output)
+        this.emit("collection-add-badge", {
+          badge: structuredClone(this.value),
+          id: el.querySelector("select").value,
+          name: el.querySelector("input").value,
+        });
+    };
   }
   targets() {
     this.querySelector(".badge-insertion").innerHTML =

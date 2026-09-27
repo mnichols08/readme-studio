@@ -12,7 +12,7 @@ if (!logos.some((t) => t.id === "wasm"))
 export function searchLogos(query) {
   const q = query.trim().toLowerCase();
   return logos.filter((t) =>
-    [t.id, t.name, t.shieldsLogo, ...t.aliases].some((v) =>
+    [t.id, t.name, t.shieldsLogo, t.category, ...t.aliases].some((v) =>
       v.toLowerCase().includes(q),
     ),
   );

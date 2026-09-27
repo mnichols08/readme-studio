@@ -200,6 +200,36 @@ export class BuilderForm extends HTMLElement {
           s,
         );
     this.innerHTML = `<form><button type="button" data-studio>Open Badge Studio for this section</button>${form}<details class="markup"><summary>Generated Markdown & preview</summary><pre data-output></pre><div class="mini-preview markdown-body"></div></details><div class="form-actions"><button type="submit" class="primary">${this.value.id ? "Save section" : "Add to README"}</button><button type="button" data-copy>Copy Markdown</button><button type="button" data-cancel>Cancel</button></div></form>`;
+    if (type === "stack") {
+      this.querySelector("form").insertAdjacentHTML(
+        "afterbegin",
+        `<label>Category to save<select data-save-category>${[...new Set(s.items.map((i) => i.category || "Other"))].map((c) => `<option>${html(c)}</option>`).join("")}</select></label><button type="button" data-save-stack>Save category as collection</button><button type="button" data-insert-stack>Insert saved collection into stack</button>`,
+      );
+      this.querySelector("[data-save-stack]").onclick = () => {
+        const category = this.querySelector("[data-save-category]").value;
+        if (category)
+          this.dispatchEvent(
+            new CustomEvent("stack-collection-save", {
+              bubbles: true,
+              detail: {
+                name: category,
+                badges: s.items
+                  .filter((i) => (i.category || "Other") === category)
+                  .map((i) => ({
+                    ...i,
+                    label: i.name,
+                    color: i.color || i.brandColor,
+                    alt: i.alt || i.name,
+                  })),
+              },
+            }),
+          );
+      };
+      this.querySelector("[data-insert-stack]").onclick = () =>
+        this.dispatchEvent(
+          new CustomEvent("open-collections", { bubbles: true }),
+        );
+    }
     this.querySelector("[data-studio]").onclick = () =>
       this.dispatchEvent(
         new CustomEvent("open-badge-studio", { bubbles: true }),

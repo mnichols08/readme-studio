@@ -58,3 +58,65 @@ test("invalid link is explained and mobile studio fits", async ({ page }) => {
     page.getByRole("button", { name: "Badge Studio", exact: true }),
   ).toBeFocused();
 });
+test("save, export, import and reuse a collection with keyboard row controls", async ({
+  page,
+}) => {
+  await start(page);
+  await page.getByLabel("Search logos").fill("React");
+  await page
+    .locator(".logo-results")
+    .getByRole("button", { name: "React", exact: true })
+    .click();
+  await page
+    .getByLabel("New collection name", { exact: true })
+    .fill("Frontend");
+  await page
+    .getByRole("button", { name: "Save badge to collection", exact: true })
+    .click();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Collections", exact: true }).click();
+  await expect(page.getByLabel("Collection name", { exact: true })).toHaveValue(
+    "Frontend",
+  );
+  await page
+    .getByRole("button", { name: "Duplicate badge 1", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Move up 2", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page
+    .getByRole("button", { name: "Save collection", exact: true })
+    .click();
+  const download = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Export collection", exact: true })
+    .click();
+  expect((await download).suggestedFilename()).toBe("Frontend.collection.json");
+  const saved = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("readme-studio:v1")).badgeCollections
+        .items[0],
+  );
+  await page
+    .getByLabel("Import collection JSON")
+    .setInputFiles({
+      name: "collection.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(saved)),
+    });
+  await expect(page.getByLabel("Collection name", { exact: true })).toHaveValue(
+    "Frontend (2)",
+  );
+  await page
+    .getByRole("button", { name: "Save collection", exact: true })
+    .click();
+  await page.getByLabel("Collection preview width").selectOption("320");
+  await page
+    .getByRole("button", { name: "Insert collection into README", exact: true })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue(/<img src="https:\/\/img.shields.io/);
+  await page.reload();
+  await page.getByRole("button", { name: "Collections", exact: true }).click();
+  await expect(page.locator(".collection-list button")).toHaveCount(2);
+});

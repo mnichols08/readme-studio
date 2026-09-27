@@ -9,3 +9,11 @@ Insertion never replaces a text selection. It appends to a selected badge row or
 Preview images contact Shields.io directly and may fail offline. Generation is local and exports ordinary Markdown/HTML with no README Studio runtime. Shields and Simple Icons provide the badge service and logo names; this app does not proxy them or guarantee GitHub rendering parity.
 
 References: [Shields static badge options and encoding](https://shields.io/badges/static-badge), [Simple Icons](https://simpleicons.org/).
+
+## Collections
+
+Collections live in the local workspace independently of drafts. Create one from Badge Studio, start from an editable collection starter, or save a stack category. In Collections, edit the name, reorder/edit/duplicate/remove badges with buttons, then **Save collection**. Import validates version 1 JSON and assigns a new ID and unique name. Export collection is independent of README export. Changes remain temporary until saved; export is available if browser storage fails.
+
+Choose plain HTML row, centered row, picture wrappers, or a Markdown category heading. Preview desktop, narrow or mobile wrapping; only the first 20 images are previewed for large collections, while export includes all badges. Search supports collection names, badge labels, logos and catalog aliases.
+
+Inserting into a README copies the markup. Inserting through a saved stack block copies badge settings into that stack. Future collection edits never rewrite existing drafts. Save pending stack edits before opening collections.

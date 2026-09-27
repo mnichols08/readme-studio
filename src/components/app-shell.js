@@ -1,3 +1,10 @@
+import "./badge-collection-editor.js";
+import {
+  validateCollection,
+  validateCollections,
+  collectionName,
+  collectionMarkdown,
+} from "../badges/collections.js";
 import "./badge-studio.js";
 import { html, createBlock, serializeBlock } from "../markdown/serialize.js";
 import { detectSections } from "../markdown/sections.js";
@@ -47,6 +54,7 @@ export class AppShell extends HTMLElement {
       preview: "1012",
       ...this.data.settings,
     };
+    this.data.badgeCollections ||= { version: 1, items: [] };
     this.draw();
     this.load(this.data.active);
     window.addEventListener("pagehide", () => this.save());
@@ -60,7 +68,7 @@ export class AppShell extends HTMLElement {
     });
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="badges">Badge Studio</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
@@ -154,6 +162,55 @@ export class AppShell extends HTMLElement {
         this.content.querySelector("button")?.focus();
       }
     });
+    this.addEventListener("collections-save", (e) =>
+      this.saveCollections(e.detail),
+    );
+    this.addEventListener("collection-export", (e) =>
+      this.download(
+        JSON.stringify(e.detail, null, 2),
+        e.detail.name + ".collection.json",
+        "application/json",
+      ),
+    );
+    this.addEventListener("collection-insert", (e) =>
+      this.insertCollection(e.detail),
+    );
+    this.addEventListener("collection-add-badge", (e) => {
+      try {
+        const items = structuredClone(this.data.badgeCollections.items);
+        let c = items.find((c) => c.id === e.detail.id);
+        if (!c) {
+          c = validateCollection({
+            version: 1,
+            type: "badge-collection",
+            name: collectionName(e.detail.name || "My collection", items),
+            badges: [],
+          });
+          items.push(c);
+        }
+        c.badges.push(e.detail.badge);
+        this.saveCollections(items);
+        const studio = this.querySelector("badge-studio");
+        if (studio) {
+          studio.collections = this.data.badgeCollections.items;
+          studio.collectionControls();
+        }
+      } catch (error) {
+        this.notify(error.message);
+      }
+    });
+    this.addEventListener("stack-collection-save", (e) => {
+      const c = validateCollection({
+        version: 1,
+        type: "badge-collection",
+        name: collectionName(e.detail.name, this.data.badgeCollections.items),
+        badges: e.detail.badges,
+      });
+      this.saveCollections([...this.data.badgeCollections.items, c]);
+    });
+    this.addEventListener("open-collections", () =>
+      this.openCollections(this.selectedBlock),
+    );
     this.addEventListener("badge-insert", (e) => this.insertBadge(e.detail));
     this.addEventListener("open-badge-studio", () =>
       this.openBadges(this.selectedBlock),
@@ -313,6 +370,64 @@ export class AppShell extends HTMLElement {
       )
       .join("");
   }
+  saveCollections(items) {
+    try {
+      const collections = validateCollections({ version: 1, items });
+      if (this.storageBlocked)
+        throw new Error(
+          "Storage recovery is active. Export this collection before closing; restore workspace storage before saving collections.",
+        );
+      const plan = { ...this.data, badgeCollections: collections };
+      saveDrafts(plan);
+      this.data.badgeCollections = collections;
+      this.querySelector("badge-collection-editor")?.status(
+        "Collections saved locally.",
+      );
+      this.notify("Collections saved locally.");
+      return true;
+    } catch (e) {
+      this.querySelector("badge-collection-editor")?.status(
+        "Could not save collections: " + e.message,
+      );
+      this.notify("Could not save collections: " + e.message);
+      return false;
+    }
+  }
+  openCollections(stackId) {
+    this.collectionStack = stackId;
+    this.badgeCursor = this.editor.input.selectionStart;
+    this.badgeSnapshot = this.store.draft.markdown;
+    this.modal("<badge-collection-editor></badge-collection-editor>");
+    this.dialog.classList.add("import-modal");
+    const editor = this.querySelector("badge-collection-editor");
+    editor.items = structuredClone(this.data.badgeCollections.items);
+    editor.selected = editor.items[0]?.id;
+    editor.draw();
+  }
+  insertCollection(c) {
+    if (this.badgeSnapshot !== this.store.draft.markdown) {
+      this.notify("Draft changed. Reopen collections before inserting.");
+      return;
+    }
+    const blocks = structuredClone(this.store.draft.blocks),
+      stack = blocks.find(
+        (b) => b.id === this.collectionStack && b.type === "stack",
+      );
+    if (stack) {
+      stack.settings.items.push(
+        ...c.badges.map((b) => ({
+          ...b,
+          name: b.name || b.label || b.alt,
+          category: c.name,
+        })),
+      );
+      this.store.blocks(blocks);
+      this.closeDialog();
+      this.focusDocument();
+      this.notify("Collection inserted into stack. Use Undo to restore it.");
+    } else
+      this.insertBadge({ markdown: collectionMarkdown(c), target: "cursor" });
+  }
   openBadges(selectedBlock) {
     this.badgeCursor = this.editor.input.selectionStart;
     this.badgeSnapshot = this.store.draft.markdown;
@@ -321,6 +436,8 @@ export class AppShell extends HTMLElement {
     const studio = this.querySelector("badge-studio");
     studio.blocks = structuredClone(this.store.draft.blocks);
     studio.selectedBlock = selectedBlock;
+    studio.collections = this.data.badgeCollections.items;
+    studio.collectionControls();
     studio.targets();
   }
   insertBadge({ badge, markdown, target }) {
@@ -706,6 +823,7 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (action === "collections") this.openCollections();
     if (action === "badges") this.openBadges();
     switch (action) {
       case "backup-all":
