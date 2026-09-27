@@ -1,3 +1,4 @@
+import "./repository-authoring.js";
 import "./component-customizer.js";
 import {
   instanceFromDetail,
@@ -103,7 +104,7 @@ export class AppShell extends HTMLElement {
     });
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
@@ -184,6 +185,38 @@ export class AppShell extends HTMLElement {
     });
     this.addEventListener("undo", () => this.store.undo());
     this.addEventListener("redo", () => this.store.redo());
+    this.addEventListener("repository-apply", (e) => {
+      const d = e.detail;
+      if (d.snapshot !== JSON.stringify(this.store.draft)) {
+        this.notify(
+          "Draft changed. Reopen repository authoring before applying.",
+        );
+        return;
+      }
+      if (d.saveComponent) {
+        const library = validateComponents(this.data.componentLibrary);
+        library.snippets.push({
+          version: 1,
+          id: crypto.randomUUID(),
+          name: d.block.githubGenerated.options.title || "Repository snippet",
+          category: "GitHub",
+          description: "Saved repository output snapshot",
+          kind: "custom",
+          template: serializeBlock(d.block),
+          fields: [],
+          tags: ["repository"],
+        });
+        if (!this.saveComponentLibrary({ library })) return;
+      }
+      const metadata = {
+        ...this.store.draft.metadata,
+        repositoryContext: d.repos,
+      };
+      this.store.blocks([...this.store.draft.blocks, d.block], metadata);
+      this.closeDialog();
+      this.focusDocument();
+      this.notify("Repository output added. Undo restores the previous draft.");
+    });
     this.addEventListener("profile-apply", (e) => {
       if (e.detail.snapshot !== profileDraftSnapshot(this.store.draft)) {
         this.notify(
@@ -759,6 +792,11 @@ export class AppShell extends HTMLElement {
         "Could not import pack: " + e.message,
       );
     }
+  }
+  openRepositories() {
+    this.modal("<repository-authoring></repository-authoring>");
+    this.dialog.classList.add("import-modal");
+    this.querySelector("repository-authoring").configure(this.store.draft);
   }
   openWidgets() {
     this.componentSnapshot = JSON.stringify(this.store.draft);
@@ -1393,6 +1431,7 @@ export class AppShell extends HTMLElement {
   }
   action(action) {
     if (action === "snippet-packs") this.openSnippetPacks();
+    if (action === "repositories") this.openRepositories();
     if (action === "widgets") this.openWidgets();
     if (action === "components") this.openComponents();
     if (action === "visual-presets") this.openVisualPresets();

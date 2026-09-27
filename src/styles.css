@@ -1956,3 +1956,26 @@ widget-hub [hidden],
 snippet-pack-dialog [hidden] {
   display: none !important;
 }
+
+repository-authoring {
+  display: block;
+  min-width: 0;
+}
+repository-authoring [data-repos] {
+  max-height: 20rem;
+  overflow: auto;
+}
+repository-authoring [data-review-area][hidden] {
+  display: none;
+}
+repository-authoring textarea {
+  width: 100%;
+  min-height: 10rem;
+}
+repository-authoring label {
+  overflow-wrap: anywhere;
+}
+repository-authoring [data-preview] {
+  overflow: auto;
+  max-height: 25rem;
+}

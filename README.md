@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.5.3** · Native Web Components · Local drafts · Static hosting
+**Version 0.6.0** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -185,3 +185,5 @@ Visual Theme Studio coordinates generated badge colors and builder section accen
 [Portable snippet packs](docs/snippet-packs.md) export selected snippets, badge collections and draft-section copies as JSON. Review imported contents and choose Keep both, Replace or Skip for collisions. Four example kits provide editable starting points.
 
 Supported components inserted as sections reopen with **Edit visually**. Template fields, widget helpers and badge row editors preserve independent settings. Save configured presets, duplicate them, or detach to exact Custom Markdown. Current/generated source review prevents silent overwrite when stored source has diverged.
+
+Repository-aware authoring is available from **Repositories**. Browse cached GitHub Autofill data or explicitly fetch public owner/repository metadata, select repositories, and review projects, lists, badges, links or technology suggestions before insertion. See [GitHub-aware authoring](docs/github-aware.md).
