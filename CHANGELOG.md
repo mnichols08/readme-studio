@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+- Added compact, detailed, featured, card, two-column, case-study, and featured-first project layouts through pure serializers.
+- Added layout presets, screenshot placement and light/dark pictures, responsive preview widths, and single-project copy with selectable fallback.
+- Project table layouts include mobile guidance in README Health. Layout changes preserve the full editable model.
+
 ## 0.3.1
 
 - Review public GitHub repository metadata before creating or refreshing project entries.

@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.3.1** · Native Web Components · Local drafts · Static hosting
+**Version 0.3.2** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -162,6 +162,6 @@ Badge guidance flags generic/missing alt text, likely low contrast, duplicate te
 
 Open **Project Studio** from the header or an existing project builder. Describe the project, your role, engineering highlights, technologies, links, status, screenshots, and badges. Review the live section, then save explicitly; Undo restores the prior source. Existing project blocks keep their exact Markdown until you save their richer representation. See [the project guide](docs/projects.md).
 
-### GitHub project import (v0.3.1)
+### GitHub project import (v0.3.2)
 
 Project Studio can review public repositories by owner/repository or from the public repository list cached by GitHub Autofill. Filter/select multiple repositories, choose fields, confirm duplicates, and apply to the working showcase before saving. Refresh changes only untouched imported fields; your role, highlights, and manual edits remain yours.

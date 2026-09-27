@@ -231,3 +231,66 @@ test("multi-repo selector keeps successful imports on partial failure", async ({
     "1 applied · 1 unavailable",
   );
 });
+
+test("layout presets, themed screenshots, mobile preview and clipboard fallback", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await start(page);
+  await page.getByRole("button", { name: "Add project", exact: true }).click();
+  const entry = page.locator(".project-entry").last();
+  await entry.getByLabel("Project name", { exact: true }).fill("Layout demo");
+  await entry
+    .getByLabel("Image URL", { exact: true })
+    .fill("https://example.com/light.png");
+  await entry
+    .getByLabel("Dark image URL", { exact: true })
+    .fill("https://example.com/dark.png");
+  await entry
+    .getByLabel("Image alt text", { exact: true })
+    .fill("Project overview");
+  await page
+    .getByLabel("Layout preset", { exact: true })
+    .selectOption("Visual");
+  await expect(page.locator(".project-preview table").first()).toBeVisible();
+  await expect(page.locator(".project-preview source").last()).toHaveAttribute(
+    "media",
+    "(prefers-color-scheme: dark)",
+  );
+  await page.getByLabel("Project preview width").selectOption("320px");
+  expect(
+    await page
+      .locator(".project-preview")
+      .evaluate((el) => el.getBoundingClientRect().width),
+  ).toBeLessThanOrEqual(320);
+  await page.evaluate(() =>
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async () => {
+          throw Error("denied");
+        },
+      },
+    }),
+  );
+  await entry.getByRole("button", { name: /Copy project Markdown/ }).click();
+  await expect(page.getByLabel("Copy project Markdown fallback")).toHaveValue(
+    /Layout demo/,
+  );
+  await expect(page.getByLabel("Copy project Markdown fallback")).toBeFocused();
+  await page
+    .getByLabel("Showcase layout", { exact: true })
+    .selectOption("case-study");
+  await entry.getByLabel("Case study: problem").fill("Repeated work");
+  await expect(page.locator(".project-preview")).toContainText("Repeated work");
+  await page
+    .getByRole("button", { name: "Save showcase", exact: true })
+    .click();
+  await expect(
+    page.getByRole("textbox", {
+      name: "Markdown editor",
+      exact: true,
+      includeHidden: true,
+    }),
+  ).toHaveValue(/#### Problem/);
+});

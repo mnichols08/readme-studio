@@ -6,6 +6,19 @@ import { contextResolver } from "../state/import-plan.js";
 export function analyzeDraft(draft) {
   const analysis = analyze(draft.markdown),
     warnings = duplicateWarnings(draft.markdown, contextResolver(draft));
+  for (const block of draft.blocks || []) {
+    if (
+      block.type === "projects" &&
+      block.settings?.version === 1 &&
+      (["card", "two-column"].includes(block.settings.layout) ||
+        block.settings.items?.some((p) => p.imagePlacement === "side-by-side"))
+    )
+      analysis.issues.push({
+        category: "Layout",
+        message:
+          "Project tables may scroll on narrow screens. Preview at mobile width or choose a linear layout.",
+      });
+  }
   for (const segment of documentSegments(draft)) {
     if (validSourceContext(segment.sourceContext)) continue;
     const a =
