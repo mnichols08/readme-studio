@@ -60,6 +60,25 @@ export class BadgeCollectionEditor extends HTMLElement {
             )}</select></label><div class="collection-advice"></div><div class="collection-preview markdown-body"></div>`
         : ""
     }`;
+    if (this.componentMode) {
+      this.setAttribute("data-component-mode", "true");
+      this.querySelector("h1").textContent = "Badge row settings";
+      this.querySelector("p").textContent =
+        "Independent badges for this README component. Use Save component changes below to apply.";
+      for (const selector of [
+        "[data-collection-search]",
+        "[data-starter]",
+        "[data-collection-file]",
+      ])
+        this.querySelector(selector)
+          ?.closest("label")
+          .setAttribute("hidden", "");
+      this.querySelector(".collection-list").hidden = true;
+      for (const el of this.querySelectorAll(
+        "[data-new-collection],[data-add-starter],[data-save-collection],[data-duplicate-collection],[data-delete-collection],[data-insert-collection]",
+      ))
+        el.hidden = true;
+    }
     this.list();
     this.querySelector("[data-collection-search]").oninput = (e) => {
       this.search = e.target.value;
@@ -214,7 +233,11 @@ export class BadgeCollectionEditor extends HTMLElement {
       if (index === undefined) c.badges.push(e.detail.badge);
       else c.badges[index] = e.detail.badge;
       this.draw();
-      this.querySelector("[data-save-collection]").focus();
+      this.querySelector(
+        this.componentMode
+          ? "[data-add-collection-badge]"
+          : "[data-save-collection]",
+      ).focus();
     });
     studio.querySelector("input").focus();
   }

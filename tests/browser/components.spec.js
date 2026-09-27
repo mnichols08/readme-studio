@@ -283,3 +283,253 @@ test("malicious pack metadata and storage failure leave reusable state unchanged
       .evaluate((el) => el.data.componentLibrary?.snippets.length || 0),
   ).toBe(0);
 });
+
+test("component customizer saves presets, duplicates independently and detaches on manual source editing", async ({
+  page,
+}) => {
+  await start(page);
+  await page
+    .getByLabel("Search components", { exact: true })
+    .fill("terminal heading");
+  await page
+    .getByRole("button", { name: "Preview Terminal heading", exact: true })
+    .click();
+  await page.getByLabel("Title", { exact: true }).fill("First heading");
+  await page
+    .getByRole("button", { name: "Insert component", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: /Edit visually: Terminal heading/ })
+    .click();
+  await page.locator('[data-custom-field="title"]').fill("Configured heading");
+  await page
+    .getByLabel("Component preset name", { exact: true })
+    .fill("My Terminal Header");
+  await page
+    .getByRole("button", {
+      name: "Save configured component preset",
+      exact: true,
+    })
+    .click();
+  await expect(page.locator(".customizer-status")).toContainText(
+    "saved locally",
+  );
+  await page
+    .getByRole("button", {
+      name: "Duplicate configured component",
+      exact: true,
+    })
+    .click();
+  const instances = await page
+    .locator("app-shell")
+    .evaluate((el) =>
+      el.store.draft.blocks.filter((b) => b.type === "component"),
+    );
+  expect(instances).toHaveLength(2);
+  expect(instances[0].settings.markdown).toContain("First heading");
+  expect(instances[1].settings.markdown).toContain("Configured heading");
+  expect(instances[0].id).not.toBe(instances[1].id);
+  const editor = page.getByRole("textbox", {
+    name: "Markdown editor",
+    exact: true,
+  });
+  const source = await editor.inputValue();
+  await editor.fill(source + "\nManual addition");
+  await expect(page.locator(".toast")).toContainText("now Custom Markdown");
+  expect(
+    await page
+      .locator("app-shell")
+      .evaluate((el) => el.store.draft.blocks[0].type),
+  ).toBe("custom");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect(
+    await page
+      .locator("app-shell")
+      .evaluate(
+        (el) =>
+          el.store.draft.blocks.filter((b) => b.type === "component").length,
+      ),
+  ).toBe(2);
+  await page.getByRole("button", { name: "Components", exact: true }).click();
+  await page.getByLabel("Library view", { exact: true }).selectOption("saved");
+  await page
+    .getByRole("button", { name: "Preview My Terminal Header", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Component Markdown", { exact: true }),
+  ).toHaveValue("## $ Configured heading");
+});
+test("modified component source requires explicit diff confirmation before visual replacement", async ({
+  page,
+}) => {
+  await start(page);
+  await page
+    .getByLabel("Search components", { exact: true })
+    .fill("terminal heading");
+  await page
+    .getByRole("button", { name: "Preview Terminal heading", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Insert component", exact: true })
+    .click();
+  await page.locator("app-shell").evaluate((el) => {
+    const blocks = structuredClone(el.store.draft.blocks);
+    blocks.find((b) => b.type === "component").settings.markdown +=
+      "\nMANUAL NOTE";
+    el.store.blocks(blocks);
+  });
+  await page
+    .getByRole("button", { name: /Edit visually: Terminal heading/ })
+    .click();
+  await expect(
+    page.getByLabel("Current Markdown", { exact: true }),
+  ).toHaveValue(/MANUAL NOTE/);
+  await page.locator('[data-custom-field="title"]').fill("Reviewed");
+  await page
+    .getByRole("button", { name: "Save component changes", exact: true })
+    .click();
+  await expect(page.locator(".customizer-status")).toContainText(
+    "confirm replacement",
+  );
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue(/MANUAL NOTE/);
+  await page
+    .getByLabel("Replace current source with generated Markdown", {
+      exact: true,
+    })
+    .check();
+  await page
+    .getByRole("button", { name: "Save component changes", exact: true })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue(/## \$ Reviewed/);
+});
+test("widget and badge components reopen their specific forms and save without changing sibling source", async ({
+  page,
+}) => {
+  await start(page);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Widget Hub", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Configure Typing SVG", exact: true })
+    .click();
+  await page.getByLabel("Typing lines", { exact: true }).fill("First line");
+  await page
+    .getByRole("button", { name: "Generate typing URL", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Insert widget", exact: true })
+    .click();
+  await page.getByRole("button", { name: /Edit visually: Typing SVG/ }).click();
+  await expect(page.getByLabel("Typing lines", { exact: true })).toHaveValue(
+    "First line",
+  );
+  await page.getByLabel("Typing lines", { exact: true }).fill("Second line");
+  await page
+    .getByRole("button", { name: "Generate typing URL", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Save component changes", exact: true })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue(/lines=Second\+line/);
+  await page.getByRole("button", { name: "Components", exact: true }).click();
+  await page
+    .getByLabel("Search components", { exact: true })
+    .fill("technology row");
+  await page
+    .getByRole("button", { name: "Preview Technology row", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Insert component", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: /Edit visually: Technology row/ })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Badge row settings", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("[data-new-collection]")).not.toBeVisible();
+  await page.getByRole("button", { name: "Edit badge 1", exact: true }).click();
+  await page.locator('[data-badge-field="label"]').fill("Custom tech");
+  await page
+    .getByRole("button", { name: "Use badge in collection", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Add badge to collection", exact: true }),
+  ).toBeFocused();
+  const count = await page.locator(".collection-badges > li").count();
+  await page
+    .getByRole("button", { name: "Duplicate badge 1", exact: true })
+    .click();
+  await expect(page.locator(".collection-badges > li")).toHaveCount(count + 1);
+  await page
+    .getByRole("button", { name: "Save component changes", exact: true })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue(/lines=Second\+line/);
+});
+test("large component libraries render bounded cards, support keyboard search and rename/delete safely", async ({
+  page,
+}) => {
+  await start(page);
+  await page.locator("app-shell").evaluate((el) => {
+    el.saveComponentLibrary({
+      library: {
+        version: 1,
+        favorites: [],
+        recents: [],
+        snippets: Array.from({ length: 200 }, (_, i) => ({
+          version: 1,
+          id: `saved-${i}`,
+          name: `My snippet ${i}`,
+          description: "Local source",
+          category: "Utilities",
+          kind: "custom",
+          fields: [],
+          tags: ["large"],
+          template: `## Item ${i}`,
+        })),
+      },
+    });
+  });
+  await page.getByLabel("Library view", { exact: true }).selectOption("saved");
+  await expect(page.locator(".component-results article")).toHaveCount(40);
+  await expect(page.locator(".component-results img")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Show more components", exact: true })
+    .focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".component-results article")).toHaveCount(80);
+  await page
+    .getByLabel("Search components", { exact: true })
+    .fill("My snippet 199");
+  await expect(page.locator(".component-results article")).toHaveCount(1);
+  await page
+    .getByRole("button", { name: "Preview My snippet 199", exact: true })
+    .click();
+  await page
+    .getByLabel("Saved component name", { exact: true })
+    .fill("Renamed snippet");
+  await page
+    .getByRole("button", { name: "Rename saved component", exact: true })
+    .click();
+  await page
+    .getByLabel("Search components", { exact: true })
+    .fill("Renamed snippet");
+  await page
+    .getByRole("button", { name: "Preview Renamed snippet", exact: true })
+    .click();
+  page.once("dialog", (d) => d.accept());
+  await page
+    .getByRole("button", { name: "Delete saved component", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Search components", { exact: true }),
+  ).toBeFocused();
+  await expect(page.locator(".component-results article")).toHaveCount(0);
+});

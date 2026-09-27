@@ -1931,3 +1931,28 @@ snippet-pack-dialog textarea,
 snippet-pack-dialog select {
   max-width: 100%;
 }
+
+.customizer-preview {
+  max-height: 420px;
+  overflow: auto;
+}
+component-customizer input,
+component-customizer textarea,
+component-customizer select {
+  max-width: 100%;
+}
+.component-diff {
+  border: 1px solid var(--line);
+  padding: 12px;
+  margin-block: 12px;
+}
+component-customizer .widget-detail h2 {
+  font-size: 20px;
+}
+
+component-customizer [hidden],
+component-library [hidden],
+widget-hub [hidden],
+snippet-pack-dialog [hidden] {
+  display: none !important;
+}

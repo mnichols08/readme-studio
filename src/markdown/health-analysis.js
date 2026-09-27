@@ -1,3 +1,4 @@
+import { componentHealth } from "../component-instances/health.js";
 import { widgetHealth } from "../widgets/health.js";
 import { stylingHealth } from "../styling/health.js";
 import { projectHealth } from "../projects/project-health.js";
@@ -10,6 +11,7 @@ import { contextResolver } from "../state/import-plan.js";
 export function analyzeDraft(draft) {
   const analysis = analyze(draft.markdown),
     warnings = duplicateWarnings(draft.markdown, contextResolver(draft));
+  analysis.issues.push(...componentHealth(draft.blocks || []));
   analysis.issues.push(...widgetHealth(analysis.images));
   analysis.issues.push(...stylingHealth(draft.blocks || []));
   const projects = (draft.blocks || [])

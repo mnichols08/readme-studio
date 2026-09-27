@@ -1,3 +1,7 @@
+import {
+  starterCollection,
+  collectionMarkdown,
+} from "../badges/collections.js";
 import { normalizeComponent } from "./model.js";
 import { snippets as widgets } from "../data/snippets.js";
 const defaults = {
@@ -232,7 +236,9 @@ for (const w of widgets)
         ? "Stats"
         : ["snake", "activity"].includes(w.id)
           ? "Activity"
-          : "GitHub",
+          : w.id === "constellation"
+            ? "GitHub"
+            : "Widgets",
       description: w.instructions,
       kind: "widget",
       template: '<p align="center"><img src="{{image}}" alt="{{alt}}"></p>',
@@ -257,6 +263,43 @@ for (const w of widgets)
       attribution: { name: w.name, url: w.projectUrl },
     }),
   );
+for (const [id, starter] of [
+  ["technology-row", "Frontend"],
+  ["social-row", "Social"],
+  ["contact-badges", "Social"],
+  ["deployment-row", "Deployment"],
+  ["ci-row", "Testing"],
+]) {
+  const c = builtInComponents.find((c) => c.id === `builtin:${id}`),
+    collection = starterCollection(starter);
+  collection.id = `starter-${id}`;
+  collection.name = c.name;
+  collection.style = "plain";
+  if (id === "ci-row")
+    collection.badges = [
+      {
+        label: "CI",
+        message: "configure workflow",
+        color: "59636e",
+        alt: "CI workflow setup",
+        style: "flat",
+      },
+    ];
+  if (id === "contact-badges")
+    collection.badges = [
+      {
+        label: "Email",
+        message: "contact",
+        color: "0969da",
+        alt: "Email contact",
+        style: "flat",
+        link: "mailto:hello@example.com",
+      },
+    ];
+  c.preset = { version: 1, type: "badges", collection };
+  c.fields = [];
+  c.template = collectionMarkdown(collection);
+}
 export const componentCatalog = (library) => [
   ...builtInComponents.map((c) => structuredClone(c)),
   ...(library?.snippets || []).map((c) => structuredClone(c)),

@@ -58,7 +58,7 @@ export function themeBlocks(blocks, theme, options = {}) {
   const t = normalizeTheme(theme),
     copy = structuredClone(blocks);
   for (const b of copy) {
-    if (b.type === "custom") continue;
+    if (["custom", "component"].includes(b.type)) continue;
     const s = b.settings;
     s.presentation ||= {};
     derive(
