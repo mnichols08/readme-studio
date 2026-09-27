@@ -96,13 +96,11 @@ test("save, export, import and reuse a collection with keyboard row controls", a
       JSON.parse(localStorage.getItem("readme-studio:v1")).badgeCollections
         .items[0],
   );
-  await page
-    .getByLabel("Import collection JSON")
-    .setInputFiles({
-      name: "collection.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify(saved)),
-    });
+  await page.getByLabel("Import collection JSON").setInputFiles({
+    name: "collection.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(saved)),
+  });
   await expect(page.getByLabel("Collection name", { exact: true })).toHaveValue(
     "Frontend (2)",
   );
@@ -119,4 +117,48 @@ test("save, export, import and reuse a collection with keyboard row controls", a
   await page.reload();
   await page.getByRole("button", { name: "Collections", exact: true }).click();
   await expect(page.locator(".collection-list button")).toHaveCount(2);
+});
+test("configure dynamic workflow and scoped npm helpers without typing requests", async ({
+  page,
+}) => {
+  await start(page);
+  await page
+    .getByText("Dynamic badge helpers", { exact: true })
+    .first()
+    .click();
+  await page
+    .getByLabel("Badge helper", { exact: true })
+    .selectOption("github-workflow");
+  await page
+    .getByLabel("GitHub repository (owner/repository)")
+    .fill("owner/repo");
+  await page.getByLabel("Workflow file or name").fill("ci.yml");
+  await page.getByLabel("Branch (optional)").fill("feature/badges");
+  await page
+    .getByRole("button", { name: "Generate dynamic badge", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Generated Markdown", { exact: true }),
+  ).toHaveValue(/github\/actions\/workflow\/status\/owner\/repo\/ci.yml/);
+  await page
+    .getByLabel("Link URL", { exact: true })
+    .fill("https://example.com/actions");
+  await expect(
+    page.getByLabel("Generated Markdown", { exact: true }),
+  ).toHaveValue(/example.com\/actions/);
+  await page
+    .getByText("Dynamic badge helpers", { exact: true })
+    .first()
+    .click();
+  await page.getByLabel("Search badge helpers").fill("npm");
+  await page
+    .getByLabel("Badge helper", { exact: true })
+    .selectOption("npm-version");
+  await page.getByLabel("npm package name").fill("@scope/package");
+  await page
+    .getByRole("button", { name: "Generate dynamic badge", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Final Shields URL", { exact: true }),
+  ).toHaveValue(/npm\/v\/%40scope\/package/);
 });

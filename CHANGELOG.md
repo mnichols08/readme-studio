@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+- Guided dynamic helpers for GitHub workflow/stars/forks/issues/license/releases, npm version/downloads, crates.io version/downloads, PyPI, Docker, Netlify, and public Shields JSON endpoints.
+- Local format validation, explicitly chosen repository suggestions, editable click-through links, and provider-specific cache settings.
+- No API lookups while typing, no proxy, and clear remote preview/privacy limitations.
+
 ## 0.2.1
 
 - Reusable local badge collections with editable starters, alias search, keyboard reorder/edit/duplicate/remove, and portable versioned JSON.

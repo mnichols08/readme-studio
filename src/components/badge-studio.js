@@ -1,3 +1,4 @@
+import "./dynamic-badge-builder.js";
 import { html } from "../markdown/serialize.js";
 import { buildLinkedBadge, badgeImages, styles } from "../badges/shields.js";
 import {
@@ -19,7 +20,7 @@ export class BadgeStudio extends HTMLElement {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
   }
   draw() {
-    this.innerHTML = `<h1>Badge Studio</h1><p>Editable badges. Ordinary Markdown. Remote previews contact the image provider.</p><label>Badge preset<select data-preset><option value="">Choose a preset</option>${badgePresets.map((p, i) => `<option value="${i}">${html(p.name)}</option>`).join("")}</select></label><label>Search logos<input data-logo-search placeholder="React, JS, Node, Postgres, Rust, WASM"></label><div class="logo-results" aria-label="Logo results"></div><div class="badge-fields">${[
+    this.innerHTML = `<h1>Badge Studio</h1><p>Editable badges. Ordinary Markdown. Remote previews contact the image provider.</p><details class="dynamic-tools"><summary>Dynamic badge helpers</summary><dynamic-badge-builder></dynamic-badge-builder></details><label>Badge preset<select data-preset><option value="">Choose a preset</option>${badgePresets.map((p, i) => `<option value="${i}">${html(p.name)}</option>`).join("")}</select></label><label>Search logos<input data-logo-search placeholder="React, JS, Node, Postgres, Rust, WASM"></label><div class="logo-results" aria-label="Logo results"></div><div class="badge-fields">${[
       ["label", "Label"],
       ["message", "Message"],
       ["logo", "Logo"],
@@ -86,6 +87,21 @@ export class BadgeStudio extends HTMLElement {
           target: this.querySelector("[data-insert-target]")?.value || "cursor",
         });
     };
+    const dynamic = this.querySelector("dynamic-badge-builder");
+    dynamic.suggestions = this.suggestions || [];
+    dynamic.fields();
+    dynamic.addEventListener("dynamic-badge", (e) => {
+      e.stopPropagation();
+      this.badge = e.detail;
+      this.querySelector('[data-badge-field="alt"]').focus();
+    });
+    if (this.value.lightUrl) {
+      this.querySelector('[data-badge-field="message"]').closest(
+        "label",
+      ).hidden = true;
+      this.querySelector('[data-badge-field="label"]').closest("label").hidden =
+        true;
+    }
     this.search("");
     this.collectionControls();
     this.targets();
