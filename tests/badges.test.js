@@ -69,3 +69,52 @@ describe("Badge Studio serialization", () => {
       logoColor: "61DAFB",
     }));
 });
+import {
+  validateCollection,
+  validateCollections,
+  collectionMarkdown,
+  searchCollections,
+  starterCollection,
+} from "../src/badges/collections.js";
+describe("badge collections", () => {
+  it("validates versioned portable data and rejects malformed badges", () => {
+    expect(() => validateCollection({ version: 2 })).toThrow();
+    expect(() =>
+      validateCollection({
+        version: 1,
+        type: "badge-collection",
+        name: "X",
+        badges: [{ label: "X", link: "javascript:bad" }],
+      }),
+    ).toThrow();
+    expect(() =>
+      validateCollection({
+        version: 1,
+        type: "badge-collection",
+        name: "X",
+        badges: [{ label: 123 }],
+      }),
+    ).toThrow();
+  });
+  it("imports independently, resolves collisions and searches aliases", () => {
+    const c = starterCollection("Frontend");
+    const saved = validateCollections({ version: 1, items: [c, c] });
+    expect(saved.items[0].id).not.toBe(saved.items[1].id);
+    expect(saved.items[1].name).toBe("Frontend (2)");
+    expect(searchCollections(saved.items, "jsx")).toHaveLength(2);
+    const imported = validateCollection(c);
+    imported.badges[0].label = "Edited";
+    expect(c.badges[0].label).not.toBe("Edited");
+  });
+  it.each(["plain", "centered", "pictures", "category"])(
+    "exports %s output",
+    (style) => {
+      const c = { ...starterCollection("Frontend"), style };
+      const output = collectionMarkdown(c);
+      expect(output).toContain("img.shields.io");
+      if (style === "pictures") expect(output).toContain("<picture>");
+      if (style === "centered") expect(output).toContain('align="center"');
+      if (style === "category") expect(output).toMatch(/^## Frontend/);
+    },
+  );
+});

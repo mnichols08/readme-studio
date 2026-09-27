@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Reusable local badge collections with editable starters, alias search, keyboard reorder/edit/duplicate/remove, and portable versioned JSON.
+- Plain, centered, picture and category output; desktop/narrow/mobile previews with bounded remote images.
+- Save badges or stack categories as collections and insert independent copies into drafts or stack blocks.
+
 ## 0.2.0
 
 - Dedicated Badge Studio with editable presets, searchable technology logos, smart defaults, and live Markdown/HTML/URL previews.

@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.2.0** · Native Web Components · Local drafts · Static hosting
+**Version 0.2.1** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -145,3 +145,7 @@ Badge output uses [Shields.io](https://shields.io). The widget catalog keeps vis
 ### Badge Studio (v0.2.0)
 
 Open **Badge Studio** in the header or from a builder section. Search a logo, choose an editable preset, and adjust label/message colors, logo, style, link, and alt text. Enable light/dark pairs for GitHub-compatible picture markup. Copy Markdown/HTML or insert at the cursor, into a badge row, or at the end of a selected section. Selected text is preserved. Build and deployment presets are static examples, not verified status badges. Preview images contact Shields directly; your draft is never sent. See [the badge guide](docs/badges.md).
+
+### Badge collections (v0.2.1)
+
+Save badges into named collections, or open **Collections** for editable starters and keyboard management. Import/export collection JSON, choose plain/centered/picture/category markup, and preview wrapping. Stack builder can save categories and insert saved collections. Insertions are independent copies.
