@@ -79,3 +79,99 @@ test("saved snippet preserves source across reload and mobile dialog remains usa
   await page.getByLabel("Library view", { exact: true }).selectOption("saved");
   await expect(page.locator(".component-results article")).toHaveCount(1);
 });
+
+test("Widget Hub generates typing URLs without requests while typing and inserts a picture embed", async ({
+  page,
+}) => {
+  await start(page);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Widget Hub", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Configure Typing SVG", exact: true })
+    .click();
+  let requests = 0;
+  await page.route("https://readme-typing-svg.demolab.com/**", (r) => {
+    requests++;
+    return r.abort();
+  });
+  await page
+    .getByLabel("Typing lines", { exact: true })
+    .fill("Hello + Rust\nSnow 雪");
+  await page
+    .getByRole("button", { name: "Generate typing URL", exact: true })
+    .click();
+  await expect(page.getByLabel("Image URL", { exact: true })).toHaveValue(
+    /lines=Hello/,
+  );
+  expect(requests).toBe(0);
+  await page
+    .getByRole("button", { name: "Favorite widget", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Favorite widget", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page
+    .getByRole("button", { name: "Load remote preview", exact: true })
+    .click();
+  await expect(page.locator(".widget-status")).toContainText(
+    "Remote image failed",
+  );
+  await page
+    .getByLabel("Dark image URL", { exact: true })
+    .fill("https://example.com/dark.svg");
+  await page.getByLabel("Alignment", { exact: true }).selectOption("center");
+  await page
+    .getByRole("button", { name: "Insert widget", exact: true })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue(/<picture>/);
+});
+test("Metrics helper stays usable offline with attribution, copy fallback and no integration", async ({
+  page,
+  context,
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await start(page);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Widget Hub", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Configure GitHub Metrics", exact: true })
+    .click();
+  await expect(
+    page.getByRole("link", { name: "GitHub Metrics", exact: true }),
+  ).toHaveAttribute("href", "https://github.com/lowlighter/metrics");
+  await page
+    .getByLabel("Image URL", { exact: true })
+    .fill("https://example.com/metrics.svg");
+  await context.setOffline(true);
+  await page
+    .getByRole("button", { name: "Load remote preview", exact: true })
+    .click();
+  await expect(page.locator(".widget-status")).toContainText("Offline");
+  await page.evaluate(() =>
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async () => {
+          throw Error("denied");
+        },
+      },
+    }),
+  );
+  await page
+    .getByRole("button", { name: "Copy widget Markdown", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Widget Markdown", { exact: true }),
+  ).toBeFocused();
+  expect(
+    await page
+      .getByRole("dialog")
+      .evaluate((e) => e.scrollWidth <= e.clientWidth),
+  ).toBe(true);
+  await page
+    .getByRole("button", { name: "Insert widget", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+});

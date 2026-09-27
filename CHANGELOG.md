@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+- Added the Dynamic Widget Hub with seven attributed upstream projects, setup/hosting guidance, shared favorites and generic light/dark embeds.
+- Added a local Typing SVG URL helper, explicit remote preview with broken/offline states, optional README credit and clipboard fallback.
+- Added advisory widget Health checks for duplicates, clutter, missing alt text and inconsistent widths without analyzing fenced examples.
+
 ## 0.5.0
 
 - Added a searchable Component Library with 34 editable starters, category filters, source inspection and sanitized previews.
