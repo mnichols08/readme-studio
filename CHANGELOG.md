@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2
+
+- Added versioned portable snippet packs with metadata, saved snippet/badge collection selection and exact draft-section copies.
+- Added validated import review, per-item source/preview, Keep both/Replace/Skip collision policies and atomic local persistence.
+- Included four editable example kits and all-reusable-snippets backup with no hosted sharing dependency.
+
 ## 0.5.1
 
 - Added the Dynamic Widget Hub with seven attributed upstream projects, setup/hosting guidance, shared favorites and generic light/dark embeds.

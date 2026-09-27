@@ -175,3 +175,111 @@ test("Metrics helper stays usable offline with attribution, copy fallback and no
     .click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
 });
+
+test("snippet packs preview, import examples, keep collisions, export and import in a fresh workspace", async ({
+  page,
+  browser,
+}) => {
+  await start(page);
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", { name: "Snippet packs", exact: true })
+    .click();
+  await page.getByLabel("Example pack", { exact: true }).selectOption("2");
+  await page
+    .getByRole("button", { name: "Review example pack", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Import Terminal Kit", exact: true }),
+  ).toBeFocused();
+  await expect(
+    page.getByLabel("Collision policy", { exact: true }),
+  ).toHaveValue("keep");
+  await expect(
+    page.getByLabel("Pack item Markdown", { exact: true }),
+  ).toHaveValue(/whoami/);
+  await page
+    .getByRole("button", { name: "Import reviewed pack", exact: true })
+    .click();
+  await expect(page.locator(".pack-status")).toContainText("imported locally");
+  await page.getByLabel("Example pack", { exact: true }).selectOption("2");
+  await page
+    .getByRole("button", { name: "Review example pack", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Import reviewed pack", exact: true })
+    .click();
+  await page.getByLabel("Pack name", { exact: true }).fill("My Terminal Kit");
+  const download = page.waitForEvent("download");
+  await page
+    .getByRole("button", {
+      name: "Download all reusable snippets backup",
+      exact: true,
+    })
+    .click();
+  const file = await download;
+  const fs = await import("node:fs/promises");
+  const json = await fs.readFile(await file.path(), "utf8");
+  expect(JSON.parse(json).snippets).toHaveLength(6);
+  await page.keyboard.press("Escape");
+  const freshContext = await browser.newContext();
+  const fresh = await freshContext.newPage();
+  await start(fresh);
+  await fresh.keyboard.press("Escape");
+  await fresh
+    .getByRole("button", { name: "Snippet packs", exact: true })
+    .click();
+  await fresh.getByLabel("Snippet pack JSON", { exact: true }).fill(json);
+  await fresh
+    .getByRole("button", { name: "Review snippet pack", exact: true })
+    .click();
+  await fresh
+    .getByRole("button", { name: "Import reviewed pack", exact: true })
+    .click();
+  await fresh.keyboard.press("Escape");
+  await fresh.getByRole("button", { name: "Components", exact: true }).click();
+  await fresh.getByLabel("Library view", { exact: true }).selectOption("saved");
+  await expect(fresh.locator(".component-results article")).toHaveCount(6);
+  await freshContext.close();
+});
+test("malicious pack metadata and storage failure leave reusable state unchanged", async ({
+  page,
+}) => {
+  await start(page);
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", { name: "Snippet packs", exact: true })
+    .click();
+  await page.getByLabel("Snippet pack JSON", { exact: true }).fill(
+    JSON.stringify({
+      version: 1,
+      type: "readme-studio-snippet-pack",
+      name: "<img src=x onerror=alert(1)>",
+      snippets: [],
+    }),
+  );
+  await page
+    .getByRole("button", { name: "Review snippet pack", exact: true })
+    .click();
+  await expect(page.locator(".pack-status")).toContainText("plain text");
+  await expect(page.locator(".pack-review img")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Review example pack", exact: true })
+    .click();
+  await page.evaluate(() => {
+    Storage.prototype.setItem = () => {
+      throw new DOMException("quota", "QuotaExceededError");
+    };
+  });
+  await page
+    .getByRole("button", { name: "Import reviewed pack", exact: true })
+    .click();
+  await expect(page.locator(".pack-status")).toContainText(
+    "Could not import pack",
+  );
+  expect(
+    await page
+      .locator("app-shell")
+      .evaluate((el) => el.data.componentLibrary?.snippets.length || 0),
+  ).toBe(0);
+});

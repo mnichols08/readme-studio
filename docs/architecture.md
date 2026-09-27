@@ -133,3 +133,9 @@ The component dialog renders at most forty search cards initially, loads no card
 `widgets/registry.js` contains upstream attribution and setup/hosting notes. `widgets/embed.js` validates URLs and dimensions and serializes ordinary Markdown/HTML/picture markup; the Typing SVG adapter only constructs documented query parameters locally. No provider API, credential or proxy code is present. Field edits clear preview content and never fetch images. An explicit preview action creates sanitized image elements; failed images become placeholders without disabling insertion. UI attribution is always visible for named providers, while README credit is optional.
 
 Widget favorites share Component Library IDs. The Hub retains working settings until insertion and has close/discard protection and clipboard fallback. `widgets/health.js` reuses the existing parsed image analysis, ignores code examples through that boundary and provides bounded advisory duplicate/alt/layout guidance in the Health Worker.
+
+## Portable snippet packs (v0.5.2)
+
+`snippets/pack-schema.js` validates version-1 portable packs, whitelists metadata and content types, builds export choices and calculates pure import plans. Collision modes are explicit: Keep both by default, confirmed Replace or Skip. Ambiguous ID/name replacement is rejected instead of silently deleting multiple items. Pack review and explicit sanitized previews do not mutate reusable storage or drafts. A single successful workspace write commits both snippet and badge collection changes; failed writes retain the editable import review.
+
+Pack JSON is a transport, not an execution format. Raw Markdown/HTML source is preserved but only rendered through the existing sanitizer. Built-in example packs are local data. Exact draft-section copies allow project/widget/layout source sharing without reverse engineering or embedding Studio metadata in the README.
