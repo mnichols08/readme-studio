@@ -78,7 +78,7 @@ export class BannerBuilder extends HTMLElement {
       )
       .join(
         "",
-      )}</fieldset><aside><h2>Local banner preview</h2><label>Preview mode<select data-banner-preview-mode aria-label="Banner preview mode"><option>light</option><option>dark</option></select></label><label>Preview width<select data-banner-preview-width aria-label="Banner preview width"><option value="100%">desktop</option><option value="320px">mobile</option></select></label><div class="banner-preview"></div><label>README picture markup<textarea data-banner-markup readonly rows="6"></textarea></label><label>SVG source<textarea data-banner-svg readonly rows="6"></textarea></label><div class="row-actions"><button data-banner-copy="markup">Copy README picture markup</button><button data-banner-copy="svg">Copy SVG source</button><button data-banner-download>Download SVG assets</button></div><div class="banner-files"></div><button data-banner-save>Save banner settings</button><button data-banner-insert class="primary">Insert banner markup</button><p class="banner-status" role="status"></p></aside></div>`;
+      )}</fieldset><aside><h2>Local banner preview</h2><label>Preview mode<select data-banner-preview-mode aria-label="Banner preview mode"><option>light</option><option>dark</option></select></label><label>Preview width<select data-banner-preview-width aria-label="Banner preview width"><option value="100%">desktop</option><option value="320px">mobile</option></select></label><div class="banner-preview"></div><label>README picture markup<textarea data-banner-markup readonly rows="6"></textarea></label><label>SVG source<textarea data-banner-svg readonly rows="6"></textarea></label><div class="row-actions"><button data-banner-copy="markup">Copy README picture markup</button><button data-banner-copy="svg">Copy SVG source</button><button data-banner-download>Download SVG assets</button></div><div class="banner-files"></div><label>Banner preset name<input data-banner-preset-name value="My banner preset"></label><button data-save-banner-preset>Save reusable banner preset</button><button data-banner-save>Save banner settings</button><button data-banner-insert class="primary">Insert banner markup</button><p class="banner-status" role="status"></p></aside></div>`;
     for (const input of this.querySelectorAll("[data-banner]"))
       input.oninput = () => {
         this.value[input.dataset.banner] =
@@ -87,6 +87,19 @@ export class BannerBuilder extends HTMLElement {
             : input.type === "number"
               ? Number(input.value)
               : input.value;
+        if (
+          [
+            "width",
+            "height",
+            "alignment",
+            "pattern",
+            "themeMode",
+            "showBorder",
+            "showAccent",
+            "seed",
+          ].includes(input.dataset.banner)
+        )
+          explicitOverride(this.value, input.dataset.banner);
         this.schedule();
       };
     for (const input of this.querySelectorAll("[data-banner-color]"))
@@ -99,6 +112,8 @@ export class BannerBuilder extends HTMLElement {
       const size = bannerSizes[e.target.value];
       if (size) {
         [this.value.width, this.value.height] = size;
+        explicitOverride(this.value, "width");
+        explicitOverride(this.value, "height");
         this.draw();
         this.querySelector("[data-banner-size]").value = e.target.value;
         this.querySelector("[data-banner-size]").focus();
@@ -144,6 +159,14 @@ export class BannerBuilder extends HTMLElement {
             name: file.name,
             type: "image/svg+xml",
           });
+    };
+    this.querySelector("[data-save-banner-preset]").onclick = () => {
+      if (this.update())
+        this.emit("save-reusable-visual", {
+          kind: "banners",
+          name: this.querySelector("[data-banner-preset-name]").value,
+          banner: normalizeBanner(this.value),
+        });
     };
     this.querySelector("[data-banner-save]").onclick = () => {
       if (this.update())

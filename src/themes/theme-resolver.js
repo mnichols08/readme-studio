@@ -1,12 +1,25 @@
 import { normalizeTheme } from "./theme-model.js";
+export function cleanOwnership(value) {
+  return {
+    derived:
+      value?.derived &&
+      typeof value.derived === "object" &&
+      !Array.isArray(value.derived)
+        ? structuredClone(value.derived)
+        : {},
+    overrides: Array.isArray(value?.overrides)
+      ? value.overrides.filter((k) => typeof k === "string")
+      : [],
+  };
+}
 export function explicitOverride(object, key) {
-  object._theme ||= { derived: {}, overrides: [] };
+  object._theme = cleanOwnership(object._theme);
   object._theme.overrides = [
     ...new Set([...(object._theme.overrides || []), key]),
   ];
 }
 export function derive(object, values, { reset = false } = {}) {
-  object._theme ||= { derived: {}, overrides: [] };
+  object._theme = cleanOwnership(object._theme);
   const own = object._theme;
   own.derived ||= {};
   own.overrides ||= [];
@@ -21,7 +34,8 @@ export function derive(object, values, { reset = false } = {}) {
       object[key] = structuredClone(value);
       own.derived[key] = structuredClone(value);
       own.overrides = own.overrides.filter((k) => k !== key);
-    } else if (Object.hasOwn(own.derived, key)) explicitOverride(object, key);
+    } else if (Object.hasOwn(own.derived, key))
+      own.overrides = [...new Set([...own.overrides, key])];
   }
   return object;
 }

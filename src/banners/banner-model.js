@@ -1,5 +1,5 @@
 import { baseTheme, color, normalizeTheme } from "../themes/theme-model.js";
-import { derive } from "../themes/theme-resolver.js";
+import { derive, cleanOwnership } from "../themes/theme-resolver.js";
 export const bannerStyles = [
   "minimal",
   "terminal",
@@ -28,7 +28,7 @@ export function themePalette(theme = baseTheme) {
   };
 }
 export function newBanner(theme = baseTheme) {
-  return {
+  const value = {
     version: 1,
     name: "Your Name",
     title: "Software developer",
@@ -39,7 +39,9 @@ export function newBanner(theme = baseTheme) {
     height: 320,
     alignment: "left",
     pattern: "minimal",
-    themeMode: "both",
+    themeMode: normalizeTheme(theme).pictures.preferThemeAware
+      ? "both"
+      : "light",
     palette: derive({}, themePalette(theme)),
     showBorder: true,
     showAccent: true,
@@ -48,6 +50,23 @@ export function newBanner(theme = baseTheme) {
     filename: "banner",
     assetDirectory: "assets",
   };
+  derive(
+    value,
+    Object.fromEntries(
+      [
+        "width",
+        "height",
+        "alignment",
+        "pattern",
+        "themeMode",
+        "showBorder",
+        "showAccent",
+        "seed",
+      ].map((k) => [k, value[k]]),
+    ),
+    { reset: true },
+  );
+  return value;
 }
 export function normalizeBanner(raw) {
   if (!raw || raw.version !== 1)
@@ -101,7 +120,7 @@ export function normalizeBanner(raw) {
   for (const k of Object.keys(themePalette()))
     b.palette[k] = color(raw.palette?.[k]);
   if (raw.palette?._theme)
-    b.palette._theme = structuredClone(raw.palette._theme);
+    b.palette._theme = cleanOwnership(raw.palette._theme);
   if (
     !/^[a-z\d_./ -]*$/i.test(b.assetDirectory) ||
     b.assetDirectory.split("/").includes("..") ||
@@ -110,5 +129,6 @@ export function normalizeBanner(raw) {
     throw Error(
       "Use a relative asset folder such as assets; parent paths are not supported.",
     );
+  if (raw._theme) b._theme = cleanOwnership(raw._theme);
   return b;
 }

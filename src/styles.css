@@ -1823,3 +1823,41 @@ banner-builder textarea {
   width: 100%;
   overflow: auto;
 }
+
+.theme-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: 1rem;
+}
+.theme-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+.theme-card-sample {
+  padding: 10px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.theme-card img {
+  width: 100%;
+  height: auto;
+}
+.local-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-block: 12px;
+}
+.local-badge-row span {
+  color: white;
+  font:
+    12px system-ui,
+    sans-serif;
+  border-radius: 3px;
+  padding: 4px 8px;
+}
+.visual-apply-review {
+  scroll-margin-block: 1rem;
+}
