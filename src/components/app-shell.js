@@ -1,3 +1,5 @@
+import "./profile-suggestions.js";
+import { dismissSuggestion } from "../github/suggestions.js";
 import "./repository-authoring.js";
 import "./component-customizer.js";
 import {
@@ -104,7 +106,7 @@ export class AppShell extends HTMLElement {
     });
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="intelligence">Profile Intelligence</button><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
@@ -185,6 +187,39 @@ export class AppShell extends HTMLElement {
     });
     this.addEventListener("undo", () => this.store.undo());
     this.addEventListener("redo", () => this.store.redo());
+    this.addEventListener("suggestion-dismiss", (e) =>
+      this.updateSuggestions(
+        dismissSuggestion(this.store.draft.metadata, e.detail),
+      ),
+    );
+    this.addEventListener("suggestion-reset", () =>
+      this.updateSuggestions({
+        ...this.store.draft.metadata,
+        suggestionDismissals: {},
+      }),
+    );
+    this.addEventListener("suggestion-open", (e) => {
+      if (e.detail === "repositories") this.openRepositories();
+      else if (e.detail === "projects") this.openProjects();
+      else this.openComponents();
+    });
+    this.addEventListener("suggestion-links", (e) => {
+      if (e.detail.snapshot !== JSON.stringify(this.store.draft)) {
+        this.notify("Draft changed. Reopen Profile Intelligence.");
+        return;
+      }
+      this.store.blocks([
+        ...this.store.draft.blocks,
+        createBlock("social", {
+          title: "Contact",
+          style: "links",
+          items: e.detail.links,
+        }),
+      ]);
+      this.closeDialog();
+      this.focusDocument();
+      this.notify("Public contact links added.");
+    });
     this.addEventListener("repository-apply", (e) => {
       const d = e.detail;
       if (d.snapshot !== JSON.stringify(this.store.draft)) {
@@ -792,6 +827,23 @@ export class AppShell extends HTMLElement {
         "Could not import pack: " + e.message,
       );
     }
+  }
+  updateSuggestions(metadata) {
+    this.store.checkpoint();
+    this.store.draft.metadata = metadata;
+    this.store.emit("metadata");
+    this.querySelector("profile-suggestions")?.configure(this.store.draft);
+    this.querySelector("profile-suggestions h1")?.setAttribute(
+      "tabindex",
+      "-1",
+    );
+    this.querySelector("profile-suggestions h1")?.focus();
+    this.notify("Suggestion preferences updated for this draft.");
+  }
+  openIntelligence() {
+    this.modal("<profile-suggestions></profile-suggestions>");
+    this.dialog.classList.add("import-modal");
+    this.querySelector("profile-suggestions").configure(this.store.draft);
   }
   openRepositories() {
     this.modal("<repository-authoring></repository-authoring>");
@@ -1431,6 +1483,7 @@ export class AppShell extends HTMLElement {
   }
   action(action) {
     if (action === "snippet-packs") this.openSnippetPacks();
+    if (action === "intelligence") this.openIntelligence();
     if (action === "repositories") this.openRepositories();
     if (action === "widgets") this.openWidgets();
     if (action === "components") this.openComponents();

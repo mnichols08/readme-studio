@@ -1,3 +1,4 @@
+import { profileSnapshot } from "../github/suggestions.js";
 import {
   createBlock,
   serializeBlock,
@@ -319,6 +320,7 @@ export function autofillProfile(draft, p, options = profileOptions) {
       align: "left",
     });
   metadata.githubProfile = {
+    snapshot: profileSnapshot(p),
     repositories: structuredClone(
       p.repositories || previous?.repositories || [],
     ),

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1
+
+- Added explainable Profile Intelligence, eligible project candidates and curated technology grouping.
+- Added per-draft dismissals keyed to relevant context and reviewed public contact links. No scores, proficiency claims, prose generation or automatic application.
+
 ## 0.6.0
 
 - Added public repository context, reusable authoring picker, cached and explicit lookups, filters and bulk review.
