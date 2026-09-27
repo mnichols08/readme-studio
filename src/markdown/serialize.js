@@ -1,3 +1,4 @@
+import { present, divider } from "../styling/presentation.js";
 import { serializeShowcase } from "../projects/serialize-project.js";
 import { safeUrl } from "./url-safety.js";
 export { safeUrl } from "./url-safety.js";
@@ -112,7 +113,8 @@ export function stack(s) {
     )
     .join("\n\n");
 }
-export function serializeBlock({ type, settings: s }) {
+export const serializeBlock = (b) => present(serializeContent(b), b);
+function serializeContent({ type, settings: s }) {
   switch (type) {
     case "hero":
       return `# ${text(s.name || "Your Name")}\n\n${s.subtitle || ""}`;
@@ -136,7 +138,7 @@ export function serializeBlock({ type, settings: s }) {
     case "picture":
       return picture(s);
     case "divider":
-      return "---";
+      return divider(s.dividerStyle || "rule", s.presentation?.decoration);
     case "custom":
       return s.markdown || "";
     default:

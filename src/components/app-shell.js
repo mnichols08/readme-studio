@@ -1,3 +1,10 @@
+import "./theme-studio.js";
+import { baseTheme } from "../themes/theme-model.js";
+import {
+  themeBlocks,
+  badgeDefaults,
+  derive,
+} from "../themes/theme-resolver.js";
 import "./project-studio.js";
 import { repositorySuggestions } from "../badges/providers/index.js";
 import "./badge-collection-editor.js";
@@ -70,7 +77,7 @@ export class AppShell extends HTMLElement {
     });
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
@@ -86,7 +93,8 @@ export class AppShell extends HTMLElement {
     this.dialog.addEventListener("cancel", (e) => {
       if (
         this.querySelector("badge-collection-editor")?.isDirty() ||
-        this.querySelector("project-studio")?.isDirty()
+        this.querySelector("project-studio")?.isDirty() ||
+        this.querySelector("theme-studio")?.isDirty()
       ) {
         e.preventDefault();
         this.closeDialog();
@@ -176,6 +184,22 @@ export class AppShell extends HTMLElement {
     this.addEventListener("open-project-studio", () =>
       this.openProjects(this.selectedBlock),
     );
+    this.addEventListener("theme-apply", (e) => {
+      if (this.visualSnapshot !== JSON.stringify(this.store.draft)) {
+        this.notify("Draft changed. Reopen Theme Studio before applying.");
+        return;
+      }
+      const { theme, reset } = e.detail;
+      this.store.blocks(
+        themeBlocks(this.store.draft.blocks, theme, { reset }),
+        { ...this.store.draft.metadata, visualTheme: theme },
+      );
+      e.target.initial = JSON.stringify(e.target.value);
+      this.closeDialog();
+      this.notify(
+        "Visual theme applied. Explicit overrides were preserved unless reset. Undo is available.",
+      );
+    });
     this.addEventListener("project-save", (e) => {
       const studio = e.target;
       if (this.projectSnapshot !== JSON.stringify(this.store.draft)) {
@@ -402,7 +426,8 @@ export class AppShell extends HTMLElement {
   closeDialog(target) {
     if (
       (this.querySelector("badge-collection-editor")?.isDirty() ||
-        this.querySelector("project-studio")?.isDirty()) &&
+        this.querySelector("project-studio")?.isDirty() ||
+        this.querySelector("theme-studio")?.isDirty()) &&
       !confirm(
         "Discard unsaved studio edits? Save or export your work to keep it.",
       )
@@ -445,6 +470,20 @@ export class AppShell extends HTMLElement {
       return false;
     }
   }
+  openTheme() {
+    this.visualSnapshot = JSON.stringify(this.store.draft);
+    this.modal("<theme-studio></theme-studio>");
+    this.dialog.classList.add("import-modal");
+    try {
+      this.querySelector("theme-studio").theme =
+        this.store.draft.metadata.visualTheme || baseTheme;
+    } catch {
+      this.querySelector("theme-studio").theme = baseTheme;
+      this.notify(
+        "Stored theme could not be read. Choose a valid theme; original source is preserved.",
+      );
+    }
+  }
   openProjects(id) {
     const block =
       this.store.draft.blocks.find(
@@ -459,6 +498,7 @@ export class AppShell extends HTMLElement {
     studio.availableRepositories = structuredClone(
       this.store.draft.metadata.githubProfile?.repositories || [],
     );
+    studio.activeTheme = this.store.draft.metadata.visualTheme || baseTheme;
     studio.collections = structuredClone(this.data.badgeCollections.items);
     try {
       studio.settings = block?.settings || {
@@ -523,6 +563,11 @@ export class AppShell extends HTMLElement {
     this.modal("<badge-studio></badge-studio>");
     this.dialog.classList.add("import-modal");
     const studio = this.querySelector("badge-studio");
+    studio.activeTheme = this.store.draft.metadata.visualTheme || baseTheme;
+    if (this.store.draft.metadata.visualTheme)
+      studio.badge = derive(studio.value, badgeDefaults(studio.activeTheme), {
+        reset: true,
+      });
     studio.blocks = structuredClone(this.store.draft.blocks);
     studio.selectedBlock = selectedBlock;
     studio.suggestions = repositorySuggestions(this.store.draft);
@@ -920,6 +965,7 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (action === "visual-theme") this.openTheme();
     if (action === "projects") this.openProjects();
     if (action === "collections") this.openCollections();
     if (action === "badges") this.openBadges();

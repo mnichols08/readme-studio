@@ -1,3 +1,4 @@
+import { explicitOverride } from "../themes/theme-resolver.js";
 import { html, serializeBlock } from "../markdown/serialize.js";
 import { render } from "../markdown/render.js";
 import technologies from "../data/technologies.json";
@@ -264,6 +265,11 @@ export class BuilderForm extends HTMLElement {
         keys.slice(0, -1).forEach((k) => (obj = obj[k]));
         obj[keys.at(-1)] =
           e.target.type === "checkbox" ? e.target.checked : e.target.value;
+        if (
+          obj._theme?.derived &&
+          Object.hasOwn(obj._theme.derived, keys.at(-1))
+        )
+          explicitOverride(obj, keys.at(-1));
         if (p === "snippet") {
           s.alt = snippets.find((i) => i.id === s.snippet).name;
           this.draw();
