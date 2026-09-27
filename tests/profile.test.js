@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   githubUsername,
   fetchGithubProfile,
@@ -8,7 +8,13 @@ import {
   autofillProfile,
   profileOptions,
 } from "../src/state/profile-autofill.js";
-import { newDraft, validateDraft } from "../src/state/drafts.js";
+import {
+  newDraft,
+  validateDraft,
+  saveDrafts,
+  readDrafts,
+} from "../src/state/drafts.js";
+import { render } from "../src/markdown/render.js";
 import { template, templateNames } from "../src/data/templates.js";
 import { createBlock, serializeBlocks } from "../src/markdown/serialize.js";
 import { Store } from "../src/state/store.js";
@@ -56,6 +62,68 @@ async function profile() {
   );
 }
 describe("public GitHub profile lookup", () => {
+  it("cancels a pending profile request without starting repository requests", async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const result = fetchGithubProfile(
+      "octocat",
+      (_url, { signal }) =>
+        new Promise((_resolve, reject) => {
+          calls++;
+          signal.addEventListener("abort", () => reject(signal.reason));
+        }),
+      controller.signal,
+    );
+    controller.abort();
+    await expect(result).rejects.toMatchObject({ name: "AbortError" });
+    expect(calls).toBe(1);
+  });
+  it("does not fetch when already canceled", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetcher = vi.fn();
+    await expect(
+      fetchGithubProfile("octocat", fetcher, controller.signal),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it("keeps completed pages on timeout and releases the timeout timer", async () => {
+    vi.useFakeTimers();
+    try {
+      let pages = 0;
+      const pending = fetchGithubProfile("octocat", async (url, { signal }) => {
+        if (!url.includes("/repos?")) return response(user);
+        if (++pages === 1) return response([repo(1)], true);
+        return new Promise((_resolve, reject) =>
+          signal.addEventListener("abort", () => reject(signal.reason)),
+        );
+      });
+      await vi.advanceTimersByTimeAsync(30000);
+      const p = await pending;
+      expect(p.complete).toBe(false);
+      expect(p.stars).toBe(5);
+      expect(p.warning).toContain("timed out");
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("rejects malformed profile JSON and keeps usable data on malformed repository pages", async () => {
+    await expect(
+      fetchGithubProfile("octocat", async () => ({
+        ok: true,
+        json: async () => {
+          throw new SyntaxError("bad JSON");
+        },
+      })),
+    ).rejects.toThrow("unreadable response");
+    const p = await fetchGithubProfile("octocat", async (url) =>
+      response(url.includes("/repos?") ? [null, {}] : user),
+    );
+    expect(p.complete).toBe(false);
+    expect(p.warning).toContain("invalid repository");
+    expect(p.projects).toEqual([]);
+  });
   it.each([
     "octocat",
     "@octocat",
@@ -135,6 +203,131 @@ describe("public GitHub profile lookup", () => {
   });
 });
 describe("conservative profile autofill", () => {
+  it("does not refill generated introductions or contact URLs that the user explicitly cleared", async () => {
+    const p = await profile();
+    const d = newDraft("Draft", template("Minimal"));
+    const first = autofillProfile(d, p);
+    first.blocks[0].settings.subtitle = "";
+    first.blocks.find((b) => b.profileAutofill?.kind === "bio").settings.body =
+      "";
+    first.blocks
+      .find((b) => b.type === "social")
+      .settings.items.find((i) => i.name === "Portfolio").url = "";
+    const next = autofillProfile({ ...d, ...first }, p);
+    expect(next.blocks[0].settings.subtitle).toBe("");
+    expect(
+      next.blocks.find((b) => b.profileAutofill?.kind === "bio").settings.body,
+    ).toBe("");
+    expect(next.markdown).not.toContain("https://example.org/");
+  });
+  it("refreshes owned introductions and portfolio URLs, including removals, while preserving edits", async () => {
+    const p = await profile();
+    const d = newDraft("Draft", template("Minimal"));
+    const first = autofillProfile(d, p);
+    const second = autofillProfile(
+      { ...d, ...first },
+      { ...p, bio: "New public bio", website: "https://new.example.org/" },
+    );
+    expect(second.blocks[0].settings.subtitle).toBe("New public bio");
+    expect(second.markdown).not.toContain("https://example.org/");
+    expect(second.markdown).toContain("https://new.example.org/");
+    const removed = autofillProfile(
+      { ...d, ...second },
+      { ...p, bio: "", company: "", location: "", website: "" },
+    );
+    expect(removed.blocks[0].settings.subtitle).toBe("");
+    expect(removed.markdown).not.toContain("https://new.example.org/");
+    second.blocks[0].settings.subtitle = "My private wording";
+    const social = second.blocks.find((b) => b.type === "social");
+    social.settings.items.find((i) => i.name === "Portfolio").url =
+      "https://my-own.example/";
+    const third = autofillProfile(
+      { ...d, ...second },
+      { ...p, bio: "Another public bio", website: "https://third.example/" },
+    );
+    expect(third.blocks[0].settings.subtitle).toBe("My private wording");
+    expect(third.markdown).toContain("https://my-own.example/");
+  });
+  it("removes generated public email when the API no longer returns it", async () => {
+    const p = { ...(await profile()), email: "public@example.org" };
+    const d = newDraft("Draft", template());
+    const first = autofillProfile(d, p);
+    expect(first.markdown).toContain("mailto:public@example.org");
+    const next = autofillProfile({ ...d, ...first }, { ...p, email: "" });
+    expect(next.markdown).not.toContain("mailto:public@example.org");
+  });
+  it("retains new field ownership across storage, JSON backup, undo and redo", async () => {
+    const p = await profile();
+    const d = newDraft("Draft", template());
+    const first = autofillProfile(d, p);
+    saveDrafts({ drafts: [{ ...d, ...first }], active: d.id, settings: {} });
+    const saved = readDrafts().drafts[0];
+    const backup = validateDraft(JSON.parse(JSON.stringify(saved)));
+    const store = new Store(backup);
+    const next = autofillProfile(backup, {
+      ...p,
+      bio: "After reload",
+      website: "https://updated.example/",
+    });
+    store.blocks(next.blocks, next.metadata);
+    expect(store.draft.markdown).toContain("After reload");
+    store.undo();
+    expect(store.draft.markdown).toBe(first.markdown);
+    store.redo();
+    expect(store.draft.markdown).toBe(next.markdown);
+  });
+  it("accepts legacy draft metadata without rewriting original Markdown on load", async () => {
+    const d = newDraft("Legacy", template());
+    d.blocks[0].profileIdentity = { invalid: true };
+    const loaded = validateDraft(d);
+    expect(loaded.markdown).toBe(d.markdown);
+    expect(() =>
+      autofillProfile(loaded, {
+        login: "octocat",
+        name: "Mona",
+        bio: "",
+        company: "",
+        location: "",
+        url: "https://github.com/octocat",
+        website: "",
+        projects: [],
+        languages: [],
+        email: "",
+        twitter: "",
+        complete: false,
+        fetchedRepos: 0,
+        fetchedAt: "2026-09-27",
+      }),
+    ).not.toThrow();
+  });
+  it("renders untrusted API fields as text and blocks executable public URLs", async () => {
+    const p = await fetchGithubProfile("octocat", async (url) =>
+      response(
+        url.includes("/repos?")
+          ? [
+              repo(1, {
+                description: '<img src=x onerror="alert(1)">',
+                homepage: "javascript:alert(1)",
+              }),
+            ]
+          : {
+              ...user,
+              name: "<script>evil()</script>",
+              bio: '<iframe src="https://evil.test"></iframe>',
+              blog: "javascript:alert(1)",
+            },
+      ),
+    );
+    const result = autofillProfile(newDraft("Safe", template()), p, {
+      projects: true,
+    });
+    const node = document.createElement("div");
+    node.innerHTML = render(result.markdown);
+    expect(
+      node.querySelector('script,iframe,[onerror],[href^="javascript"]'),
+    ).toBeNull();
+    expect(node.textContent).toContain("<iframe");
+  });
   it("refreshes a filled display name while preserving subsequent manual name edits", async () => {
     const p = await profile();
     const draft = newDraft("Minimal", template("Minimal"));

@@ -42,7 +42,11 @@ GitHub import fetches only the public GitHub README API endpoint, using the raw 
 
 `state/profile-autofill.js` is a pure draft transformation. It replaces explicit placeholders, safely escapes external text, fills known sample content, and adds chosen generated sections. Internal block metadata records the last generated Markdown and identity placeholder source/value pairs. Refresh replaces only content that still matches its last generated form; manual changes relinquish ownership. Draft metadata retains detached section kinds to prevent duplicate insertion after raw editing. These records never appear in exported Markdown.
 
-`github-profile-form` loads and previews the transformation without mutating the draft. Request generations discard stale results after input changes or dialog replacement. Applying calls the store with both blocks and metadata in one undo checkpoint. Profile metadata is scoped to the draft and included in JSON backups; no account-wide automatic fetching or background refresh occurs.
+`github-profile-form` loads and previews the transformation without mutating the draft. An AbortController cancels requests on username changes, dialog close, or component removal; request generations also discard stale results. The loader clears its 30-second timeout and removes cancellation listeners when a request ends. Completed repository pages survive repository timeouts, but explicit cancellation produces no usable result.
+
+Applying compares the reviewed snapshot (draft ID, Markdown, blocks, and metadata) against the current draft before recording one undo checkpoint. A mismatched snapshot is rejected. Internal `profileIntro` and `profileLinks` records allow untouched hero bios and sample contact URLs to refresh. Contact records check the row index, label, and previous URL before updating; reordered or edited rows are treated conservatively. Missing formerly public fields clear only generated values. Older v0.1.0 drafts keep their content, and absent ownership records are never inferred from ordinary personal text.
+
+Profile metadata is scoped to the draft and included in JSON backups; no account-wide automatic fetching or background refresh occurs. The local storage schema remains version 1; additive ownership metadata requires no destructive migration.
 
 ## Performance and future Rust boundary
 

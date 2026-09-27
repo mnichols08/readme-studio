@@ -115,20 +115,26 @@ export function autofillProfile(draft, p, options = profileOptions) {
   if (opts.identity && !blocks.length)
     blocks.push(
       createBlock("hero", {
-        name: p.name,
-        subtitle: opts.bio ? literal(p.bio) : "",
+        name: "Your Name",
+        subtitle: "",
       }),
     );
-  if (opts.bio && (p.bio || p.company || p.location)) {
+  if (opts.bio) {
     const hero = blocks.find(
       (b) =>
         b.type === "hero" &&
-        (!b.settings.subtitle || b.settings.subtitle === defaultIntro),
+        (b.profileIntro
+          ? b.profileIntro.value === b.settings.subtitle
+          : !b.settings.subtitle || b.settings.subtitle === defaultIntro),
     );
-    if (hero && p.bio) hero.settings.subtitle = literal(p.bio);
+    if (hero && (p.bio || hero.profileIntro)) {
+      hero.settings.subtitle = literal(p.bio);
+      hero.profileIntro = { value: hero.settings.subtitle };
+    }
     const about = blocks.find(
       (b) =>
         b.type === "about" &&
+        !b.profileAutofill &&
         (!b.settings.body || b.settings.body === defaultAbout),
     );
     const body = [
@@ -139,20 +145,26 @@ export function autofillProfile(draft, p, options = profileOptions) {
       .filter(Boolean)
       .map(literal)
       .join("\n\n");
-    if (about) {
+    if (about && body) {
       about.settings.body = body;
       about.profileAutofill = { kind: "bio", markdown: serializeBlock(about) };
-    } else managed("bio", "about", { title: "About Me", body });
+    } else if (body || blocks.some((b) => b.profileAutofill?.kind === "bio"))
+      managed("bio", "about", { title: "About Me", body });
   }
   if (opts.identity) {
     for (const b of blocks) {
       const owned =
         b.profileAutofill && serializeBlock(b) === b.profileAutofill.markdown;
       const prior = new Map(
-        (b.profileIdentity || []).map((record) => [
-          JSON.stringify(record.path),
-          record,
-        ]),
+        (Array.isArray(b.profileIdentity) ? b.profileIdentity : [])
+          .filter(
+            (record) =>
+              record &&
+              Array.isArray(record.path) &&
+              typeof record.source === "string" &&
+              typeof record.value === "string",
+          )
+          .map((record) => [JSON.stringify(record.path), record]),
       );
       const records = [];
       const visit = (value, path = []) => {
@@ -179,6 +191,7 @@ export function autofillProfile(draft, p, options = profileOptions) {
     }
   }
   if (opts.links) {
+    const editedKinds = new Set();
     const items = [
       { name: "GitHub", url: p.url },
       ...(p.website ? [{ name: "Portfolio", url: p.website }] : []),
@@ -192,14 +205,43 @@ export function autofillProfile(draft, p, options = profileOptions) {
     // Replace only known sample links; keep custom contact destinations.
     for (const b of blocks.filter((b) =>
       ["social", "contact"].includes(b.type),
-    ))
-      b.settings.items = b.settings.items.map((i) =>
-        i.url === "https://example.com" && p.website
-          ? { ...i, url: p.website }
-          : i.url === "https://github.com/your-name"
-            ? { ...i, url: p.url }
-            : i,
-      );
+    )) {
+      const records = [];
+      b.settings.items = b.settings.items.map((i, index) => {
+        const oldRecord = (
+          Array.isArray(b.profileLinks) ? b.profileLinks : []
+        ).find((r) => r?.index === index);
+        const prior = (
+          Array.isArray(b.profileLinks) ? b.profileLinks : []
+        ).find(
+          (r) => r?.index === index && r.name === i.name && r.value === i.url,
+        );
+        const identity = (
+          Array.isArray(b.profileIdentity) ? b.profileIdentity : []
+        ).some(
+          (r) =>
+            JSON.stringify(r?.path) ===
+              JSON.stringify(["items", index, "url"]) &&
+            r.value === i.url &&
+            r.source === "https://github.com/your-name",
+        );
+        if (oldRecord && !prior && !identity) editedKinds.add(oldRecord.kind);
+        const kind =
+          prior?.kind ||
+          (i.url === "https://example.com"
+            ? "website"
+            : i.url === "https://github.com/your-name" || identity
+              ? "github"
+              : null);
+        if (!kind) return i;
+        const url = kind === "website" ? p.website : p.url;
+        if (!url && !prior) return i;
+        records.push({ index, kind, name: i.name, value: url });
+        return { ...i, url };
+      });
+      if (records.length) b.profileLinks = records;
+      else delete b.profileLinks;
+    }
     const existingUrls = new Set(
       blocks
         .filter(
@@ -211,12 +253,17 @@ export function autofillProfile(draft, p, options = profileOptions) {
     );
     const missing = items.filter(
       (i) =>
+        !(i.name === "Portfolio" && editedKinds.has("website")) &&
+        !(i.name === "GitHub" && editedKinds.has("github")) &&
         !existingUrls.has(i.url) &&
         !blocks.some(
           (b) => b.type === "custom" && b.settings.markdown.includes(i.url),
         ),
     );
-    if (missing.length)
+    if (
+      missing.length ||
+      blocks.some((b) => b.profileAutofill?.kind === "links")
+    )
       managed("links", "social", { style: "links", items: missing });
   }
   if (opts.stats)

@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.1.0** · Native Web Components · Local drafts · Static hosting
+**Version 0.1.1** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -52,6 +52,10 @@ The flow reads the [public user endpoint](https://docs.github.com/en/rest/users/
 
 Apply is a single undoable change to the current draft, including saved profile metadata. Look up the profile again to refresh untouched generated sections and filled names. Subsequent manual edits are respected. Raw Markdown editing detaches generated sections from automatic refresh; repeating autofill does not append those sections again. All applied content remains ordinary Markdown/HTML after export.
 
+In 0.1.1, untouched autofilled hero bios and sample contact URLs also refresh. Previously generated bio/contact fields are cleared when the public profile no longer provides them; manual replacements stay yours. Closing the dialog or changing the username cancels the lookup. If the draft changes after review, apply is rejected so you can reopen autofill and review the latest source. Keyboard users can submit the username with Enter, tab through choices, and close with Escape.
+
+Existing v0.1.0 drafts and JSON backups remain readable without a format migration. Older bio/contact fields without ownership records are treated conservatively as custom content. See [0.1.1 release scope and verification](docs/releases/0.1.1.md). The next milestones are 0.1.2 Import Intelligence and 0.1.3 Foundation Hardening; later capability work is intentionally excluded from this patch.
+
 ## Preview and health
 
 The preview supports GFM tables, task lists, highlighted fenced code, details/summary, pictures, and a conservative subset of GitHub-compatible HTML. DOMPurify sanitizes generated preview HTML. Links open in a separate tab with `noopener noreferrer`. Preview width presets are maximum widths, constrained by the available pane: desktop (1012), narrow (760), tablet (640), and mobile (375). The separate preview theme toggle simulates light/dark picture sources.
@@ -83,6 +87,8 @@ npm run preview
 Unit tests cover serializers, templates, sanitization, warnings, section splitting, document statistics, raw/block ownership, drafts, import errors, Unicode, and 100 KB documents. Playwright covers the showcase acceptance workflow, badges, projects, stack/social/widget/picture builders, themes, preview sizes, raw editing, history, import, storage, export, and mobile layout. GitHub responses and badge images are mocked; tests do not depend on live GitHub.
 
 GitHub Actions runs tests, browser tests, and the production build. It does not deploy.
+
+Browser tests start their own server on port 4317 and refuse to reuse an unrelated running server. Set `README_STUDIO_TEST_PORT` to another unused port if needed.
 
 ## Static deployment
 
