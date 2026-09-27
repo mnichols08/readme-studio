@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+- Added public repository context, reusable authoring picker, cached and explicit lookups, filters and bulk review.
+- Generate repository lists, projects, badge groups, confirmed technology suggestions and reusable custom snippets with source ownership.
+- Preserve manual Markdown, reuse existing project/badge serializers, and label repository homepages as unverified data.
+
 ## 0.5.3
 
 - Added structured component ownership, visual re-editing for template/widget/badge forms, independent duplication and reusable configured presets.

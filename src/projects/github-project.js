@@ -23,7 +23,11 @@ export function repositoryIdentity(value) {
 const string = (v) => (typeof v === "string" ? v : "");
 const count = (v) => (Number.isSafeInteger(v) && v >= 0 ? v : null);
 export function publicRepository(raw) {
-  if (!raw || raw.private === true)
+  if (
+    !raw ||
+    raw.private === true ||
+    (raw.visibility && raw.visibility !== "public")
+  )
     throw new Error("Only public repositories can be imported.");
   const fullName =
     string(raw.full_name) || `${string(raw.owner?.login)}/${string(raw.name)}`;
@@ -50,6 +54,8 @@ export function publicRepository(raw) {
     updated_at: string(raw.updated_at),
     pushed_at: string(raw.pushed_at),
     license: string(raw.license?.spdx_id) || string(raw.license),
+    default_branch: string(raw.default_branch),
+    visibility: "public",
     lastFetched: new Date().toISOString(),
   };
 }
