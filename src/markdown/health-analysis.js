@@ -1,3 +1,4 @@
+import { analyzeCompatibility } from "../compatibility/analyze.js";
 import { analyzeDocument } from "../analysis/analyze.js";
 import { componentHealth } from "../component-instances/health.js";
 import { widgetHealth } from "../widgets/health.js";
@@ -52,5 +53,6 @@ export function analyzeDraft(draft, core) {
       );
   }
   analysis.detail = analyzeDocument(draft.markdown, { core });
+  analysis.detail.compatibility = analyzeCompatibility(analysis.detail);
   return { analysis, warnings: [...new Set(warnings)] };
 }

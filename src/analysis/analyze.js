@@ -95,7 +95,9 @@ export function analyzeDocument(markdown, { core = jsCore } = {}) {
       const clean = t.raw.replace(/<!--[\s\S]*?(?:-->|$)/g, (s) =>
         s.replace(/[^\n]/g, " "),
       );
-      for (const m of clean.matchAll(/<\/?([a-z][\w-]*)\b[^>]*>/gi)) {
+      for (const m of clean.matchAll(
+        /<\/?([a-z][\w-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi,
+      )) {
         const raw = m[0],
           tag = m[1].toLowerCase(),
           a = attributes(raw),

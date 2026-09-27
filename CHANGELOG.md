@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2
+
+- Added a dedicated GitHub Compatibility Lab with support/safety filters, explanations, alternatives and source navigation.
+- Added picture, details, table, styling, event and URL diagnostics that distinguish mobile layout from preview security.
+- Added documented GitHub-style fixtures, encoded-URL tests and mobile keyboard coverage without claiming exact GitHub parity.
+
 ## 0.7.1
 
 - Added a lazy local WASM statistics core with JavaScript fallback and a portable, parity-tested Rust structural API.
