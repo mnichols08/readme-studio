@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3
+
+- Advisory badge alt-text, approximate contrast, duplicate technology/URL/status, long-row and per-section clutter guidance; code examples and comments remain excluded.
+- Resilient collection backup/restore and partial corruption recovery, bounded large-collection previews, and explicit unsaved-edit handling.
+- In-place clipboard fallback, offline markup generation, strict color/style/URL validation, and local builder validation errors.
+- Desktop side-by-side preview, mobile wrapping, predictable WebKit dialog focus, and Chromium/Firefox/WebKit workflow coverage.
+- Completed badge, privacy, accessibility, and architecture documentation.
+
 ## 0.2.2
 
 - Guided dynamic helpers for GitHub workflow/stars/forks/issues/license/releases, npm version/downloads, crates.io version/downloads, PyPI, Docker, Netlify, and public Shields JSON endpoints.

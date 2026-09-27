@@ -83,7 +83,8 @@ export function validateCollections(value = { version: 1, items: [] }) {
 export function collectionName(name, items) {
   let next = name,
     n = 2;
-  while (items.some((i) => i.name === next)) next = `${name} (${n++})`;
+  while (items.some((i) => i.name === next))
+    next = `${name.slice(0, 110)} (${n++})`;
   return next;
 }
 export function collectionMarkdown(c) {
@@ -147,4 +148,38 @@ export function starterCollection(name) {
     style: "category",
     badges,
   });
+}
+
+export function recoverCollections(data) {
+  const recovered = [];
+  if (data?.version !== 1 || !Array.isArray(data.items))
+    return { version: 1, items: [] };
+  for (const entry of data.items.slice(0, 500)) {
+    try {
+      recovered.push(validateCollection(entry, { preserveId: true }));
+    } catch {
+      if (!entry || !Array.isArray(entry.badges)) continue;
+      const badges = [];
+      for (const b of entry.badges.slice(0, 1000)) {
+        try {
+          badges.push(validateBadge(b));
+        } catch {
+          /* Original JSON remains available in recovery export. */
+        }
+      }
+      if (badges.length)
+        recovered.push(
+          validateCollection({
+            version: 1,
+            type: "badge-collection",
+            name:
+              typeof entry.name === "string"
+                ? entry.name.slice(0, 110) || "Recovered collection"
+                : "Recovered collection",
+            badges,
+          }),
+        );
+    }
+  }
+  return validateCollections({ version: 1, items: recovered });
 }

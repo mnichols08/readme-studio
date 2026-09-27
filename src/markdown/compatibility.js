@@ -1,3 +1,4 @@
+import { badgeWarnings, badgeIdentity } from "../badges/duplicates.js";
 import { visitTokens } from "./visit-tokens.js";
 import { marked } from "marked";
 export const compatibilityRules = [
@@ -32,14 +33,47 @@ export function analyze(markdown) {
   let codeBlocks = 0;
   let separators = 0;
   const tokens = marked.lexer(markdown);
-  let source = "";
+  let source = "",
+    section = "README";
+  const htmlSections = [];
   visitTokens(tokens, (t) => {
-    if (t.type === "heading") headings.push({ level: t.depth, text: t.text });
-    if (t.type === "image") images.push({ alt: t.text, url: t.href });
+    if (t.type === "heading") {
+      section = t.text;
+      headings.push({ level: t.depth, text: t.text });
+    }
+    if (t.type === "image") images.push({ alt: t.text, url: t.href, section });
     if (t.type === "link") links.push({ text: t.text, url: t.href });
     if (t.type === "code") codeBlocks++;
-    if (t.type === "html")
-      source += t.text.replace(/<!--[\s\S]*?(?:-->|$)/g, "") + "\n";
+    if (t.type === "html") {
+      const clean = t.text.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+      source += clean + "\n";
+      htmlSections.push({ source: clean, section });
+    }
+    if (t.type === "paragraph") {
+      const row = [];
+      visitTokens(t.tokens || [], (token) => {
+        if (token.type === "image" && badgeIdentity(token.href))
+          row.push(token);
+      });
+      if (row.length > 8)
+        issues.push({
+          category: "Badge layout",
+          message: `Long badge row (${row.length} badges) in “${section.slice(0, 80)}”; check mobile wrapping.`,
+        });
+      if (
+        row.length === 1 &&
+        t.tokens?.some(
+          (token) =>
+            token.type === "text" &&
+            token.text.trim().toLowerCase() ===
+              row[0].text.trim().toLowerCase(),
+        )
+      )
+        issues.push({
+          category: "Badge accessibility",
+          message: `Badge alt text repeats nearby text in “${section.slice(0, 80)}”; avoid redundant screen-reader announcements.`,
+        });
+    }
     if (t.type === "hr") separators++;
     if (t.type === "table" && t.header.length > 6)
       issues.push({
@@ -55,11 +89,17 @@ export function analyze(markdown) {
         "i",
       ),
     )?.[1] || "";
-  for (const tag of source.match(/<img\b[^>]*>/gi) || []) {
-    images.push({ alt: attr(tag, "alt"), url: attr(tag, "src") });
-    if (Number(attr(tag, "width")) > 900)
-      add("Layout", "A fixed-width image exceeds 900px.");
-  }
+  for (const segment of htmlSections)
+    for (const tag of segment.source.match(/<img\b[^>]*>/gi) || []) {
+      images.push({
+        alt: attr(tag, "alt"),
+        url: attr(tag, "src"),
+        section: segment.section,
+      });
+      if (Number(attr(tag, "width")) > 900)
+        add("Layout", "A fixed-width image exceeds 900px.");
+    }
+  issues.push(...badgeWarnings(images));
   if (images.some((i) => !i.alt.trim()))
     add("Accessibility", "Add descriptive alt text to every image.");
   if (images.some((i) => i.alt.length > 150 || /^[^\p{L}\p{N}]+$/u.test(i.alt)))

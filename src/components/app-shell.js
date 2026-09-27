@@ -82,6 +82,12 @@ export class AppShell extends HTMLElement {
     this.content = this.querySelector(".builder-content");
     this.dialog = this.querySelector("dialog");
     this.querySelector(".close-dialog").onclick = () => this.closeDialog();
+    this.dialog.addEventListener("cancel", (e) => {
+      if (this.querySelector("badge-collection-editor")?.isDirty()) {
+        e.preventDefault();
+        this.closeDialog();
+      }
+    });
     this.dialog.addEventListener("close", () => {
       if (this.dialog.open) return; // Ignore a queued close event from the previous dialog content.
       this.querySelector("import-dialog")?.cancel();
@@ -364,6 +370,13 @@ export class AppShell extends HTMLElement {
     el.hidden = false;
   }
   closeDialog(target) {
+    if (
+      this.querySelector("badge-collection-editor")?.isDirty() &&
+      !confirm(
+        "Discard unsaved collection edits? Save or export the collection to keep them.",
+      )
+    )
+      return;
     this.afterDialogFocus = target || this.dialogTrigger;
     this.dialog.close();
   }
@@ -385,6 +398,9 @@ export class AppShell extends HTMLElement {
       const plan = { ...this.data, badgeCollections: collections };
       saveDrafts(plan);
       this.data.badgeCollections = collections;
+      const collectionEditor = this.querySelector("badge-collection-editor");
+      if (collectionEditor)
+        collectionEditor.initial = JSON.stringify(collectionEditor.items);
       this.querySelector("badge-collection-editor")?.status(
         "Collections saved locally.",
       );
@@ -406,10 +422,21 @@ export class AppShell extends HTMLElement {
     this.dialog.classList.add("import-modal");
     const editor = this.querySelector("badge-collection-editor");
     editor.items = structuredClone(this.data.badgeCollections.items);
+    editor.initial = JSON.stringify(editor.items);
     editor.selected = editor.items[0]?.id;
     editor.draw();
   }
   insertCollection(c) {
+    const collectionEditor = this.querySelector("badge-collection-editor");
+    if (collectionEditor?.isDirty()) {
+      if (
+        !confirm(
+          "Insert this collection without saving its library edits? Save collection first to reuse those edits later.",
+        )
+      )
+        return;
+      collectionEditor.initial = JSON.stringify(collectionEditor.items);
+    }
     if (this.badgeSnapshot !== this.store.draft.markdown) {
       this.notify("Draft changed. Reopen collections before inserting.");
       return;
@@ -790,9 +817,9 @@ export class AppShell extends HTMLElement {
         if (ticket !== generation || !input.isConnected) return;
         const snapshot = JSON.stringify(this.data);
         this.querySelector("#restore-status").textContent =
-          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""}`;
+          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.badgeCollections.items.length} badge collections`;
         this.querySelector("#restore-review").innerHTML =
-          '<label>Restore mode<select id="restore-mode" aria-label="Restore mode"><option value="merge">Merge with local drafts</option><option value="replace">Replace local drafts</option></select></label><label class="check"><input id="restore-confirm" type="checkbox"> I confirm replacing local drafts or original recovery data</label><button id="apply-restore" class="primary">Restore backup</button>';
+          '<label>Restore mode<select id="restore-mode" aria-label="Restore mode"><option value="merge">Merge with local drafts</option><option value="replace">Replace local drafts</option></select></label><label class="check"><input id="restore-confirm" type="checkbox"> I confirm replacing local drafts, collections, or original recovery data</label><button id="apply-restore" class="primary">Restore backup</button>';
         this.querySelector("#restore-mode").focus();
         this.querySelector("#apply-restore").onclick = () => {
           try {
