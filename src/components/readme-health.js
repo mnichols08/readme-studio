@@ -7,6 +7,13 @@ export class ReadmeHealth extends HTMLElement {
     this.worker = null;
   }
   set draft(draft) {
+    const identity = JSON.stringify([
+      draft.markdown,
+      draft.blocks,
+      draft.metadata,
+    ]);
+    if (identity === this.draftIdentity && this.worker) return;
+    this.draftIdentity = identity;
     this.pending = structuredClone(draft);
     if (!this.querySelector("h2"))
       this.innerHTML =
@@ -72,6 +79,7 @@ export class ReadmeHealth extends HTMLElement {
   }
   display(a) {
     const focused = this.contains(document.activeElement);
+    const focusedIssue = focused ? document.activeElement.dataset.jumpId : null;
     if (a.detail) {
       this.analysis = a;
       const views = [
@@ -112,8 +120,19 @@ export class ReadmeHealth extends HTMLElement {
               }),
             )),
       );
-      if (focused)
-        this.querySelector("[data-view]").focus({ preventScroll: true });
+      this.querySelectorAll("[data-jump]").forEach((button) => {
+        button.dataset.jumpId = issues[Number(button.dataset.jump)].id;
+      });
+      if (focused) {
+        const target =
+          focusedIssue &&
+          [...this.querySelectorAll("[data-jump]")].find(
+            (button) => button.dataset.jumpId === focusedIssue,
+          );
+        (target || this.querySelector("[data-view]")).focus({
+          preventScroll: true,
+        });
+      }
       return;
     }
     this.innerHTML = `<h2 tabindex="-1">README Health</h2><p class="hint">Suggestions, not a score. Your content stays yours.</p><div class="stats"><span><b>${a.words}</b> words</span><span><b>${a.images.length}</b> images</span><span><b>${a.codeBlocks}</b> code blocks</span><span><b>${(a.bytes / 1024).toFixed(1)}</b> KB</span></div>${[
