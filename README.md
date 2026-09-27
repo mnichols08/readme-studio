@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.2.3** · Native Web Components · Local drafts · Static hosting
+**Version 0.3.0** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -157,3 +157,7 @@ Open **Dynamic badge helpers** inside Badge Studio for GitHub Actions/repository
 ### Badge reliability (v0.2.3)
 
 Badge guidance flags generic/missing alt text, likely low contrast, duplicate technologies/URLs, repeated status badges, and crowded rows. Suggestions never block export or remove content. Contrast estimates are advisory, not WCAG certification. Collection previews offer desktop/narrow/mobile widths and cap remote images for large groups. All-drafts backups include versioned collections; malformed storage opens a temporary recoverable workspace without overwriting originals. See [the badge guide](docs/badges.md) and [release checkpoints](docs/releases/0.2.x.md).
+
+### Project Showcase Studio (v0.3.0)
+
+Open **Project Studio** from the header or an existing project builder. Describe the project, your role, engineering highlights, technologies, links, status, screenshots, and badges. Review the live section, then save explicitly; Undo restores the prior source. Existing project blocks keep their exact Markdown until you save their richer representation. See [the project guide](docs/projects.md).

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Project Studio adds normalized editable projects, roles/types, engineering highlights, catalog/custom technologies, status, links, and accessible screenshots.
+- Attach independent badge collection copies or compose individual badges with the existing Badge Studio.
+- Keyboard reorder/duplicate/delete, collapsed editors, live section preview, explicit save/undo, and exact legacy source preservation until migration is saved.
+
 ## 0.2.3
 
 - Advisory badge alt-text, approximate contrast, duplicate technology/URL/status, long-row and per-section clutter guidance; code examples and comments remain excluded.

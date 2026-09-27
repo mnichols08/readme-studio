@@ -1,3 +1,4 @@
+import "./project-studio.js";
 import { repositorySuggestions } from "../badges/providers/index.js";
 import "./badge-collection-editor.js";
 import {
@@ -69,7 +70,7 @@ export class AppShell extends HTMLElement {
     });
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
@@ -83,7 +84,10 @@ export class AppShell extends HTMLElement {
     this.dialog = this.querySelector("dialog");
     this.querySelector(".close-dialog").onclick = () => this.closeDialog();
     this.dialog.addEventListener("cancel", (e) => {
-      if (this.querySelector("badge-collection-editor")?.isDirty()) {
+      if (
+        this.querySelector("badge-collection-editor")?.isDirty() ||
+        this.querySelector("project-studio")?.isDirty()
+      ) {
         e.preventDefault();
         this.closeDialog();
       }
@@ -168,6 +172,25 @@ export class AppShell extends HTMLElement {
         this.showTab("sections");
         this.content.querySelector("button")?.focus();
       }
+    });
+    this.addEventListener("open-project-studio", () =>
+      this.openProjects(this.selectedBlock),
+    );
+    this.addEventListener("project-save", (e) => {
+      const studio = e.target;
+      if (this.projectSnapshot !== JSON.stringify(this.store.draft)) {
+        this.notify("Draft changed. Reopen Project Studio before saving.");
+        return;
+      }
+      const blocks = structuredClone(this.store.draft.blocks),
+        index = blocks.findIndex((b) => b.id === this.projectBlockId);
+      if (index >= 0) blocks[index].settings = e.detail;
+      else blocks.push(createBlock("projects", e.detail));
+      this.store.blocks(blocks);
+      studio.initial = JSON.stringify(studio.value);
+      this.closeDialog();
+      this.focusDocument();
+      this.notify("Project showcase saved. Use Undo to restore it.");
     });
     this.addEventListener("collections-save", (e) =>
       this.saveCollections(e.detail),
@@ -371,9 +394,10 @@ export class AppShell extends HTMLElement {
   }
   closeDialog(target) {
     if (
-      this.querySelector("badge-collection-editor")?.isDirty() &&
+      (this.querySelector("badge-collection-editor")?.isDirty() ||
+        this.querySelector("project-studio")?.isDirty()) &&
       !confirm(
-        "Discard unsaved collection edits? Save or export the collection to keep them.",
+        "Discard unsaved studio edits? Save or export your work to keep it.",
       )
     )
       return;
@@ -412,6 +436,29 @@ export class AppShell extends HTMLElement {
       );
       this.notify("Could not save collections: " + e.message);
       return false;
+    }
+  }
+  openProjects(id) {
+    const block =
+      this.store.draft.blocks.find(
+        (b) => b.id === id && b.type === "projects",
+      ) ||
+      (!id ? this.store.draft.blocks.find((b) => b.type === "projects") : null);
+    this.projectBlockId = block?.id;
+    this.projectSnapshot = JSON.stringify(this.store.draft);
+    this.modal("<project-studio></project-studio>");
+    this.dialog.classList.add("import-modal");
+    const studio = this.querySelector("project-studio");
+    studio.collections = structuredClone(this.data.badgeCollections.items);
+    try {
+      studio.settings = block?.settings || {
+        title: "Selected Projects",
+        items: [],
+      };
+    } catch (e) {
+      studio.innerHTML =
+        "<h1>Project data could not be opened</h1><p>Your original Markdown is preserved. Continue in the source editor or export it.</p>";
+      studio.initial = JSON.stringify(studio.value);
     }
   }
   openCollections(stackId) {
@@ -536,6 +583,10 @@ export class AppShell extends HTMLElement {
     this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button>${this.store.draft.metadata.importSource?.type === "github" ? '<button class="wide" data-action="reimport">Re-import current GitHub README</button>' : ""}<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(b.section?.title || blockTypes[b.type] || "Section")}</strong><small>${html((b.section ? `Suggested ${b.section.kind} · Custom Markdown` : "") || b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small></span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p>' : ""}${this.store.draft.markdown ? '<button class="wide" data-action="split">Split into sections</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for your GitHub profile</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
   }
   edit(block) {
+    if (block.type === "projects" && block.settings.version === 1) {
+      this.openProjects(block.id);
+      return;
+    }
     this.selectedBlock = block.id;
     this.tab = "form";
     this.content.innerHTML = `<div class="section-title"><h2>${html(blockTypes[block.type])}</h2><p>Customize, preview, then add to your story.</p></div><builder-form></builder-form>`;
@@ -859,6 +910,7 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (action === "projects") this.openProjects();
     if (action === "collections") this.openCollections();
     if (action === "badges") this.openBadges();
     switch (action) {
