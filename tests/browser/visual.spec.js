@@ -124,3 +124,85 @@ test("local theme-aware banners download safe SVG and insert portable markup", a
     .click();
   await expect(page.locator('[data-banner="name"]')).toHaveValue("Ada 雪");
 });
+
+test("section style overrides survive theme changes while Custom Markdown stays exact", async ({
+  page,
+}) => {
+  await start(page);
+  const custom = await page
+    .locator("app-shell")
+    .evaluate((el) => el.store.draft.blocks.filter((b) => b.type === "custom"));
+  await page
+    .getByRole("button", { name: "Section style", exact: true })
+    .click();
+  await page
+    .getByLabel("Heading style", { exact: true })
+    .selectOption("centered");
+  await page.getByLabel("Divider style", { exact: true }).selectOption("dots");
+  await page
+    .getByLabel("Section preview width", { exact: true })
+    .selectOption("320px");
+  await expect(page.locator(".section-style-preview h1")).toHaveAttribute(
+    "align",
+    "center",
+  );
+  await page
+    .getByRole("button", { name: "Save section style", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Visual theme", exact: true }).click();
+  await page.getByLabel("Built-in theme", { exact: true }).selectOption("nord");
+  await page
+    .getByRole("button", { name: "Apply visual theme", exact: true })
+    .click();
+  expect(
+    await page
+      .locator("app-shell")
+      .evaluate((el) =>
+        el.store.draft.blocks.filter((b) => b.type === "custom"),
+      ),
+  ).toEqual(custom);
+  await page
+    .getByRole("button", { name: "Section style", exact: true })
+    .click();
+  await expect(page.getByLabel("Heading style", { exact: true })).toHaveValue(
+    "centered",
+  );
+  await expect(page.getByLabel("Divider style", { exact: true })).toHaveValue(
+    "dots",
+  );
+});
+test("callout, code, details and columns are available through the builder", async ({
+  page,
+}) => {
+  await start(page);
+  for (const [name, field, value] of [
+    ["Callout", "Callout text", "Remember to test"],
+    ["Collapsible Details", "Details Markdown", "Extra details"],
+    ["Code Sample", "Code source", 'console.log("safe");'],
+    ["Two Columns", "Left text", "Left column"],
+  ]) {
+    await page.getByRole("button", { name: "Library", exact: true }).click();
+    await page
+      .locator(".library-grid")
+      .getByRole("button", { name: new RegExp(name) })
+      .click();
+    await page
+      .locator("builder-form")
+      .getByLabel(field, { exact: true })
+      .fill(value);
+    if (name === "Code Sample")
+      await page.locator('[data-path="collapsed"]').check();
+    await page
+      .locator("builder-form")
+      .getByRole("button", { name: "Add to README", exact: true })
+      .click();
+  }
+  const source = page.getByRole("textbox", {
+    name: "Markdown editor",
+    exact: true,
+  });
+  await expect(source).toHaveValue(/> \[!NOTE\]/);
+  await expect(source).toHaveValue(/<details>/);
+  await expect(source).toHaveValue(/console.log/);
+  await expect(source).toHaveValue(/Left column/);
+});

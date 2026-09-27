@@ -1,3 +1,4 @@
+import { callout, details, codeSample, columns } from "../styling/blocks.js";
 import { present, divider } from "../styling/presentation.js";
 import { serializeShowcase } from "../projects/serialize-project.js";
 import { safeUrl } from "./url-safety.js";
@@ -116,14 +117,26 @@ export function stack(s) {
 export const serializeBlock = (b) => present(serializeContent(b), b);
 function serializeContent({ type, settings: s }) {
   switch (type) {
+    case "callout":
+      return callout(s);
+    case "details":
+      return details(s);
+    case "code":
+      return codeSample(s);
+    case "columns":
+      return columns(s);
     case "hero":
       return `# ${text(s.name || "Your Name")}\n\n${s.subtitle || ""}`;
     case "badge":
-      return badge(s);
+      return s.presentation?.center
+        ? `<p align="center">${buildLinkedBadge(s, "html")}</p>`
+        : badge(s);
     case "badges":
       return (
         (s.title ? `## ${text(s.title)}\n\n` : "") +
-        (s.items || []).map(badge).join(" ")
+        (s.presentation?.center
+          ? `<p align="center">${(s.items || []).map((b) => buildLinkedBadge(b, "html")).join(" ")}</p>`
+          : (s.items || []).map(badge).join(" "))
       );
     case "stack":
       return `## Tech Stack\n\n${stack(s)}`;
@@ -134,9 +147,9 @@ function serializeContent({ type, settings: s }) {
       if (s.version === 1) return serializeShowcase(s);
       return `## ${text(s.title || "Selected Projects")}\n\n${(s.items || []).map(project).join("\n\n")}`;
     case "widget":
-      return widget(s);
+      return widget(s.presentation?.center ? { ...s, align: "center" } : s);
     case "picture":
-      return picture(s);
+      return picture(s.presentation?.center ? { ...s, align: "center" } : s);
     case "divider":
       return divider(s.dividerStyle || "rule", s.presentation?.decoration);
     case "custom":

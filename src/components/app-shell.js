@@ -1,3 +1,4 @@
+import "./section-style-editor.js";
 import "./banner-builder.js";
 import { newBanner, themePalette } from "../banners/banner-model.js";
 import "./theme-studio.js";
@@ -79,7 +80,7 @@ export class AppShell extends HTMLElement {
     });
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
@@ -97,7 +98,8 @@ export class AppShell extends HTMLElement {
         this.querySelector("badge-collection-editor")?.isDirty() ||
         this.querySelector("project-studio")?.isDirty() ||
         this.querySelector("theme-studio")?.isDirty() ||
-        this.querySelector("banner-builder")?.isDirty()
+        this.querySelector("banner-builder")?.isDirty() ||
+        this.querySelector("section-style-editor")?.isDirty()
       ) {
         e.preventDefault();
         this.closeDialog();
@@ -190,6 +192,34 @@ export class AppShell extends HTMLElement {
     this.addEventListener("visual-download", (e) =>
       this.download(e.detail.content, e.detail.name, e.detail.type),
     );
+    this.addEventListener("section-style-save", (e) => {
+      if (this.styleSnapshot !== JSON.stringify(this.store.draft)) {
+        this.notify("Draft changed. Reopen Section Styling before saving.");
+        return;
+      }
+      const blocks = structuredClone(this.store.draft.blocks),
+        b = blocks.find((b) => b.id === e.detail.id);
+      if (!b || b.type === "custom") return;
+      b.settings.presentation = e.detail.settings.presentation;
+      if (b.type === "divider") {
+        b.settings.dividerStyle = e.detail.settings.dividerStyle;
+        b.settings._theme ||= { derived: {}, overrides: [] };
+        if (
+          e.detail.settings.presentation._theme?.overrides?.includes("divider")
+        )
+          b.settings._theme.overrides.push("dividerStyle");
+        else
+          derive(
+            b.settings,
+            { dividerStyle: e.detail.settings.dividerStyle },
+            { reset: true },
+          );
+      }
+      this.store.blocks(blocks);
+      e.target.initial = JSON.stringify(e.target.value);
+      this.closeDialog();
+      this.notify("Section style saved. Undo is available.");
+    });
     this.addEventListener("banner-save", (e) => {
       if (this.bannerSnapshot !== JSON.stringify(this.store.draft)) {
         this.notify("Draft changed. Reopen Banner Builder before saving.");
@@ -456,7 +486,8 @@ export class AppShell extends HTMLElement {
       (this.querySelector("badge-collection-editor")?.isDirty() ||
         this.querySelector("project-studio")?.isDirty() ||
         this.querySelector("theme-studio")?.isDirty() ||
-        this.querySelector("banner-builder")?.isDirty()) &&
+        this.querySelector("banner-builder")?.isDirty() ||
+        this.querySelector("section-style-editor")?.isDirty()) &&
       !confirm(
         "Discard unsaved studio edits? Save or export your work to keep it.",
       )
@@ -498,6 +529,15 @@ export class AppShell extends HTMLElement {
       this.notify("Could not save collections: " + e.message);
       return false;
     }
+  }
+  openSectionStyle() {
+    this.styleSnapshot = JSON.stringify(this.store.draft);
+    this.modal("<section-style-editor></section-style-editor>");
+    this.dialog.classList.add("import-modal");
+    this.querySelector("section-style-editor").configure(
+      this.store.draft.blocks,
+      this.store.draft.metadata.visualTheme || baseTheme,
+    );
   }
   openBanner() {
     this.bannerSnapshot = JSON.stringify(this.store.draft);
@@ -673,7 +713,7 @@ export class AppShell extends HTMLElement {
       )
         .map(
           ([type, name], i) =>
-            `<button data-block-type="${type}"><span class="library-icon">${["H", "≡", "⌘", "↗", "▣", "◈", "⌁", "✎", "@", "—", "&lt;/&gt;", "◇", "▦", "◐"][i]}</span><span>${name}</span><span>+</span></button>`,
+            `<button data-block-type="${type}"><span class="library-icon">${["H", "≡", "⌘", "↗", "▣", "◈", "⌁", "✎", "@", "—", "&lt;/&gt;", "◇", "▦", "◐", "!", "▸", "{}", "▥"][i]}</span><span>${name}</span><span>+</span></button>`,
         )
         .join(
           "",
@@ -1011,6 +1051,7 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (action === "section-style") this.openSectionStyle();
     if (action === "banner") this.openBanner();
     if (action === "visual-theme") this.openTheme();
     if (action === "projects") this.openProjects();

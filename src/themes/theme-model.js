@@ -1,6 +1,13 @@
 import { styles } from "../badges/shields.js";
-export const headingStyles = ["plain", "emoji-accent"];
-export const dividerStyles = ["none", "rule", "glyph"];
+export const headingStyles = [
+  "plain",
+  "emoji-accent",
+  "minimal-prefix",
+  "terminal-prompt",
+  "centered",
+  "divider-heading",
+];
+export const dividerStyles = ["none", "rule", "glyph", "ascii", "dots"];
 export const paletteKeys = [
   "accent",
   "accentAlt",

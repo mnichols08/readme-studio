@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+- Added per-section heading/divider styles, editable accent glyphs, theme inheritance/reset, and centered compact image/badge content.
+- Added readable callouts, collapsible details, safe fenced code samples, and escaped two-column helpers using ordinary GitHub Markdown/HTML.
+- Added advisory styling Health checks for centering/divider/prompt/glyph overuse, nested details, and large table layouts. Custom Markdown remains excluded from styling.
+
 ## 0.4.1
 
 - Added local SVG Banner Builder with eight restrained styles, deterministic seeds, dimension presets, editable content, and theme palette defaults with independent overrides.

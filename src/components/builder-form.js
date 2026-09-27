@@ -1,3 +1,4 @@
+import { calloutStyles } from "../styling/blocks.js";
 import { explicitOverride } from "../themes/theme-resolver.js";
 import { html, serializeBlock } from "../markdown/serialize.js";
 import { render } from "../markdown/render.js";
@@ -74,8 +75,25 @@ export const blockTypes = {
   badge: "Badge",
   badges: "Badge Row",
   picture: "Light / Dark Image",
+  callout: "Callout",
+  details: "Collapsible Details",
+  code: "Code Sample",
+  columns: "Two Columns",
 };
 export function defaults(type) {
+  if (type === "callout") return { style: "note", title: "", body: "" };
+  if (type === "details")
+    return { summary: "More details", body: "", open: false };
+  if (type === "code")
+    return {
+      title: "",
+      language: "js",
+      code: "",
+      collapsed: false,
+      open: false,
+    };
+  if (type === "columns")
+    return { leftTitle: "", leftBody: "", rightTitle: "", rightBody: "" };
   if (type === "hero") return { name: "Your Name", subtitle: "" };
   if (type === "stack") return { items: [], style: "badges", headings: true };
   if (type === "projects") return { items: [], title: "Selected Projects" };
@@ -127,7 +145,51 @@ export class BuilderForm extends HTMLElement {
   draw() {
     const { type, settings: s } = this.value;
     let form = "";
-    if (type === "hero")
+    if (type === "callout")
+      form = this.fields(
+        [
+          field("style", "Callout style", "select", calloutStyles),
+          field("title", "Callout title"),
+          field("body", "Callout text", "textarea"),
+        ],
+        s,
+      );
+    else if (type === "details")
+      form =
+        this.fields(
+          [
+            field("summary", "Details summary"),
+            field("body", "Details Markdown", "textarea"),
+          ],
+          s,
+        ) +
+        '<label class="check"><input type="checkbox" data-path="open" ' +
+        (s.open ? "checked" : "") +
+        "> Initially open</label>";
+    else if (type === "code")
+      form =
+        this.fields(
+          [
+            field("title", "Code title"),
+            field("language", "Code language"),
+            field("code", "Code source", "textarea"),
+          ],
+          s,
+        ) +
+        `<label class="check"><input type="checkbox" data-path="collapsed" ${s.collapsed ? "checked" : ""}> Wrap in collapsible details</label><label class="check"><input type="checkbox" data-path="open" ${s.open ? "checked" : ""}> Initially open</label>`;
+    else if (type === "columns")
+      form =
+        '<p class="hint">Tables may scroll on mobile. Keep both columns short. Text is escaped; Markdown inside cells is not interpreted.</p>' +
+        this.fields(
+          [
+            field("leftTitle", "Left title"),
+            field("leftBody", "Left text", "textarea"),
+            field("rightTitle", "Right title"),
+            field("rightBody", "Right text", "textarea"),
+          ],
+          s,
+        );
+    else if (type === "hero")
       form = this.fields(
         [field("name", "Name"), field("subtitle", "Introduction", "textarea")],
         s,
