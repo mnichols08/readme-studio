@@ -38,40 +38,71 @@ const choices = [
     "An ordinary linked image, hosted by GitHub.",
   ],
 ];
+export const profileDraftSnapshot = (draft) =>
+  JSON.stringify({
+    id: draft.id,
+    markdown: draft.markdown,
+    blocks: draft.blocks,
+    metadata: draft.metadata,
+  });
 export class GithubProfileForm extends HTMLElement {
   connectedCallback() {
     this.generation = 0;
+    this.dialog = this.closest("dialog");
+    this.closeHandler = () => this.cancelLookup();
+    this.dialog?.addEventListener("close", this.closeHandler);
     this.innerHTML = `<div class="eyebrow">MAKE IT YOURS, FROM GITHUB</div><h1>Start with your public profile.</h1><p>Look up a username, review what’s available, and fill your README in one step.</p><form class="profile-lookup"><label>GitHub username or profile URL<input name="username" placeholder="octocat or https://github.com/octocat" required autocomplete="off"></label><button class="primary">Look up profile</button></form><p class="profile-status" role="status"></p><div class="profile-result"></div><p class="hint">Public data only. No token or sign-in. Applying changes is undoable. Private activity and contribution streaks are not available here.</p>`;
     this.querySelector("input").oninput = () => {
-      this.generation++;
+      this.cancelLookup();
       this.querySelector(".profile-result").replaceChildren();
       this.querySelector(".profile-status").textContent = "";
       this.querySelector("button").disabled = false;
     };
     this.querySelector("form").onsubmit = async (e) => {
       e.preventDefault();
+      this.cancelLookup();
+      this.lookupController = new AbortController();
       const request = ++this.generation;
       const button = this.querySelector("button");
       const status = this.querySelector(".profile-status");
       button.disabled = true;
+      this.querySelector(".profile-lookup").setAttribute("aria-busy", "true");
       status.textContent = "Loading public profile and repositories…";
       this.querySelector(".profile-result").replaceChildren();
       try {
         const profile = await fetchGithubProfile(
           new FormData(e.target).get("username"),
+          fetch,
+          this.lookupController.signal,
         );
         if (!this.isConnected || request !== this.generation) return;
         this.profile = profile;
         status.textContent =
           profile.warning || "Public profile loaded. Choose what to fill.";
         this.showResult();
+        this.querySelector(".profile-choices input")?.focus();
       } catch (error) {
         if (this.isConnected && request === this.generation)
           status.textContent = error.message;
       } finally {
-        if (request === this.generation) button.disabled = false;
+        if (request === this.generation) {
+          button.disabled = false;
+          this.querySelector(".profile-lookup").setAttribute(
+            "aria-busy",
+            "false",
+          );
+        }
       }
     };
+  }
+  cancelLookup() {
+    this.generation++;
+    this.lookupController?.abort();
+    this.querySelector(".profile-lookup")?.setAttribute("aria-busy", "false");
+  }
+  disconnectedCallback() {
+    this.cancelLookup();
+    this.dialog?.removeEventListener("close", this.closeHandler);
   }
   set draft(value) {
     this.currentDraft = structuredClone(value);
@@ -103,7 +134,11 @@ export class GithubProfileForm extends HTMLElement {
       e.preventDefault();
       this.dispatchEvent(
         new CustomEvent("profile-apply", {
-          detail: { ...this.result, draftId: this.currentDraft.id },
+          detail: {
+            ...this.result,
+            draftId: this.currentDraft.id,
+            snapshot: profileDraftSnapshot(this.currentDraft),
+          },
           bubbles: true,
         }),
       );

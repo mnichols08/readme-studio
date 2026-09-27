@@ -146,3 +146,131 @@ test("mobile profile autofill fits the dialog", async ({ page }) => {
     .click();
   await expect(page.locator("github-preview h1")).toHaveText("Mona Octocat");
 });
+test("keyboard lookup moves focus to choices and Escape cancels a pending request", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Autofill from GitHub" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("GitHub username or profile URL")).toBeFocused();
+  await page.keyboard.type("octocat");
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByLabel("Fill name and username placeholders", { exact: false }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Autofill from GitHub" }),
+  ).toBeFocused();
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  let requested;
+  const seen = new Promise((resolve) => (requested = resolve));
+  await page.route("https://api.github.com/users/slow", async (r) => {
+    requested();
+    await gate;
+    await r.fulfill({ json: { ...user, login: "slow" } }).catch(() => {});
+  });
+  await page.keyboard.press("Enter");
+  await page.getByLabel("GitHub username or profile URL").fill("slow");
+  await page.getByRole("button", { name: "Look up profile" }).click();
+  await seen;
+  await page.evaluate(
+    () =>
+      (window.pendingProfileSignal = document.querySelector(
+        "github-profile-form",
+      ).lookupController.signal),
+  );
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() => page.evaluate(() => window.pendingProfileSignal.aborted))
+    .toBe(true);
+  release();
+  await page.getByRole("button", { name: "Autofill from GitHub" }).click();
+  await expect(page.locator(".profile-result")).toBeEmpty();
+});
+test("typing a new username cancels the old lookup and ignores stale results", async ({
+  page,
+}) => {
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  let requested;
+  const seen = new Promise((resolve) => (requested = resolve));
+  await page.route("https://api.github.com/users/slow", async (r) => {
+    requested();
+    await gate;
+    await r
+      .fulfill({ json: { ...user, name: "Stale Profile" } })
+      .catch(() => {});
+  });
+  await page.getByRole("button", { name: "Autofill from GitHub" }).click();
+  await page.getByLabel("GitHub username or profile URL").fill("slow");
+  await page.getByRole("button", { name: "Look up profile" }).click();
+  await seen;
+  await page.evaluate(
+    () =>
+      (window.pendingProfileSignal = document.querySelector(
+        "github-profile-form",
+      ).lookupController.signal),
+  );
+  await page.getByLabel("GitHub username or profile URL").fill("octocat");
+  expect(await page.evaluate(() => window.pendingProfileSignal.aborted)).toBe(
+    true,
+  );
+  await page.getByRole("button", { name: "Look up profile" }).click();
+  await expect(page.locator(".profile-result")).toContainText("Mona Octocat");
+  release();
+  await expect(page.locator(".profile-result")).not.toContainText(
+    "Stale Profile",
+  );
+});
+test("rejects an obsolete preview of the same draft without losing edits", async ({
+  page,
+}) => {
+  await lookup(page);
+  await page.evaluate(() =>
+    document.querySelector("app-shell").store.raw("# Changed after preview\n"),
+  );
+  await page.getByRole("button", { name: "Apply to current draft" }).click();
+  await expect(page.locator(".toast")).toContainText(
+    "draft changed since this preview",
+  );
+  await expect(page.getByLabel("Markdown editor", { exact: true })).toHaveValue(
+    "# Changed after preview\n",
+  );
+  await expect(page.getByRole("dialog")).toBeVisible();
+});
+test("refreshes owned bio and website after reload and preserves manually edited text", async ({
+  page,
+}) => {
+  await lookup(page);
+  await page.getByRole("button", { name: "Apply to current draft" }).click();
+  await page.reload();
+  await page.route("https://api.github.com/users/octocat", (r) =>
+    r.fulfill({
+      json: {
+        ...user,
+        bio: "Updated GitHub bio",
+        blog: "https://new.example.org",
+      },
+    }),
+  );
+  await lookup(page, "octocat");
+  await page.getByRole("button", { name: "Apply to current draft" }).click();
+  await expect(page.getByLabel("Markdown editor", { exact: true })).toHaveValue(
+    /Updated GitHub bio/,
+  );
+  await expect(
+    page.getByLabel("Markdown editor", { exact: true }),
+  ).not.toHaveValue(/https:\/\/example.org/);
+  await page.locator(".block-open").filter({ hasText: "Hero" }).click();
+  await page
+    .getByLabel("Introduction", { exact: true })
+    .fill("My edited introduction");
+  await page.getByRole("button", { name: "Save section" }).click();
+  await lookup(page, "octocat");
+  await page.getByRole("button", { name: "Apply to current draft" }).click();
+  await expect(page.getByLabel("Markdown editor", { exact: true })).toHaveValue(
+    /My edited introduction/,
+  );
+});

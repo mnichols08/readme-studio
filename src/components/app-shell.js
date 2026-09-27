@@ -13,7 +13,8 @@ import { blockTypes, defaults } from "./builder-form.js";
 import "./markdown-editor.js";
 import "./github-preview.js";
 import "./readme-health.js";
-import "./github-profile-form.js";
+import { profileDraftSnapshot } from "./github-profile-form.js";
+import { version } from "../../package.json";
 export class AppShell extends HTMLElement {
   connectedCallback() {
     let saved;
@@ -42,7 +43,7 @@ export class AppShell extends HTMLElement {
     if (this.storageError) this.notify(this.storageError);
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v0.1</span><div class="header-actions"><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status" role="status">Saved locally</span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <main class="workspace" data-mobile="build"><aside class="builder-pane pane"><div class="pane-heading"><span>WORKSPACE</span><button data-action="collapse" aria-label="Collapse builder">‹</button></div><nav class="builder-tabs" aria-label="Builder tools"><button class="active" data-tab="sections">Sections</button><button data-tab="library">Library</button><button data-tab="health">Health</button></nav><div class="builder-content"></div><div class="builder-footer"><span>✦</span> Make it yours. Keep it Markdown.</div></aside>
@@ -72,8 +73,10 @@ export class AppShell extends HTMLElement {
     this.addEventListener("undo", () => this.store.undo());
     this.addEventListener("redo", () => this.store.redo());
     this.addEventListener("profile-apply", (e) => {
-      if (e.detail.draftId !== this.store.draft.id) {
-        this.notify("The active draft changed. Open GitHub autofill again.");
+      if (e.detail.snapshot !== profileDraftSnapshot(this.store.draft)) {
+        this.notify(
+          "The draft changed since this preview. Open GitHub autofill again to review the latest draft.",
+        );
         return;
       }
       this.store.blocks(e.detail.blocks, e.detail.metadata);

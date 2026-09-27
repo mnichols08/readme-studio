@@ -4,11 +4,17 @@ const string = (value) => (typeof value === "string" ? value.trim() : "");
 export function githubUsername(input) {
   let username = String(input).trim().replace(/^@/, "");
   if (/^https?:\/\//i.test(username)) {
-    const url = new URL(username);
+    let url;
+    try {
+      url = new URL(username);
+    } catch {
+      throw new Error("Enter a GitHub username or profile URL.");
+    }
     if (
       url.hostname !== "github.com" ||
       url.username ||
       url.password ||
+      url.port ||
       !/^\/[^/]+\/?$/.test(url.pathname)
     )
       throw new Error("Enter a GitHub username or profile URL.");
@@ -54,15 +60,33 @@ async function json(path, fetcher, signal) {
           ? "GitHub rate limit reached. Try again later."
           : `GitHub request failed (${response.status}).`,
     );
+  let data;
+  try {
+    data = await response.json();
+    signal.throwIfAborted();
+  } catch {
+    if (signal.aborted) throw signal.reason;
+    throw new Error("GitHub returned an unreadable response. Try again.");
+  }
   return {
-    data: await response.json(),
+    data,
     next: /rel="next"/.test(response.headers?.get("link") || ""),
   };
 }
-export async function fetchGithubProfile(input, fetcher = fetch) {
+export async function fetchGithubProfile(input, fetcher = fetch, cancellation) {
   const username = githubUsername(input);
-  const signal = AbortSignal.timeout(30000);
+  const controller = new AbortController();
+  const cancel = () => controller.abort(cancellation.reason);
+  if (cancellation?.aborted) cancel();
+  else cancellation?.addEventListener("abort", cancel, { once: true });
+  const timeout = setTimeout(
+    () =>
+      controller.abort(new DOMException("GitHub timed out.", "TimeoutError")),
+    30000,
+  );
+  const signal = controller.signal;
   try {
+    signal.throwIfAborted();
     const { data: u } = await json(`/users/${username}`, fetcher, signal);
     if (!u || typeof u.login !== "string")
       throw new Error("GitHub returned an invalid profile. Try again.");
@@ -77,7 +101,16 @@ export async function fetchGithubProfile(input, fetcher = fetch) {
           fetcher,
           signal,
         );
-        if (!Array.isArray(data))
+        if (
+          !Array.isArray(data) ||
+          data.some(
+            (r) =>
+              !r ||
+              typeof r.name !== "string" ||
+              typeof r.owner?.login !== "string" ||
+              !Number.isSafeInteger(r.id),
+          )
+        )
           throw new Error("GitHub returned an invalid repository list.");
         repositories.push(
           ...data.filter(
@@ -96,6 +129,7 @@ export async function fetchGithubProfile(input, fetcher = fetch) {
         warning =
           "Repository summary covers the first 1,000 recently updated repositories.";
     } catch (error) {
+      if (cancellation?.aborted) throw error;
       warning = `Profile loaded, but repository data is incomplete. ${signal.aborted ? "The request timed out." : error.message}`;
     }
     const unique = [
@@ -154,7 +188,11 @@ export async function fetchGithubProfile(input, fetcher = fetch) {
         })),
     };
   } catch (error) {
+    if (cancellation?.aborted) throw cancellation.reason;
     if (signal.aborted) throw new Error("GitHub timed out. Try again.");
     throw error;
+  } finally {
+    clearTimeout(timeout);
+    cancellation?.removeEventListener("abort", cancel);
   }
 }
