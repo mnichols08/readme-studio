@@ -1,6 +1,6 @@
+import { parseSource } from "../analysis/source.js";
 import { badgeWarnings, badgeIdentity } from "../badges/duplicates.js";
 import { visitTokens } from "./visit-tokens.js";
-import { marked } from "marked";
 export const compatibilityRules = [
   ["script", /<script\b/i, "Script tags cannot run on GitHub."],
   ["iframe", /<iframe\b/i, "Use an image and link instead of an iframe."],
@@ -32,7 +32,7 @@ export function analyze(markdown) {
   const links = [];
   let codeBlocks = 0;
   let separators = 0;
-  const tokens = marked.lexer(markdown);
+  const tokens = parseSource(markdown).tokens;
   let source = "",
     section = "README";
   const htmlSections = [];

@@ -1,3 +1,4 @@
+import { analyzeDocument } from "../analysis/analyze.js";
 import { componentHealth } from "../component-instances/health.js";
 import { widgetHealth } from "../widgets/health.js";
 import { stylingHealth } from "../styling/health.js";
@@ -50,5 +51,6 @@ export function analyzeDraft(draft) {
         "Relative repository link has no known source; its destination cannot be opened in preview.",
       );
   }
+  analysis.detail = analyzeDocument(draft.markdown);
   return { analysis, warnings: [...new Set(warnings)] };
 }

@@ -181,6 +181,18 @@ export class AppShell extends HTMLElement {
       if (b.dataset.blockAction)
         this.blockAction(b.dataset.blockAction, b.dataset.id);
     };
+    this.addEventListener("analysis-jump", (e) => {
+      if (e.detail.source !== this.store.draft.markdown) {
+        this.notify("The document changed. Wait for updated analysis.");
+        return;
+      }
+      this.mobile("markdown");
+      this.editor.input.focus();
+      this.editor.input.setSelectionRange(
+        e.detail.sourceRange.start,
+        e.detail.sourceRange.end,
+      );
+    });
     this.addEventListener("markdown-change", (e) => {
       const detached =
         e.detail !== this.store.draft.markdown &&

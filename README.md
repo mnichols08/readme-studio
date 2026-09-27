@@ -193,3 +193,7 @@ Repository-aware authoring is available from **Repositories**. Browse cached Git
 **Check links** explicitly scans README repositories, links and remote images, with bounded requests and clear uncertainty when browser policy prevents verification.
 
 **Refresh GitHub data** inventories generated sources and previews selected public metadata changes. Manual fields are preserved; detached sections can be explicitly recreated by appending a new version. Apply is undoable, and source metadata stays out of README export. See [refreshing safely](docs/refreshing.md).
+
+### README Analyzer (0.7.0)
+
+Health provides category views, neutral statistics, section inventories and source jumps. Findings explain their reasoning and remain advisory; analysis never fetches remote URLs or changes source. See [the analyzer guide](docs/analyzer.md).

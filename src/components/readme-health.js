@@ -1,11 +1,19 @@
 import { analyze } from "../markdown/compatibility.js";
 import { html } from "../markdown/serialize.js";
+import { analyzeDocument } from "../analysis/analyze.js";
 export class ReadmeHealth extends HTMLElement {
   disconnectedCallback() {
     this.worker?.terminate();
     this.worker = null;
   }
   set draft(draft) {
+    const identity = JSON.stringify([
+      draft.markdown,
+      draft.blocks,
+      draft.metadata,
+    ]);
+    if (identity === this.draftIdentity && this.worker) return;
+    this.draftIdentity = identity;
     this.pending = structuredClone(draft);
     if (!this.querySelector("h2"))
       this.innerHTML =
@@ -53,6 +61,7 @@ export class ReadmeHealth extends HTMLElement {
   }
   run() {
     this.busy = true;
+    this.analyzedSource = this.pending.markdown;
     this.worker.postMessage(this.pending);
     this.pending = null;
   }
@@ -62,13 +71,70 @@ export class ReadmeHealth extends HTMLElement {
   }
   set value(markdown) {
     try {
-      this.display(analyze(markdown));
+      this.analyzedSource = markdown;
+      this.display({ ...analyze(markdown), detail: analyzeDocument(markdown) });
     } catch {
       this.failure();
     }
   }
   display(a) {
     const focused = this.contains(document.activeElement);
+    const focusedIssue = focused ? document.activeElement.dataset.jumpId : null;
+    if (a.detail) {
+      this.analysis = a;
+      const views = [
+        "Overview",
+        "Accessibility",
+        "Compatibility",
+        "Structure",
+        "Layout",
+        "Clutter",
+        "Security",
+      ];
+      const view = this.view || "Overview";
+      const issues = a.detail.issues.filter(
+        (i) => view === "Overview" || i.category === view,
+      );
+      this.innerHTML = `<h2 tabindex="-1">README Health</h2><p class="hint">Suggestions, not a score. Analysis stays local and makes no network requests.</p><label>Analysis view<select data-view>${views.map((v) => `<option ${v === view ? "selected" : ""}>${v}</option>`).join("")}</select></label><div class="stats">${Object.entries(
+        a.detail.stats,
+      )
+        .map(([key, value]) => `<span><b>${value}</b> ${html(key)}</span>`)
+        .join(
+          "",
+        )}</div><p class="hint">Heuristics are advisory. Source locations marked approximate may include surrounding content.</p>${issues.map((i, index) => `<section class="health-group"><h3>${html(i.category)} · ${html(i.severity)}</h3><p>${html(i.message)}</p><p class="hint">${html(i.reason)}</p>${i.sourceRange ? `<button data-jump="${index}">Go to ${i.sourceRange.approximate ? "approximate " : ""}line ${i.sourceRange.line}, column ${i.sourceRange.column}</button>` : ""}</section>`).join("") || "<p>No suggestions in this view.</p>"}<details><summary>Section inventory</summary>${a.detail.sections.map((s) => `<p>${html(s.title)}: ${s.words} words, ${s.imageCount} images, ${s.badgeCount} badges, ${s.linkCount} links, ${s.codeCount} code blocks</p>`).join("")}</details><details><summary>Additional builder and import guidance</summary>${a.issues.map((i) => `<p class="issue">${html(i.message.replace("Clutter suggestions: ", ""))}</p>`).join("")}</details>`;
+      this.querySelector("[data-view]").onchange = (e) => {
+        this.view = e.target.value;
+        this.display(a);
+        this.querySelector("[data-view]").focus();
+      };
+      this.querySelectorAll("[data-jump]").forEach(
+        (b) =>
+          (b.onclick = () =>
+            this.dispatchEvent(
+              new CustomEvent("analysis-jump", {
+                bubbles: true,
+                detail: {
+                  source: this.analyzedSource,
+                  sourceRange: issues[Number(b.dataset.jump)].sourceRange,
+                },
+              }),
+            )),
+      );
+      this.querySelectorAll("[data-jump]").forEach((button) => {
+        button.dataset.jumpId = issues[Number(button.dataset.jump)].id;
+      });
+      if (focused) {
+        const target =
+          focusedIssue &&
+          [...this.querySelectorAll("[data-jump]")].find(
+            (button) => button.dataset.jumpId === focusedIssue,
+          );
+        (target || this.querySelector("[data-view]")).focus({
+          preventScroll: true,
+        });
+      }
+      return;
+    }
     this.innerHTML = `<h2 tabindex="-1">README Health</h2><p class="hint">Suggestions, not a score. Your content stays yours.</p><div class="stats"><span><b>${a.words}</b> words</span><span><b>${a.images.length}</b> images</span><span><b>${a.codeBlocks}</b> code blocks</span><span><b>${(a.bytes / 1024).toFixed(1)}</b> KB</span></div>${[
       "Accessibility",
       "Compatibility",
