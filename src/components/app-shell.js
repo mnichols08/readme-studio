@@ -1,13 +1,9 @@
 import { html, createBlock, serializeBlock } from "../markdown/serialize.js";
-import { parseSections } from "../markdown/sections.js";
+import { detectSections } from "../markdown/sections.js";
+import { splitDraft, draftSnapshot } from "../state/import-plan.js";
+import "./import-dialog.js";
 import { Store } from "../state/store.js";
-import {
-  newDraft,
-  readDrafts,
-  saveDrafts,
-  validateDraft,
-} from "../state/drafts.js";
-import { importGithub } from "../state/import.js";
+import { newDraft, readDrafts, saveDrafts } from "../state/drafts.js";
 import { template, templateNames } from "../data/templates.js";
 import { blockTypes, defaults } from "./builder-form.js";
 import "./markdown-editor.js";
@@ -15,6 +11,7 @@ import "./github-preview.js";
 import "./readme-health.js";
 import { profileDraftSnapshot } from "./github-profile-form.js";
 import { version } from "../../package.json";
+import { contextForBlock } from "../markdown/source-context.js";
 export class AppShell extends HTMLElement {
   connectedCallback() {
     let saved;
@@ -55,6 +52,21 @@ export class AppShell extends HTMLElement {
     this.content = this.querySelector(".builder-content");
     this.dialog = this.querySelector("dialog");
     this.querySelector(".close-dialog").onclick = () => this.dialog.close();
+    this.dialog.addEventListener("close", () =>
+      this.querySelector("import-dialog")?.cancel(),
+    );
+    this.addEventListener("import-apply", (e) => {
+      const { plan, mode, name, snapshot } = e.detail;
+      if (snapshot !== draftSnapshot(this.store.draft)) {
+        this.notify("The draft changed. Preview the import again.");
+        return;
+      }
+      if (mode === "new") this.addDraft(name, plan.blocks, plan.metadata);
+      else this.store.blocks(plan.blocks, plan.metadata);
+      this.dialog.close();
+      this.focusDocument();
+      this.notify("Import applied");
+    });
     this.onclick = (e) => {
       const b = e.target.closest("button");
       if (!b) return;
@@ -165,13 +177,16 @@ export class AppShell extends HTMLElement {
     this.draftOptions();
     this.save();
   }
+  focusDocument() {
+    if (this.editor.getClientRects().length) this.editor.input.focus();
+    else this.querySelector('.header-actions [data-action="import"]').focus();
+  }
   refreshDocument() {
-    this.preview.value = this.store.draft.markdown;
+    this.preview.draft = this.store.draft;
     this.querySelector("[data-count]").textContent =
       `${this.store.draft.markdown.split("\n").length} lines · ${this.store.draft.markdown.length.toLocaleString()} characters`;
     if (this.tab === "health")
-      this.content.querySelector("readme-health").value =
-        this.store.draft.markdown;
+      this.content.querySelector("readme-health").draft = this.store.draft;
   }
   save() {
     if (this.storageBlocked) {
@@ -205,7 +220,7 @@ export class AppShell extends HTMLElement {
     );
     if (tab === "health") {
       this.content.innerHTML = "<readme-health></readme-health>";
-      this.content.firstElementChild.value = this.store.draft.markdown;
+      this.content.firstElementChild.draft = this.store.draft;
       return;
     }
     if (tab === "library") {
@@ -222,7 +237,7 @@ export class AppShell extends HTMLElement {
       return;
     }
     const blocks = this.store.draft.blocks;
-    this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button><div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(blockTypes[b.type] || "Section")}</strong><small>${html(b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small></span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p><button class="wide" data-action="split">Split at section headings</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for your GitHub profile</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
+    this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button>${this.store.draft.metadata.importSource?.type === "github" ? '<button class="wide" data-action="reimport">Re-import current GitHub README</button>' : ""}<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(b.section?.title || blockTypes[b.type] || "Section")}</strong><small>${html((b.section ? `Suggested ${b.section.kind} · Custom Markdown` : "") || b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small></span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p>' : ""}${this.store.draft.markdown ? '<button class="wide" data-action="split">Split into sections</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for your GitHub profile</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
   }
   edit(block) {
     this.tab = "form";
@@ -245,11 +260,13 @@ export class AppShell extends HTMLElement {
     }
     if (action === "remove") blocks.splice(i, 1);
     if (action === "duplicate")
-      blocks.splice(
-        i + 1,
-        0,
-        createBlock(blocks[i].type, structuredClone(blocks[i].settings)),
-      );
+      blocks.splice(i + 1, 0, {
+        ...createBlock(blocks[i].type, structuredClone(blocks[i].settings)),
+        sourceContext: contextForBlock(blocks[i], this.store.draft.metadata),
+        ...(blocks[i].section
+          ? { section: structuredClone(blocks[i].section) }
+          : {}),
+      });
     if (action === "up" || action === "down") {
       const j = i + (action === "up" ? -1 : 1);
       if (j < 0 || j >= blocks.length) return;
@@ -293,6 +310,7 @@ export class AppShell extends HTMLElement {
     this.toastTimer = setTimeout(() => (el.hidden = true), 6500);
   }
   modal(content) {
+    this.dialog.classList.remove("import-modal");
     this.querySelector(".dialog-content").innerHTML = content;
     if (!this.dialog.open) this.dialog.showModal();
   }
@@ -330,53 +348,39 @@ export class AppShell extends HTMLElement {
         }),
     );
   }
-  importDialog() {
+  importDialog(reimport = false) {
+    this.modal("<import-dialog></import-dialog>");
+    this.dialog.classList.add("import-modal");
+    const component = this.querySelector("import-dialog");
+    component.draft = this.store.draft;
+    if (reimport) component.reimport();
+    component.querySelector("input")?.focus();
+  }
+  splitDialog() {
+    const snapshot = draftSnapshot(this.store.draft);
     this.modal(
-      `<div class="eyebrow">BRING YOUR OWN MARKDOWN</div><h1>Pick up where you left off.</h1><p>Imports open in a new draft and preserve the original Markdown.</p><button class="profile-entry" data-action="profile">Autofill profile details instead ↗</button><form id="github-import"><label>GitHub username or owner/repository<input name="repository" placeholder="octocat or owner/repository" required></label><button class="primary">Import GitHub README</button><p class="hint">Public repositories only. No token needed.</p><p class="import-result" role="status"></p></form><div class="divider-label">OR IMPORT A LOCAL FILE</div><label class="file-label">README.md or Studio draft (.json)<input type="file" accept=".md,.markdown,.txt,.json" id="file-import"></label><p class="hint">Remote images in previews contact their hosting services. Relative image paths may need public URLs.</p>`,
+      '<h1>Split into sections</h1><p>Exact source slices become Custom Markdown blocks. Suggested kinds are labels only.</p><label>Split by<select id="split-levels"><option value="both">H1 + H2</option><option value="h1">H1</option></select></label><div id="split-summary"></div><button id="apply-split" class="primary">Split into sections</button>',
     );
-    this.querySelector("#github-import").onsubmit = async (e) => {
-      e.preventDefault();
-      const button = e.target.querySelector("button");
-      const status = e.target.querySelector(".import-result");
-      button.disabled = true;
-      status.textContent = "Fetching README…";
-      try {
-        const result = await importGithub(
-          new FormData(e.target).get("repository"),
-        );
-        const d = newDraft(result.repository, [
-          createBlock("custom", { markdown: result.markdown }),
-        ]);
-        d.metadata.repository = result.repository;
-        this.data.drafts.push(d);
-        this.load(d.id);
-        this.dialog.close();
-        this.notify("README imported");
-      } catch (error) {
-        status.textContent =
-          error.name === "TimeoutError"
-            ? "GitHub timed out. Try again or import a local file."
-            : error.message;
-      } finally {
-        button.disabled = false;
-      }
+    const levels = () =>
+      this.querySelector("#split-levels").value === "h1" ? [1] : [1, 2];
+    const update = () => {
+      this.querySelector("#split-summary").innerHTML = detectSections(
+        this.store.draft.markdown,
+        { levels: levels() },
+      )
+        .map((s) => `<p>${html(s.title)} · suggested ${s.kind}</p>`)
+        .join("");
     };
-    this.querySelector("#file-import").onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      try {
-        if (file.size > 2_000_000)
-          throw new Error("Choose a file smaller than 2 MB.");
-        const content = await file.text();
-        const d = file.name.endsWith(".json")
-          ? validateDraft(JSON.parse(content))
-          : newDraft(file.name, [createBlock("custom", { markdown: content })]);
-        this.data.drafts.push(d);
-        this.load(d.id);
-        this.dialog.close();
-      } catch (error) {
-        this.notify(error.message);
+    update();
+    this.querySelector("#split-levels").onchange = update;
+    this.querySelector("#apply-split").onclick = () => {
+      if (snapshot !== draftSnapshot(this.store.draft)) {
+        this.notify("The draft changed. Open split again.");
+        return;
       }
+      this.store.blocks(splitDraft(this.store.draft, levels()));
+      this.dialog.close();
+      this.focusDocument();
     };
   }
   profileDialog() {
@@ -486,13 +490,11 @@ export class AppShell extends HTMLElement {
       case "expand":
         this.querySelector(".workspace").classList.remove("collapsed");
         break;
+      case "reimport":
+        this.importDialog(true);
+        break;
       case "split":
-        this.store.blocks(
-          parseSections(this.store.draft.markdown).map((markdown) => ({
-            ...createBlock("custom", { markdown }),
-            separator: "\n",
-          })),
-        );
+        this.splitDialog();
         break;
     }
   }

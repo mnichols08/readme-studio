@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.1.1** · Native Web Components · Local drafts · Static hosting
+**Version 0.1.2** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -33,11 +33,21 @@ Choose Minimal, Developer Showcase, Open Source, Student, or Terminal on first l
 
 The Markdown editor preserves formatting and supports undo/redo and two-space Tab insertion. **Shift+Tab leaves the editor**, so keyboard users are never trapped. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redoes; Ctrl/Cmd+S saves. Alt+1–4 selects Build, Markdown, Preview, or Health on mobile. Section controls provide keyboard reordering, duplication, removal, and copying. The builder can collapse on desktop.
 
-Builder-created documents retain editable block settings. **Editing raw Markdown turns the document into one Custom Markdown block**. This deliberately gives manual text priority: new builder sections append to the preserved text. Undo restores the previous block state. “Split at section headings” explicitly divides raw content into Custom Markdown sections and preserves its exact text; it does not infer structured form fields.
+Builder-created documents retain editable block settings. **Editing raw Markdown turns the document into one Custom Markdown block**. This deliberately gives manual text priority: new builder sections append to the preserved text. Undo restores the previous block state. “Split into sections” explicitly divides raw content into Custom Markdown sections and preserves its exact text; it does not infer structured form fields.
 
 Drafts and theme/preview settings autosave to this browser’s localStorage. Use the menu beside the draft name to rename, duplicate, delete, or create drafts. Download a JSON draft backup to retain builder settings; Markdown export preserves only the portable document. Clearing browser storage removes drafts. Storage failures are reported without silently claiming a successful save.
 
-Import accepts a GitHub username (loads `username/username`) or `owner/repository`. It uses GitHub’s public root README endpoint and default branch. GitHub rate limits, missing repositories, and timeouts produce errors. Local `.md`, `.markdown`, `.txt`, and Studio `.json` imports are supported. Imports open new drafts. No token is requested or stored.
+## Import Intelligence
+
+Open **Import**, choose GitHub, Local file, or Studio backup, and review the summary before applying. GitHub accepts a username, `@username`, `owner/repository`, or GitHub profile/repository URL. It fetches the public README endpoint and records the returned path, branch, SHA, and fetch time. No token is requested or stored. Imports are limited to 2 MB; timeouts, rate limits, missing repositories/READMEs, and malformed responses have distinct errors.
+
+**New draft** is the default. **Replace current draft** requires confirmation. **Append** adds content at the end. **Merge** shows current and imported sections together, suggests matches, and requires an action for every imported section: keep current, use imported, insert before, or append after a chosen section. Review the resulting Markdown, then apply. Replacement, append, and merge each have one undo step.
+
+Import preserves the original Markdown, including whitespace, HTML, comments, and code. **Split into sections** creates Custom Markdown blocks at H1 or H1 + H2 boundaries, preserving the preamble and exact source slices. Suggested section kinds are labels; they do not convert content into specialized forms. Merge preserves the selected slices, adding blank lines only where newly joined pieces need separation. Duplicate sections and image/widget URLs produce warnings and are never deleted automatically.
+
+Relative GitHub images and repository links resolve **only in preview**; Markdown exports keep their original URLs. Local anchors stay within the preview. Relative assets in local files have no accessible sibling directory, so images show a placeholder and links remain inactive. Studio backups retain source context and valid builder/autofill metadata when restored as a new draft or replacement. Appending retains imported blocks; section merging and splitting deliberately produce user-owned raw blocks.
+
+GitHub-backed drafts offer **Re-import current GitHub README**. It compares the saved SHA, reports whether the remote changed, and opens merge review without changing the draft. Combined documents retain each block’s source repository. Editing an entire document that combines different sources collapses it to one raw block; ambiguous relative assets then remain unresolved. Edit individual sections to retain their source context.
 
 ## Autofill from GitHub
 
@@ -58,7 +68,7 @@ Existing v0.1.0 drafts and JSON backups remain readable without a format migrati
 
 ## Preview and health
 
-The preview supports GFM tables, task lists, highlighted fenced code, details/summary, pictures, and a conservative subset of GitHub-compatible HTML. DOMPurify sanitizes generated preview HTML. Links open in a separate tab with `noopener noreferrer`. Preview width presets are maximum widths, constrained by the available pane: desktop (1012), narrow (760), tablet (640), and mobile (375). The separate preview theme toggle simulates light/dark picture sources.
+The preview supports GFM tables, task lists, highlighted fenced code, details/summary, pictures, and a conservative subset of GitHub-compatible HTML. DOMPurify sanitizes generated preview HTML. External links open in a separate tab with `noopener noreferrer`; local anchors scroll within the preview. Preview width presets are maximum widths, constrained by the available pane: desktop (1012), narrow (760), tablet (640), and mobile (375). The separate preview theme toggle simulates light/dark picture sources.
 
 README Health provides advisory Accessibility, Compatibility, Layout, Structure, and **Clutter suggestions**. It reports missing alt text, empty links, heading hierarchy issues, scripts, custom CSS, interactive HTML, large images, wide tables, and excessive badges/widgets. There is no quality score, and checks never delete or rewrite content.
 
@@ -102,10 +112,10 @@ Vite uses `base: './'`, so built assets work at repository subpaths. There is no
 ## v0.1 limitations
 
 - Preview approximates GitHub; it is not pixel-for-pixel parity. GitHub may apply different sanitization and rendering policies.
-- Imported relative images/links are preserved and may not resolve locally. Use public absolute image URLs for accurate previews.
+- Local relative assets cannot be loaded from sibling files. GitHub imports resolve them in preview using saved source context. Cross-source reference definitions and HTML spanning different source contexts may render differently; exports preserve the text.
 - Arbitrary Markdown does not round-trip into specialized forms automatically. Raw editing preserves text as Custom Markdown.
 - Health is heuristic, not an exhaustive HTML validator, accessibility audit, or network link checker.
-- Local import is limited to 2 MB. The tested editing target is 100 KB; there is no editor virtualization.
+- Local and GitHub Markdown import is limited to 2 MB. The tested editing target is 100 KB; there is no editor virtualization.
 - No OAuth, GitHub writes, accounts, AI generation, backend, cloud sync, collaboration, full banner designer, or direct widget-service integration.
 
 ## Third-party tools

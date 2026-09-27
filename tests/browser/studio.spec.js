@@ -170,8 +170,22 @@ test("GitHub import uses mock API, handles errors, and retains Markdown", async 
     route.request().url().includes("missing")
       ? route.fulfill({ status: 404, body: "{}" })
       : route.fulfill({
-          contentType: "text/plain",
-          body: "# Imported\n\nOriginal  formatting.\n",
+          contentType: "application/json",
+          body: JSON.stringify(
+            route.request().url().includes("/readme")
+              ? {
+                  path: "README.md",
+                  sha: "abc",
+                  size: Buffer.byteLength(
+                    "# Imported\n\nOriginal  formatting.\n",
+                  ),
+                  encoding: "base64",
+                  content: Buffer.from(
+                    "# Imported\n\nOriginal  formatting.\n",
+                  ).toString("base64"),
+                }
+              : { default_branch: "main" },
+          ),
         }),
   );
   await start(page);
@@ -181,15 +195,16 @@ test("GitHub import uses mock API, handles errors, and retains Markdown", async 
     .click();
   await page.getByLabel("GitHub username or owner/repository").fill("missing");
   await page
-    .getByRole("button", { name: "Import GitHub README", exact: true })
+    .getByRole("button", { name: "Preview import", exact: true })
     .click();
   await expect(page.locator(".import-result")).toContainText(
-    "No public root README",
+    "Repository not found",
   );
   await page.getByLabel("GitHub username or owner/repository").fill("example");
   await page
-    .getByRole("button", { name: "Import GitHub README", exact: true })
+    .getByRole("button", { name: "Preview import", exact: true })
     .click();
+  await page.getByRole("button", { name: "Import as new draft" }).click();
   await expect(editor(page)).toHaveValue(
     "# Imported\n\nOriginal  formatting.\n",
   );
@@ -212,11 +227,13 @@ test("draft management and local file import", async ({ page }) => {
     .getByRole("button", { name: "Import", exact: false })
     .first()
     .click();
+  await page.getByRole("button", { name: "Local file", exact: true }).click();
   await page.locator("#file-import").setInputFiles({
     name: "README.md",
     mimeType: "text/markdown",
     buffer: Buffer.from("# Local file\n"),
   });
+  await page.getByRole("button", { name: "Import as new draft" }).click();
   await expect(editor(page)).toHaveValue("# Local file\n");
 });
 test("mobile panes do not squeeze editor and preview together", async ({
@@ -276,7 +293,10 @@ test("large document stays editable and section splitting is lossless", async ({
       .locator("github-preview")
       .getByRole("heading", { name: "Last", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Split at section headings" }).click();
+  await page
+    .getByRole("button", { name: "Split into sections", exact: true })
+    .click();
+  await page.locator("#apply-split").click();
   await expect(editor(page)).toHaveValue(md);
   await expect(page.locator(".block-row")).toHaveCount(2);
 });

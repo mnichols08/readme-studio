@@ -166,7 +166,7 @@ describe("analysis and non-destructive state", () => {
       serializeBlocks(
         pieces.map((markdown) => ({
           ...createBlock("custom", { markdown }),
-          separator: "\n",
+          separator: "",
         })),
       ),
     ).toBe(md);
@@ -214,7 +214,21 @@ describe("public import", () => {
     let url;
     const r = await importGithub("octocat", async (u) => {
       url = u;
-      return { ok: true, text: async () => "# Raw\n  " };
+      return {
+        ok: true,
+        text: async () =>
+          JSON.stringify(
+            u.includes("/readme")
+              ? {
+                  path: "README.md",
+                  sha: "abc",
+                  size: 8,
+                  encoding: "base64",
+                  content: btoa("# Raw\n  "),
+                }
+              : { default_branch: "main" },
+          ),
+      };
     });
     expect(url).toContain("/octocat/octocat/readme");
     expect(r.markdown).toBe("# Raw\n  ");
@@ -222,7 +236,7 @@ describe("public import", () => {
   it("reports missing repositories and invalid input", async () => {
     await expect(
       importGithub("owner/repo", async () => ({ ok: false, status: 404 })),
-    ).rejects.toThrow("No public root README");
+    ).rejects.toThrow("Repository not found");
     await expect(importGithub("../repo")).rejects.toThrow("Enter a username");
   });
 });
