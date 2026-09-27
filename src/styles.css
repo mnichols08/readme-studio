@@ -1639,3 +1639,54 @@ badge-studio textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.collection-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.collection-badges {
+  padding-left: 24px;
+}
+.collection-badges li {
+  padding: 8px 0;
+  overflow-wrap: anywhere;
+}
+.collection-preview {
+  width: 100%;
+  border: 1px solid var(--border);
+  padding: 12px;
+  overflow: auto;
+}
+.collection-preview img {
+  max-width: 100%;
+  height: auto;
+}
+.collection-preview p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.collection-preview p[align="center"] {
+  justify-content: center;
+}
+badge-collection-editor {
+  display: block;
+  min-width: 0;
+}
+.badge-config,
+.badge-result {
+  min-width: 0;
+}
+@media (min-width: 900px) {
+  .badge-workbench {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+  }
+  .badge-result {
+    position: sticky;
+    top: 0;
+  }
+}

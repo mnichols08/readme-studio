@@ -1,3 +1,5 @@
+import { contrastWarnings } from "../badges/contrast.js";
+import "./dynamic-badge-builder.js";
 import { html } from "../markdown/serialize.js";
 import { buildLinkedBadge, badgeImages, styles } from "../badges/shields.js";
 import {
@@ -19,7 +21,7 @@ export class BadgeStudio extends HTMLElement {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
   }
   draw() {
-    this.innerHTML = `<h1>Badge Studio</h1><p>Editable badges. Ordinary Markdown. Remote previews contact the image provider.</p><label>Badge preset<select data-preset><option value="">Choose a preset</option>${badgePresets.map((p, i) => `<option value="${i}">${html(p.name)}</option>`).join("")}</select></label><label>Search logos<input data-logo-search placeholder="React, JS, Node, Postgres, Rust, WASM"></label><div class="logo-results" aria-label="Logo results"></div><div class="badge-fields">${[
+    this.innerHTML = `<h1>Badge Studio</h1><p>Editable badges. Ordinary Markdown. Remote previews contact the image provider.</p><div class="badge-workbench"><div class="badge-config"><details class="dynamic-tools"><summary>Dynamic badge helpers</summary><dynamic-badge-builder></dynamic-badge-builder></details><label>Badge preset<select data-preset><option value="">Choose a preset</option>${badgePresets.map((p, i) => `<option value="${i}">${html(p.name)}</option>`).join("")}</select></label><label>Search logos<input data-logo-search placeholder="React, JS, Node, Postgres, Rust, WASM"></label><div class="logo-results" aria-label="Logo results"></div><div class="badge-fields">${[
       ["label", "Label"],
       ["message", "Message"],
       ["logo", "Logo"],
@@ -35,7 +37,7 @@ export class BadgeStudio extends HTMLElement {
       )
       .join(
         "",
-      )}<label>Badge style<select data-badge-field="style">${styles.map((s) => `<option ${s === this.value.style ? "selected" : ""}>${s}</option>`).join("")}</select></label></div><label class="check"><input type="checkbox" data-pair ${this.value.darkColor ? "checked" : ""}> Light / dark badge pair</label><fieldset data-dark ${this.value.darkColor ? "" : "hidden"}><legend>Dark variant (main colors are the light variant)</legend><label>Dark background<input data-badge-field="darkColor" value="${html(this.value.darkColor || "20232A")}"></label><label>Dark logo color<input data-badge-field="darkLogoColor" value="${html(this.value.darkLogoColor || "white")}"></label></fieldset><div class="badge-status" role="status"></div><div class="badge-preview" aria-label="Badge preview"></div><label>Generated Markdown<textarea data-output="markdown" readonly rows="3"></textarea></label><label>Generated HTML<textarea data-output="html" readonly rows="3"></textarea></label><label>Final Shields URL<textarea data-output="url" readonly rows="2"></textarea></label><div class="row-actions"><button data-badge-copy="markdown">Copy Markdown</button><button data-badge-copy="html">Copy HTML</button><button data-duplicate-badge>Duplicate badge</button><button data-reset-badge>Reset</button></div><div class="badge-insertion"></div><button class="primary" data-insert-badge>Add to README</button>`;
+      )}<label>Badge style<select data-badge-field="style">${styles.map((s) => `<option ${s === this.value.style ? "selected" : ""}>${s}</option>`).join("")}</select></label></div><label class="check"><input type="checkbox" data-pair ${this.value.darkColor ? "checked" : ""}> Light / dark badge pair</label><fieldset data-dark ${this.value.darkColor ? "" : "hidden"}><legend>Dark variant (main colors are the light variant)</legend><label>Dark background<input data-badge-field="darkColor" value="${html(this.value.darkColor || "20232A")}"></label><label>Dark logo color<input data-badge-field="darkLogoColor" value="${html(this.value.darkLogoColor || "white")}"></label></fieldset></div><div class="badge-result"><div class="badge-status" role="status"></div><div class="badge-advice" aria-label="Badge guidance"></div><div class="badge-preview" aria-label="Badge preview"></div><label>Generated Markdown<textarea data-output="markdown" readonly rows="3"></textarea></label><label>Generated HTML<textarea data-output="html" readonly rows="3"></textarea></label><label>Final Shields URL<textarea data-output="url" readonly rows="2"></textarea></label><div class="row-actions"><button data-badge-copy="markdown">Copy Markdown</button><button data-badge-copy="html">Copy HTML</button><button data-duplicate-badge>Duplicate badge</button><button data-reset-badge>Reset</button></div><div class="badge-collection-controls"></div><div class="badge-insertion"></div><button class="primary" data-insert-badge>Add to README</button></div></div>`;
     this.querySelector("[data-logo-search]").oninput = (e) =>
       this.search(e.target.value);
     this.querySelector("[data-preset]").onchange = (e) => {
@@ -64,8 +66,7 @@ export class BadgeStudio extends HTMLElement {
     this.querySelectorAll("[data-badge-copy]").forEach(
       (b) =>
         (b.onclick = () => {
-          if (this.output)
-            this.emit("copy-markup", this.output[b.dataset.badgeCopy]);
+          if (this.output) this.copyOutput(b.dataset.badgeCopy);
         }),
     );
     this.querySelector("[data-reset-badge]").onclick = () => {
@@ -86,9 +87,60 @@ export class BadgeStudio extends HTMLElement {
           target: this.querySelector("[data-insert-target]")?.value || "cursor",
         });
     };
+    const dynamic = this.querySelector("dynamic-badge-builder");
+    dynamic.suggestions = this.suggestions || [];
+    dynamic.fields();
+    dynamic.addEventListener("dynamic-badge", (e) => {
+      e.stopPropagation();
+      this.badge = e.detail;
+      this.querySelector('[data-badge-field="alt"]').focus();
+    });
+    if (this.value.lightUrl) {
+      this.querySelector('[data-badge-field="message"]').closest(
+        "label",
+      ).hidden = true;
+      this.querySelector('[data-badge-field="label"]').closest("label").hidden =
+        true;
+    }
     this.search("");
+    this.collectionControls();
     this.targets();
     this.update();
+    if (this.collectionMode) {
+      this.querySelector(".badge-insertion").hidden = true;
+      this.querySelector(".badge-collection-controls").hidden = true;
+      this.querySelector("[data-insert-badge]").textContent =
+        "Use badge in collection";
+    }
+  }
+  async copyOutput(format) {
+    const text = this.output?.[format];
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      if (this.isConnected)
+        this.querySelector(".badge-status").textContent = "Badge copied.";
+    } catch {
+      if (!this.isConnected) return;
+      const area = this.querySelector(`[data-output="${format}"]`);
+      area.focus();
+      area.select();
+      this.querySelector(".badge-status").textContent =
+        "Clipboard unavailable. Select and copy the generated text below.";
+    }
+  }
+  collectionControls() {
+    const el = this.querySelector(".badge-collection-controls");
+    if (!el) return;
+    el.innerHTML = `<label>Save badge to collection<select data-save-collection-target aria-label="Save badge to collection"><option value="">New collection</option>${(this.collections || []).map((c) => `<option value="${html(c.id)}">${html(c.name)}</option>`).join("")}</select></label><label>New collection name<input data-new-collection-name maxlength="120" value="My collection"></label><button data-save-badge-collection>Save badge to collection</button>`;
+    el.querySelector("[data-save-badge-collection]").onclick = () => {
+      if (this.output)
+        this.emit("collection-add-badge", {
+          badge: structuredClone(this.value),
+          id: el.querySelector("select").value,
+          name: el.querySelector("input").value,
+        });
+    };
   }
   targets() {
     this.querySelector(".badge-insertion").innerHTML =
@@ -114,6 +166,17 @@ export class BadgeStudio extends HTMLElement {
   }
   update() {
     const status = this.querySelector(".badge-status");
+    const advice = contrastWarnings(this.value);
+    if (
+      !this.value.alt?.trim() ||
+      /^(badge|image|logo|status)$/i.test(this.value.alt.trim())
+    )
+      advice.unshift(
+        "Add meaningful alt text, such as the technology or status described. Export remains available.",
+      );
+    this.querySelector(".badge-advice").innerHTML = advice.length
+      ? `<details><summary>${advice.length} badge suggestions</summary><ul>${advice.map((a) => `<li>${html(a)}</li>`).join("")}</ul><p>Contrast is approximate, assumes white badge text, and does not certify WCAG compliance. Provider rendering may choose different text colors.</p></details>`
+      : "";
     try {
       const images = badgeImages(this.value);
       this.output = {

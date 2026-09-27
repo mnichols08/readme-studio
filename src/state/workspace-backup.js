@@ -1,3 +1,7 @@
+import {
+  validateCollections,
+  recoverCollections,
+} from "../badges/collections.js";
 import { validateDraft } from "./drafts.js";
 export const BACKUP_LIMIT = 50_000_000;
 export const workspaceSettings = (s = {}) => ({
@@ -50,6 +54,7 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     drafts,
     active: active || drafts[0].id,
     settings: workspaceSettings(data.settings),
+    badgeCollections: validateCollections(data.badgeCollections),
     ...(typeof data.createdAt === "string"
       ? { createdAt: data.createdAt }
       : {}),
@@ -71,7 +76,17 @@ export function restoreWorkspace(current, backup, mode) {
     throw new Error(
       "Merged workspace exceeds the 500 draft limit. Export smaller backups first.",
     );
-  return { ...current, drafts };
+  return {
+    ...current,
+    drafts,
+    badgeCollections: validateCollections({
+      version: 1,
+      items: [
+        ...(current.badgeCollections?.items || []),
+        ...incoming.badgeCollections.items,
+      ],
+    }),
+  };
 }
 export function recoverWorkspace(raw) {
   try {
@@ -90,7 +105,13 @@ export function recoverWorkspace(raw) {
         /* Keep unreadable originals in the recovery download. */
       }
     }
-    return drafts.length ? validateWorkspace({ ...data, drafts }) : null;
+    return drafts.length
+      ? validateWorkspace({
+          ...data,
+          drafts,
+          badgeCollections: recoverCollections(data.badgeCollections),
+        })
+      : null;
   } catch {
     return null;
   }

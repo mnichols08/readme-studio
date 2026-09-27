@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.3
+
+- Advisory badge alt-text, approximate contrast, duplicate technology/URL/status, long-row and per-section clutter guidance; code examples and comments remain excluded.
+- Resilient collection backup/restore and partial corruption recovery, bounded large-collection previews, and explicit unsaved-edit handling.
+- In-place clipboard fallback, offline markup generation, strict color/style/URL validation, and local builder validation errors.
+- Desktop side-by-side preview, mobile wrapping, predictable WebKit dialog focus, and Chromium/Firefox/WebKit workflow coverage.
+- Completed badge, privacy, accessibility, and architecture documentation.
+
+## 0.2.2
+
+- Guided dynamic helpers for GitHub workflow/stars/forks/issues/license/releases, npm version/downloads, crates.io version/downloads, PyPI, Docker, Netlify, and public Shields JSON endpoints.
+- Local format validation, explicitly chosen repository suggestions, editable click-through links, and provider-specific cache settings.
+- No API lookups while typing, no proxy, and clear remote preview/privacy limitations.
+
+## 0.2.1
+
+- Reusable local badge collections with editable starters, alias search, keyboard reorder/edit/duplicate/remove, and portable versioned JSON.
+- Plain, centered, picture and category output; desktop/narrow/mobile previews with bounded remote images.
+- Save badges or stack categories as collections and insert independent copies into drafts or stack blocks.
+
 ## 0.2.0
 
 - Dedicated Badge Studio with editable presets, searchable technology logos, smart defaults, and live Markdown/HTML/URL previews.

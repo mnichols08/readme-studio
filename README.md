@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.2.0** · Native Web Components · Local drafts · Static hosting
+**Version 0.2.3** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -20,7 +20,7 @@ Open the local URL printed by Vite. No credentials, Rust toolchain, backend, or 
 ## What you can build
 
 - Hero, about, learning, writing, contact, divider, and unrestricted Custom Markdown sections.
-- Shields badges and editable badge rows, including light/dark colors and image variants.
+- Badge Studio with searchable logos, live Markdown/HTML/URL previews, light/dark pairs, reusable collections, and guided dynamic badges.
 - Searchable technology catalog with aliases, custom technologies, categories, badges, code chips, and text lists.
 - Social badges, plain links, and centered contact lines.
 - Multi-project showcases with compact, detailed, and table-card layouts, screenshots, highlights, status Markdown, and custom links.
@@ -82,7 +82,7 @@ Apply is a single undoable change to the current draft, including saved profile 
 
 In 0.1.1, untouched autofilled hero bios and sample contact URLs also refresh. Previously generated bio/contact fields are cleared when the public profile no longer provides them; manual replacements stay yours. Closing the dialog or changing the username cancels the lookup. If the draft changes after review, apply is rejected so you can reopen autofill and review the latest source. Keyboard users can submit the username with Enter, tab through choices, and close with Escape.
 
-Existing v0.1.0 drafts and JSON backups remain readable without a format migration. Older bio/contact fields without ownership records are treated conservatively as custom content. See [0.1.1 release scope and verification](docs/releases/0.1.1.md). The next milestones are 0.1.2 Import Intelligence and 0.1.3 Foundation Hardening; later capability work is intentionally excluded from this patch.
+Existing v0.1.0 drafts and JSON backups remain readable without a format migration. Older bio/contact fields without ownership records are treated conservatively as custom content. See [0.1.1 release scope and verification](docs/releases/0.1.1.md). Import Intelligence and Foundation Hardening are included; the v0.2.x cycle adds Badge Studio in four separate release checkpoints.
 
 ## Preview and health
 
@@ -145,3 +145,15 @@ Badge output uses [Shields.io](https://shields.io). The widget catalog keeps vis
 ### Badge Studio (v0.2.0)
 
 Open **Badge Studio** in the header or from a builder section. Search a logo, choose an editable preset, and adjust label/message colors, logo, style, link, and alt text. Enable light/dark pairs for GitHub-compatible picture markup. Copy Markdown/HTML or insert at the cursor, into a badge row, or at the end of a selected section. Selected text is preserved. Build and deployment presets are static examples, not verified status badges. Preview images contact Shields directly; your draft is never sent. See [the badge guide](docs/badges.md).
+
+### Badge collections (v0.2.1)
+
+Save badges into named collections, or open **Collections** for editable starters and keyboard management. Import/export collection JSON, choose plain/centered/picture/category markup, and preview wrapping. Stack builder can save categories and insert saved collections. Insertions are independent copies.
+
+### Dynamic badge helpers (v0.2.2)
+
+Open **Dynamic badge helpers** inside Badge Studio for GitHub Actions/repository stats, npm, crates.io, PyPI, Docker, Netlify, or a public JSON endpoint. Choose a helper, enter its fields, then generate. Repository suggestions are opt-in. Customize colors, style, alt text and click-through link before insertion or collection saving. Generation validates formats locally; a preview image does not guarantee a successful workflow or correct status.
+
+### Badge reliability (v0.2.3)
+
+Badge guidance flags generic/missing alt text, likely low contrast, duplicate technologies/URLs, repeated status badges, and crowded rows. Suggestions never block export or remove content. Contrast estimates are advisory, not WCAG certification. Collection previews offer desktop/narrow/mobile widths and cap remote images for large groups. All-drafts backups include versioned collections; malformed storage opens a temporary recoverable workspace without overwriting originals. See [the badge guide](docs/badges.md) and [release checkpoints](docs/releases/0.2.x.md).

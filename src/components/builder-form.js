@@ -17,8 +17,10 @@ const badgeFields = [
     "flat-square",
     "for-the-badge",
     "plastic",
+    "social",
   ]),
   field("color", "Background color"),
+  field("labelColor", "Label color"),
   field("logoColor", "Logo color"),
   field("link", "Link URL"),
   field("alt", "Alt text"),
@@ -200,12 +202,43 @@ export class BuilderForm extends HTMLElement {
           s,
         );
     this.innerHTML = `<form><button type="button" data-studio>Open Badge Studio for this section</button>${form}<details class="markup"><summary>Generated Markdown & preview</summary><pre data-output></pre><div class="mini-preview markdown-body"></div></details><div class="form-actions"><button type="submit" class="primary">${this.value.id ? "Save section" : "Add to README"}</button><button type="button" data-copy>Copy Markdown</button><button type="button" data-cancel>Cancel</button></div></form>`;
+    if (type === "stack") {
+      this.querySelector("form").insertAdjacentHTML(
+        "afterbegin",
+        `<label>Category to save<select data-save-category>${[...new Set(s.items.map((i) => i.category || "Other"))].map((c) => `<option>${html(c)}</option>`).join("")}</select></label><button type="button" data-save-stack>Save category as collection</button><button type="button" data-insert-stack>Insert saved collection into stack</button>`,
+      );
+      this.querySelector("[data-save-stack]").onclick = () => {
+        const category = this.querySelector("[data-save-category]").value;
+        if (category)
+          this.dispatchEvent(
+            new CustomEvent("stack-collection-save", {
+              bubbles: true,
+              detail: {
+                name: category,
+                badges: s.items
+                  .filter((i) => (i.category || "Other") === category)
+                  .map((i) => ({
+                    ...i,
+                    label: i.name,
+                    color: i.color || i.brandColor,
+                    alt: i.alt || i.name,
+                  })),
+              },
+            }),
+          );
+      };
+      this.querySelector("[data-insert-stack]").onclick = () =>
+        this.dispatchEvent(
+          new CustomEvent("open-collections", { bubbles: true }),
+        );
+    }
     this.querySelector("[data-studio]").onclick = () =>
       this.dispatchEvent(
         new CustomEvent("open-badge-studio", { bubbles: true }),
       );
     this.querySelector("form").onsubmit = (e) => {
       e.preventDefault();
+      if (!this.output()) return;
       this.dispatchEvent(
         new CustomEvent("commit", {
           detail: structuredClone(this.value),
@@ -343,9 +376,29 @@ export class BuilderForm extends HTMLElement {
       '<p class="hint">No matches. Add a custom technology below.</p>';
   }
   output() {
-    const md = serializeBlock(this.value);
-    this.querySelector("[data-output]").textContent = md;
-    this.querySelector(".mini-preview").innerHTML = render(md);
+    try {
+      const md = serializeBlock(this.value);
+      this.querySelector("[data-output]").textContent = md;
+      this.querySelector(".mini-preview").innerHTML = render(md);
+      this.querySelectorAll('[type="submit"],[data-copy]').forEach(
+        (b) => (b.disabled = false),
+      );
+      this.querySelector(".builder-validation")?.remove();
+      return true;
+    } catch (error) {
+      let status = this.querySelector(".builder-validation");
+      if (!status) {
+        status = document.createElement("p");
+        status.className = "builder-validation";
+        status.setAttribute("role", "status");
+        this.querySelector(".form-actions").before(status);
+      }
+      status.textContent = error.message;
+      this.querySelectorAll('[type="submit"],[data-copy]').forEach(
+        (b) => (b.disabled = true),
+      );
+      return false;
+    }
   }
 }
 customElements.define("builder-form", BuilderForm);

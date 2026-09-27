@@ -87,3 +87,15 @@ The preview catches rendering failures locally and keeps source/editor/export in
 Dialogs retain their original trigger through nested content changes, focus meaningful fields on open, and restore a connected visible target on close. Import/split completion can explicitly target the editor; draft deletion/restore targets the draft selector. Background rendering/saves do not steal focus. Native dialog modality keeps hidden workspace controls outside tab flow.
 
 Static builds include a separate Health Worker asset and relative Vite asset references. `scripts/static-smoke.mjs` verifies root and `/readme-studio/` deployments with a plain HTTP file server and no route fallback. A browser `file://` launch is not supported for ES modules/Workers; serve `dist/` over HTTP(S).
+
+## Badge Studio (v0.2.x)
+
+`src/badges/shields.js` is the shared pure static/linked/picture serializer for Badge Studio and existing builders. It implements Shields path escaping, query encoding, named/hex color validation, constrained logo slugs and the shared safe-URL boundary. No arbitrary HTML input or remote script is executed. Generated Markdown remains ordinary source; preview sanitization changes only temporary DOM.
+
+The logo catalog derives from data-driven technology records with explicit WebAssembly support. Presets, aliases and defaults are separate from component search. Provider adapters generate GitHub, npm, crates, Netlify and other documented Shields URLs locally. Dynamic preview is requested only on Generate; static preview follows composer edits. There is no proxy or API fetch while typing. Metadata contributes explicit target suggestions, never silently selected repositories.
+
+`collections.js` validates portable schema-1 collection files and the workspace's schema-1 `badgeCollections` field. Collections are independent of draft blocks. Insertions clone settings or serialize source; stack integration does not establish live references. Collection saves write validated data before replacing in-memory persisted state. Quota/unavailable-storage failures leave the editable collection open for export. Backup merge resolves IDs and names; recovery salvages readable badges while preserving the damaged raw storage until explicit restore.
+
+`contrast.js` and `duplicates.js` are pure advisory analyses. README Health reuses parsed Markdown tokens and performs badge checks in its existing Worker, ignoring fenced code and HTML comments. Duplicate output is bounded to 100 distinct guidance messages. Collection previews cap remote images at twenty and allow three widths; export is never truncated. No new runtime dependency was added.
+
+Badge components use native controls and the app's dialog focus management. Composer clipboard fallback selects its output in place, retaining edits. Collection close prompts protect unsaved changes. Malformed builder settings fail locally; source editing and downloads remain available. Cross-browser tests cover these workflows in Chromium, Firefox and WebKit with mocked image providers.

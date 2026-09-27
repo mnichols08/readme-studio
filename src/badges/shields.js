@@ -1,3 +1,4 @@
+import { namedColors } from "./contrast.js";
 import { safeUrl } from "../markdown/url-safety.js";
 export const styles = [
   "flat",
@@ -23,7 +24,10 @@ const dest = (s) =>
 export function normalizeColor(value = "") {
   const v = String(value).trim().replace(/^#/, "");
   if (!v) return "";
-  if (/^(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(v) || /^[a-z]+$/i.test(v))
+  if (
+    /^(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(v) ||
+    namedColors.has(v.toLowerCase())
+  )
     return v;
   throw new Error("Use a named color or a 3, 6, or 8 digit hex color.");
 }
@@ -35,6 +39,8 @@ export const encodeBadgeText = (value) =>
     (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
   );
 export function badgeOptions(s = {}) {
+  if (s.style && !styles.includes(s.style))
+    throw new Error("Choose a supported badge style.");
   const q = new URLSearchParams({
     style: styles.includes(s.style) ? s.style : "flat",
   });
@@ -72,13 +78,35 @@ export function buildStaticBadge(s = {}, dark = false) {
   return `https://img.shields.io/badge/${parts.map(encodeBadgeText).join("-")}?${q}`;
 }
 export function badgeImages(s) {
-  const light = s.lightUrl
-    ? safeUrl(s.lightUrl, { image: true })
-    : buildStaticBadge(s);
+  const customize = (raw, dark = false) => {
+    const safe = safeUrl(raw, { image: true });
+    if (!safe) return "";
+    let url;
+    try {
+      url = new URL(safe);
+    } catch {
+      return safe;
+    }
+    {
+      if (url.origin === "https://img.shields.io") {
+        const options = badgeOptions({
+          ...s,
+          color: dark ? s.darkColor : s.color,
+          logoColor: dark ? s.darkLogoColor : s.logoColor,
+        });
+        for (const [k, v] of options) url.searchParams.set(k, v);
+        return url.href;
+      }
+    }
+    return safe;
+  };
+  const light = s.lightUrl ? customize(s.lightUrl) : buildStaticBadge(s);
   const dark = s.darkUrl
-    ? safeUrl(s.darkUrl, { image: true })
+    ? customize(s.darkUrl, true)
     : s.darkColor
-      ? buildStaticBadge(s, true)
+      ? s.lightUrl
+        ? customize(s.lightUrl, true)
+        : buildStaticBadge(s, true)
       : "";
   if (!light || (s.darkUrl && !dark))
     throw new Error("Use a safe HTTP(S) or relative badge image URL.");
