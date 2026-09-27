@@ -21,3 +21,5 @@ GitHub calls and remote images are mocked in workflow tests. Performance tests s
 Release branches run Chromium, Firefox, and WebKit in CI; other branches run Chromium. Only Chromium captures documentation screenshots so engines do not overwrite each other's artifacts. Failure traces are uploaded by CI. These automated checks complement manual keyboard, touch, and assistive-technology review; they do not certify accessibility.
 
 `npm audit` is useful when its registry endpoint is available. If an audit request fails, report the failed check rather than treating it as a clean result. Prefer a verified advisory fix over unrelated major dependency upgrades.
+
+Project tests cover legacy migration, pure layouts, portable packs, GitHub field ownership, explicit link-check failure classification, and advisory Health rules. `tests/browser/projects.spec.js` covers the user workflows in all three engines, including 10/25/50-project showcases and deferred screenshots. Project pack and GitHub fixtures are inline and deliberately omit authentication.

@@ -1,5 +1,6 @@
 import {
   fetchProjects,
+  repositoryChanges,
   filterRepositories,
   applyRepository,
   importedFields,
@@ -37,8 +38,12 @@ export class GithubProjectPicker extends HTMLElement {
     );
     this.querySelector("[data-fetch-selected]").onclick = () =>
       this.lookup([...this.selected]);
-    this.querySelector("[data-cancel-project-import]").onclick = () =>
+    this.querySelector("[data-cancel-project-import]").onclick = () => {
+      this.dispatchEvent(
+        new CustomEvent("project-review-close", { bubbles: true }),
+      );
       this.remove();
+    };
     this.list();
   }
   list() {
@@ -107,7 +112,7 @@ export class GithubProjectPicker extends HTMLElement {
             suggestedTechnologies(repo)
               .map((t) => t.name)
               .join(", ") || "None",
-          )}</p>${importedFields.map((key) => `<label class="check"><input type="checkbox" data-import-field="${key}" ${existing ? (Object.hasOwn(existing.metadata.github.generatedFields || {}, key) ? "checked" : "") : ["name", "description", "repositoryUrl", "liveUrl"].includes(key) ? "checked" : ""}> Apply ${key}</label>`).join("")}${existing ? `<p>Manual edits are preserved. Fields currently owned by you: ${h(applyRepository(repo, importedFields, existing).preserved.join(", ") || "none")}</p>` : ""}${duplicate ? '<p>This repository is already included.</p><label class="check"><input type="checkbox" data-allow-duplicate> I confirm adding a duplicate repository</label>' : ""}</fieldset>`;
+          )}</p>${importedFields.map((key) => `<label class="check"><input type="checkbox" data-import-field="${key}" ${existing ? (Object.hasOwn(existing.metadata.github.generatedFields || {}, key) ? "checked" : "") : ["name", "description", "repositoryUrl", "liveUrl"].includes(key) ? "checked" : ""}> Apply ${key}</label>`).join("")}${existing ? `<p>Source changes since last import: ${h(repositoryChanges(repo, existing).join(", ") || "none")}. Apply selected refresh fields below; manual edits are preserved. Fields currently owned by you: ${h(applyRepository(repo, importedFields, existing).preserved.join(", ") || "none")}</p>` : ""}${duplicate ? '<p>This repository is already included.</p><label class="check"><input type="checkbox" data-allow-duplicate> I confirm adding a duplicate repository</label>' : ""}</fieldset>`;
         })
         .join("") +
       (results.some((r) => r.data)
@@ -132,21 +137,23 @@ export class GithubProjectPicker extends HTMLElement {
           "Confirm the duplicate repository before applying.";
         return;
       }
-      const repo = this.results[Number(el.dataset.repoReview)].data,
-        existing = (this.refresh || []).find(
-          (p) =>
-            `${p.metadata.github.owner}/${p.metadata.github.repo}`.toLowerCase() ===
-            repo.full_name.toLowerCase(),
-        );
-      const result = applyRepository(
-        repo,
-        [...el.querySelectorAll("[data-import-field]:checked")].map(
-          (i) => i.dataset.importField,
-        ),
-        existing,
+      const repo = this.results[Number(el.dataset.repoReview)].data;
+      const targets = (this.refresh || []).filter(
+        (p) =>
+          `${p.metadata.github.owner}/${p.metadata.github.repo}`.toLowerCase() ===
+          repo.full_name.toLowerCase(),
       );
-      projects.push(result.project);
-      preserved.push(...result.preserved);
+      for (const existing of targets.length ? targets : [null]) {
+        const result = applyRepository(
+          repo,
+          [...el.querySelectorAll("[data-import-field]:checked")].map(
+            (i) => i.dataset.importField,
+          ),
+          existing,
+        );
+        projects.push(result.project);
+        preserved.push(...result.preserved);
+      }
     }
     if (!projects.length) {
       this.querySelector(".project-fetch-status").textContent =
