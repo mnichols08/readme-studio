@@ -147,7 +147,7 @@ test("link scan is explicit, reports partial failures and never changes export s
   await start(page);
   let calls = 0;
   await page.route("https://health.example/**", (r) => {
-    calls++;
+    if (r.request().method() === "HEAD") calls++;
     return r.fulfill({
       status: r.request().url().endsWith("/missing") ? 404 : 200,
       contentType: "image/png",
@@ -162,7 +162,7 @@ test("link scan is explicit, reports partial failures and never changes export s
       ),
     );
   await page.getByRole("button", { name: "Check links", exact: true }).click();
-  expect(calls).toBeGreaterThanOrEqual(0);
+  expect(calls).toBe(0);
   const before = calls;
   await expect(page.locator("repository-health [role=status]")).toContainText(
     "no requests started",
