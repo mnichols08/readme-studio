@@ -1,89 +1,58 @@
-import { safeUrl } from "../markdown/url-safety.js";
-import { buildLinkedBadge } from "../badges/shields.js";
-export const escapeHtml = (s = "") =>
-  String(s).replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ],
-  );
-export const escapeText = (s = "") =>
-  String(s).replace(/[\\`*_[\]<>#|]/g, "\\$&");
-export const destination = (s, image = false) =>
-  safeUrl(s, { image }).replace(
-    /[()\s<>"'`]/g,
-    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
-export const projectLinks = (p) =>
-  [
-    ["Repository", p.repositoryUrl],
-    ["Live Demo", p.liveUrl],
-    ["Case Study", p.caseStudyUrl],
-    ...p.links.map((l) => [l.name, l.url]),
-  ].filter(([name, url]) => name && safeUrl(url));
-export function projectImage(p) {
-  if (!safeUrl(p.imageUrl, { image: true }) || p.imagePlacement === "hidden")
-    return "";
-  const width = /^\d{1,4}$/.test(p.imageWidth)
-    ? ` width="${Math.min(1200, Number(p.imageWidth))}"`
-    : "";
-  let result = `<img src="${escapeHtml(safeUrl(p.imageUrl, { image: true }))}" alt="${escapeHtml(p.imageAlt)}"${width}>`;
-  if (safeUrl(p.darkImageUrl, { image: true }))
-    result = `<picture>\n<source media="(prefers-color-scheme: dark)" srcset="${escapeHtml(safeUrl(p.darkImageUrl, { image: true }))}">\n${result}\n</picture>`;
-  if (safeUrl(p.imageLink))
-    result = `<a href="${escapeHtml(safeUrl(p.imageLink))}">${result}</a>`;
-  return p.imageAlign === "center" ? `<p align="center">${result}</p>` : result;
+import { escapeText } from "./project-output.js";
+import { compact } from "./layouts/compact.js";
+import { detailed } from "./layouts/detailed.js";
+import { featured } from "./layouts/featured.js";
+import { card } from "./layouts/card.js";
+import { twoColumn } from "./layouts/two-column.js";
+import { caseStudy } from "./layouts/case-study.js";
+export * from "./project-output.js";
+export const layouts = [
+  "compact",
+  "detailed",
+  "featured",
+  "card",
+  "two-column",
+  "case-study",
+  "featured-first",
+];
+export const layoutPresets = {
+  Portfolio: "featured-first",
+  Technical: "detailed",
+  Minimal: "compact",
+  Visual: "card",
+  "Case Study": "case-study",
+};
+const serializers = {
+  compact,
+  detailed,
+  featured,
+  card,
+  "case-study": caseStudy,
+};
+export function serializeProject(p, layout = p.layout) {
+  if (layout === "two-column") return twoColumn([p]);
+  if (
+    p.imagePlacement === "side-by-side" &&
+    !["compact", "card"].includes(layout)
+  )
+    return card(p);
+  return (serializers[layout] || detailed)(p);
 }
-export function projectTechnologies(p) {
-  return p.technologies
-    .filter((t) => t.name)
-    .map((t) =>
-      p.technologyStyle === "badges"
-        ? buildLinkedBadge({ ...t, label: t.name, alt: t.name })
-        : p.technologyStyle === "text"
-          ? escapeText(t.name)
-          : `<code>${escapeHtml(t.name)}</code>`,
-    )
-    .join(p.technologyStyle === "text" ? ", " : " ");
+export function serializeShowcase(s) {
+  const content =
+    s.layout === "two-column"
+      ? twoColumn(s.items)
+      : s.items
+          .map((p, i) =>
+            serializeProject(
+              p,
+              s.layout === "featured-first"
+                ? i === 0
+                  ? "featured"
+                  : "compact"
+                : s.layout,
+            ),
+          )
+          .join("\n\n");
+  return `## ${escapeText(s.title || "Selected Projects")}\n\n${content}`;
 }
-export function projectStatus(p) {
-  return !p.status || p.statusStyle === "hidden"
-    ? ""
-    : p.statusStyle === "badge"
-      ? buildLinkedBadge({
-          label: "Status",
-          message: p.status,
-          alt: `Project status: ${p.status}`,
-          color: "555",
-        })
-      : `**Status:** ${escapeText(p.status)}`;
-}
-export function serializeProject(p) {
-  return [
-    `### ${escapeText([p.emoji, p.name || "Untitled project"].filter(Boolean).join(" "))}`,
-    p.subtitle && escapeText(p.subtitle),
-    projectImage(p),
-    p.description && escapeText(p.description),
-    p.projectType && `**Type:** ${escapeText(p.projectType)}`,
-    p.role && `**Role:** ${escapeText(p.role)}`,
-    projectStatus(p),
-    p.highlights
-      .filter((h) => h.title || h.description)
-      .map(
-        (h) =>
-          `- ${h.title ? `**${escapeText(h.title)}:** ` : ""}${escapeText(h.description).replace(/\n/g, "\n  ")}`,
-      )
-      .join("\n"),
-    projectTechnologies(p),
-    projectLinks(p)
-      .map(([name, url]) => `[${escapeText(name)}](${destination(url)})`)
-      .join(" · "),
-    p.badges.map((b) => buildLinkedBadge(b)).join(" "),
-    p.legacyStatusMarkdown,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-}
-export const serializeShowcase = (s) =>
-  `## ${escapeText(s.title || "Selected Projects")}\n\n${s.items.map(serializeProject).join("\n\n")}`;

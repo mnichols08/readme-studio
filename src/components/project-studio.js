@@ -8,6 +8,9 @@ import {
 } from "../projects/project-model.js";
 import {
   serializeShowcase,
+  serializeProject,
+  layouts,
+  layoutPresets,
   escapeHtml as h,
 } from "../projects/serialize-project.js";
 import { render } from "../markdown/render.js";
@@ -26,6 +29,10 @@ const fields = [
   ["status", "Project status"],
   ["imageUrl", "Image URL"],
   ["imageAlt", "Image alt text"],
+  ["darkImageUrl", "Dark image URL"],
+  ...["problem", "architecture", "challenges", "testing", "outcome"].map(
+    (k) => [k, `Case study: ${k}`, "textarea"],
+  ),
   ["imageLink", "Image click target"],
   ["imageWidth", "Image width (optional)"],
 ];
@@ -68,7 +75,26 @@ export class ProjectStudio extends HTMLElement {
       )
       .join(
         "",
-      )}<label>Showcase heading<input data-showcase-title value="${h(this.value.title)}"></label><div class="project-tools"><button data-project-import>Import GitHub projects</button><button data-project-add>Add project</button><button data-project-save class="primary">Save showcase</button></div><p class="project-status" role="status"></p><div class="project-import-panel"></div><div class="project-workbench"><div class="project-entries">${this.value.items.map((p, i) => this.entry(p, i)).join("")}</div><aside class="project-preview-area" aria-label="Project section preview"><h2>Live project section</h2><div class="project-preview markdown-body"></div><details><summary>Generated project Markdown</summary><textarea data-project-output readonly rows="8" aria-label="Generated project Markdown"></textarea></details></aside></div><div class="project-badge-composer"></div>`;
+      )}<label>Showcase heading<input data-showcase-title value="${h(this.value.title)}"></label><label>Showcase layout<select data-showcase-layout aria-label="Showcase layout">${layouts.map((l) => `<option ${this.value.layout === l ? "selected" : ""}>${l}</option>`).join("")}</select></label><label>Layout preset<select data-layout-preset aria-label="Layout preset"><option value="">Choose preset</option>${Object.keys(
+      layoutPresets,
+    )
+      .map((k) => `<option>${k}</option>`)
+      .join(
+        "",
+      )}</select></label><p class="hint">Layouts change presentation only. Compact omits details and screenshots. Tables may scroll on narrow screens; choose compact or detailed for a linear layout.</p><div class="project-tools"><button data-project-import>Import GitHub projects</button><button data-project-add>Add project</button><button data-project-save class="primary">Save showcase</button></div><p class="project-status" role="status"></p><div class="project-import-panel"></div><div class="project-workbench"><div class="project-entries">${this.value.items.map((p, i) => this.entry(p, i)).join("")}</div><aside class="project-preview-area" aria-label="Project section preview"><h2>Live project section</h2><label>Preview width<select data-project-width aria-label="Project preview width"><option value="100%">desktop</option><option value="600px">narrow</option><option value="320px">mobile</option></select></label><div class="project-copy-fallback" role="status"></div><div class="project-preview markdown-body"></div><details><summary>Generated project Markdown</summary><textarea data-project-output readonly rows="8" aria-label="Generated project Markdown"></textarea></details></aside></div><div class="project-badge-composer"></div>`;
+    this.querySelector("[data-showcase-layout]").onchange = (e) => {
+      this.value.layout = e.target.value;
+      this.preview();
+    };
+    this.querySelector("[data-layout-preset]").onchange = (e) => {
+      if (!e.target.value) return;
+      this.value.layout = layoutPresets[e.target.value];
+      this.querySelector("[data-showcase-layout]").value = this.value.layout;
+      this.preview();
+    };
+    this.querySelector("[data-project-width]").onchange = (e) => {
+      this.querySelector(".project-preview").style.maxWidth = e.target.value;
+    };
     this.querySelector("[data-showcase-title]").oninput = (e) => {
       this.value.title = e.target.value;
       this.preview();
@@ -183,6 +209,7 @@ export class ProjectStudio extends HTMLElement {
       ["up", "Move project up"],
       ["down", "Move project down"],
       ["duplicate", "Duplicate project"],
+      ["copy", "Copy project Markdown"],
       ["remove", "Delete project"],
     ]
       .map(
@@ -191,7 +218,7 @@ export class ProjectStudio extends HTMLElement {
       )
       .join(
         "",
-      )}</div><div class="project-fields">${fields.map(([key, label, type]) => field(p, key, label, type)).join("")}${select("statusStyle", "Status display", ["text", "badge", "hidden"], p.statusStyle)}${select("technologyStyle", "Technology display", ["chips", "badges", "text"], p.technologyStyle)}${select("imageAlign", "Image alignment", ["left", "center"], p.imageAlign)}</div>${p.metadata.github ? `<p>Imported from ${h(p.metadata.github.owner)}/${h(p.metadata.github.repo)}</p><button data-refresh-project>Refresh from GitHub</button>` : ""}<h3>Engineering highlights</h3><p class="hint">Call out engineering decisions, architecture, testing, performance, accessibility, or other meaningful work.</p><div class="project-highlights">${p.highlights.map((v, n) => `<fieldset><legend>Highlight ${n + 1}</legend><label>Highlight title<input data-highlight="${n}" data-part="title" value="${h(v.title)}"></label><label>Highlight description<textarea data-highlight="${n}" data-part="description">${h(v.description)}</textarea></label><button data-remove-highlight="${n}" aria-label="Remove highlight ${n + 1}">Remove highlight</button></fieldset>`).join("")}</div><button data-add-highlight>Add engineering highlight</button><h3>Technologies</h3><label>Search or enter technology<input data-project-tech-search></label><div class="project-tech-results"></div><button data-project-custom-tech>Add custom technology</button><ul>${p.technologies.map((t, n) => `<li>${h(t.name)} <button data-remove-tech="${n}" aria-label="Remove technology ${n + 1}">Remove</button></li>`).join("")}</ul><label>Additional links (Label | URL, one per line)<textarea data-project-links>${h(p.links.map((l) => `${l.name} | ${l.url}`).join("\n"))}</textarea></label><h3>Project badges</h3><label>Saved badge collection<select data-project-collection aria-label="Saved badge collection"><option value="">Choose a collection</option>${(this.collections || []).map((c) => `<option value="${h(c.id)}">${h(c.name)}</option>`).join("")}</select></label><button data-attach-collection>Attach collection copy</button><button data-compose-project-badge>Create individual badge</button><ul>${p.badges.map((b, n) => `<li>${h(b.alt || b.label)} <button data-remove-project-badge="${n}" aria-label="Remove project badge ${n + 1}">Remove</button></li>`).join("")}</ul>${p.legacyStatusMarkdown ? `<p class="hint">Original status Markdown is preserved.</p>` : ""}</fieldset></details>`;
+      )}</div><div class="project-fields">${fields.map(([key, label, type]) => field(p, key, label, type)).join("")}${select("statusStyle", "Status display", ["text", "badge", "hidden"], p.statusStyle)}${select("technologyStyle", "Technology display", ["chips", "badges", "text"], p.technologyStyle)}${select("imagePlacement", "Screenshot placement", ["top", "below-title", "side-by-side", "hidden"], p.imagePlacement)}${select("imageAlign", "Image alignment", ["left", "center"], p.imageAlign)}</div>${p.metadata.github ? `<p>Imported from ${h(p.metadata.github.owner)}/${h(p.metadata.github.repo)}</p><button data-refresh-project>Refresh from GitHub</button>` : ""}<h3>Engineering highlights</h3><p class="hint">Call out engineering decisions, architecture, testing, performance, accessibility, or other meaningful work.</p><div class="project-highlights">${p.highlights.map((v, n) => `<fieldset><legend>Highlight ${n + 1}</legend><label>Highlight title<input data-highlight="${n}" data-part="title" value="${h(v.title)}"></label><label>Highlight description<textarea data-highlight="${n}" data-part="description">${h(v.description)}</textarea></label><button data-remove-highlight="${n}" aria-label="Remove highlight ${n + 1}">Remove highlight</button></fieldset>`).join("")}</div><button data-add-highlight>Add engineering highlight</button><h3>Technologies</h3><label>Search or enter technology<input data-project-tech-search></label><div class="project-tech-results"></div><button data-project-custom-tech>Add custom technology</button><ul>${p.technologies.map((t, n) => `<li>${h(t.name)} <button data-remove-tech="${n}" aria-label="Remove technology ${n + 1}">Remove</button></li>`).join("")}</ul><label>Additional links (Label | URL, one per line)<textarea data-project-links>${h(p.links.map((l) => `${l.name} | ${l.url}`).join("\n"))}</textarea></label><h3>Project badges</h3><label>Saved badge collection<select data-project-collection aria-label="Saved badge collection"><option value="">Choose a collection</option>${(this.collections || []).map((c) => `<option value="${h(c.id)}">${h(c.name)}</option>`).join("")}</select></label><button data-attach-collection>Attach collection copy</button><button data-compose-project-badge>Create individual badge</button><ul>${p.badges.map((b, n) => `<li>${h(b.alt || b.label)} <button data-remove-project-badge="${n}" aria-label="Remove project badge ${n + 1}">Remove</button></li>`).join("")}</ul>${p.legacyStatusMarkdown ? `<p class="hint">Original status Markdown is preserved.</p>` : ""}</fieldset></details>`;
   }
   openImport(refresh = []) {
     const area = this.querySelector(".project-import-panel");
@@ -238,6 +265,19 @@ export class ProjectStudio extends HTMLElement {
   }
   row(action, i) {
     const items = this.value.items;
+    if (action === "copy") {
+      this.copyProject(
+        serializeProject(
+          items[i],
+          this.value.layout === "featured-first"
+            ? i === 0
+              ? "featured"
+              : "compact"
+            : this.value.layout,
+        ),
+      );
+      return;
+    }
     let next = i;
     if (action === "remove") {
       if (
@@ -301,6 +341,21 @@ export class ProjectStudio extends HTMLElement {
       this.redrawEntry(index, "[data-compose-project-badge]");
     });
     studio.querySelector("input").focus();
+  }
+  async copyProject(md) {
+    try {
+      await navigator.clipboard.writeText(md);
+      this.querySelector(".project-status").textContent =
+        "Project Markdown copied.";
+    } catch {
+      const area = this.querySelector(".project-copy-fallback");
+      area.innerHTML =
+        '<p>Clipboard unavailable. Select and copy this Markdown.</p><textarea readonly aria-label="Copy project Markdown fallback" rows="6"></textarea>';
+      const input = area.querySelector("textarea");
+      input.value = md;
+      input.focus();
+      input.select();
+    }
   }
   preview() {
     try {

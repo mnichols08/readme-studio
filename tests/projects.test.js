@@ -92,3 +92,72 @@ describe("Project Showcase 2.0", () => {
     ).toBe("projects");
   });
 });
+
+describe("Project layouts", () => {
+  const p = () =>
+    normalizeProject({
+      schemaVersion: 1,
+      name: "Tool",
+      description: "Safe <script>alert(1)</script>",
+      role: "Testing Lead",
+      highlights: [{ title: "Architecture", description: "Separate concerns" }],
+      technologies: ["Rust"],
+      repositoryUrl: "https://github.com/a/b",
+      imageUrl: "https://example.com/light.png",
+      darkImageUrl: "https://example.com/dark.png",
+      imageAlt: 'Tool "screen"',
+      problem: "Repeated work",
+      testing: "Integration coverage",
+    });
+  it.each([
+    "compact",
+    "detailed",
+    "featured",
+    "card",
+    "two-column",
+    "case-study",
+    "featured-first",
+  ])("serializes %s without mutating source", (layout) => {
+    const s = { title: "Projects", layout, items: [p()] },
+      before = structuredClone(s),
+      md = serializeShowcase(s);
+    expect(md).toContain("Tool");
+    expect(md).toContain("https://github.com/a/b");
+    expect(md).not.toContain("<script>");
+    expect(s).toEqual(before);
+  });
+  it("creates balanced odd tables and real HTML rather than Markdown in cells", () => {
+    const md = serializeShowcase({
+      layout: "two-column",
+      items: [p(), p(), p()],
+    });
+    expect(md.match(/<tr>/g)).toHaveLength(2);
+    expect(md.match(/<\/tr>/g)).toHaveLength(2);
+    expect(md).toContain('colspan="2"');
+    expect(md).toContain('<a href="https://github.com/a/b">Repository</a>');
+    expect(md).not.toContain("[Repository]");
+  });
+  it("omits empty case sections and preserves optional populated sections", () => {
+    const md = serializeProject(p(), "case-study");
+    expect(md).toContain("#### Problem");
+    expect(md).toContain("#### Testing");
+    expect(md).not.toContain("#### Outcome");
+  });
+  it("places themed images without source rewrites", () => {
+    const x = p();
+    x.imagePlacement = "top";
+    expect(serializeProject(x).indexOf("<picture>")).toBeLessThan(
+      serializeProject(x).indexOf("### Tool"),
+    );
+    x.imagePlacement = "hidden";
+    expect(serializeProject(x)).not.toContain("<picture>");
+    x.imagePlacement = "side-by-side";
+    expect(serializeProject(x)).toContain('<td valign="top">');
+    expect(serializeProject(x)).toContain("prefers-color-scheme: dark");
+  });
+  it("compact presentation retains all stored highlights when switching back", () => {
+    const x = p();
+    expect(serializeProject(x, "compact")).not.toContain("Separate concerns");
+    expect(serializeProject(x, "detailed")).toContain("Separate concerns");
+  });
+});

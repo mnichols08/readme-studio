@@ -21,3 +21,11 @@ Review name, description, homepage, primary language, topics, archived state, li
 Imported entries record repository identity, last fetch time, the public snapshot and generated field values. Refresh from GitHub fetches that source again and shows the same review. A field is refreshed only if it is still equal to its previously imported value; manually changed fields and fields that were never imported are preserved. Roles and highlights never come from GitHub. Reopening or reloading retains this ownership record. Rate limits, missing repositories, offline/network failures and timeouts are explained; no automatic retries or writes to GitHub occur.
 
 Reference: [GitHub repository metadata API](https://docs.github.com/en/rest/repos/repos#get-a-repository).
+
+## Layouts and screenshots
+
+Choose one layout for the showcase: compact, detailed, featured, card, two-column, case-study, or featured-first (one featured project, remaining entries compact). Portfolio, Technical, Minimal, Visual, and Case Study presets select these existing layouts. Changing layout never removes stored fields. Compact intentionally shows only the name, description, stack, and links. Case-study adds only populated Problem, Architecture, Challenges, Testing, and Outcome sections; role, stack, and links remain in the main entry.
+
+Screenshots support top, below-title, hidden, or side-by-side placement. Side-by-side uses a GitHub-safe table in non-compact layouts. Light and optional dark URLs generate a picture element, with optional image link, width, and alignment. No images are uploaded. Cards and paired columns use plain HTML without custom CSS; an odd final project spans both cells. Narrow screens can scroll tables. Prefer compact or detailed for linear mobile reading.
+
+Use desktop, narrow (600px), or mobile (320px) preview widths to inspect wrapping. Copy project Markdown exports one entry in the selected layout. If clipboard access fails, a selectable field appears without closing the editor. Generated Markdown remains editable in the main source editor after saving.
