@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.4.3** · Native Web Components · Local drafts · Static hosting
+**Version 0.5.0** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -175,3 +175,7 @@ Visual Theme Studio coordinates generated badge colors and builder section accen
 [Banner Builder](docs/banners.md) generates deterministic local SVG light/dark assets. Download them, commit them to your repository, and insert the provided picture markup.
 
 [Section styling](docs/section-styling.md) adds per-section heading/divider overrides, callouts, collapsible details, code samples, and compact two-column helpers.
+
+## Reusable README components
+
+[Component Library](docs/components.md) provides searchable starters, categories, favorites, recently used items, exact-source custom snippets, preview/source inspection and explicit insertion positions. Reusable snippets persist locally and join workspace backups.

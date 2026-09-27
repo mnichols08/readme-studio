@@ -1,4 +1,9 @@
 import {
+  validateComponents,
+  mergeComponents,
+  recoverComponents,
+} from "../components-library/storage.js";
+import {
   validateVisualLibrary,
   mergeVisualLibraries,
   recoverVisualLibrary,
@@ -61,6 +66,7 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     settings: workspaceSettings(data.settings),
     badgeCollections: validateCollections(data.badgeCollections),
     visualLibrary: validateVisualLibrary(data.visualLibrary),
+    componentLibrary: validateComponents(data.componentLibrary),
     ...(typeof data.createdAt === "string"
       ? { createdAt: data.createdAt }
       : {}),
@@ -85,6 +91,10 @@ export function restoreWorkspace(current, backup, mode) {
   return {
     ...current,
     drafts,
+    componentLibrary: mergeComponents(
+      current.componentLibrary,
+      incoming.componentLibrary,
+    ),
     visualLibrary: mergeVisualLibraries(
       current.visualLibrary,
       incoming.visualLibrary,
@@ -121,6 +131,7 @@ export function recoverWorkspace(raw) {
           drafts,
           badgeCollections: recoverCollections(data.badgeCollections),
           visualLibrary: recoverVisualLibrary(data.visualLibrary),
+          componentLibrary: recoverComponents(data.componentLibrary),
         })
       : null;
   } catch {

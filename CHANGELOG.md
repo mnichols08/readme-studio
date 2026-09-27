@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- Added a searchable Component Library with 34 editable starters, category filters, source inspection and sanitized previews.
+- Added explicit cursor/before/after/append insertion, local favorites/recents and exact-source custom snippet saving.
+- Included versioned reusable components in workspace backup/recovery with safe interpolation and collision handling.
+
 ## 0.4.3
 
 - Added reusable theme libraries, banner presets and visual bundles with rename/duplicate/delete, validated JSON import/export, theme packs, and visual packs.
