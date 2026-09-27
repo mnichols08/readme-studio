@@ -13,3 +13,13 @@ The Profile Intelligence dialog works locally from loaded metadata and current R
 Open a relevant builder or review/select public profile links before adding them. Only the email returned publicly by GitHub is offered. Plain company text is not turned into an invented website; an explicit GitHub `@organization` may become a link. Run Autofill again for profiles loaded before this version to obtain the normalized profile snapshot.
 
 Dismissals belong to the current draft and survive backup/reload. They persist until the relevant suggestion context changes (not merely a new star count or timestamp). Reset dismissals explicitly to review them again. README Health retains technical, compatibility and accessibility checks; Profile Intelligence does not repeat its widget clutter or alt-text warnings.
+
+## Repository Health
+
+**Check links** opens an inventory; its Check links action starts network validation. Recheck an item or all results explicitly. Cancel retains completed results. Scans are capped at 300 unique targets, four concurrent requests, ten seconds per target, and a five-minute in-memory cache. No results are treated as permanent. Link checks omit credentials and referrers and do not proxy requests.
+
+GitHub repository URLs use public metadata to show archived status, homepage/default-branch changes against loaded context, and factual update age. Imported relative paths use the public contents endpoint where source context is available. Anchors and mailto links do not trigger network checks. Code examples and HTML comments are excluded. Missing public repositories may also be private; Studio does not attempt authentication.
+
+Other hosts use HEAD, with a GET fallback for 405/501. GET bodies are cancelled rather than downloading large assets. A bounded 64 KB SVG inspection on that fallback can flag possible provider-error text, advisory only. Exposed image content type/size headers can reveal mismatches or files over 5 MB; absent headers and HEAD success cannot prove a valid rendered image. Remote previews themselves may already contact image hosts independently of the explicit checker.
+
+Results distinguish reachable, redirected, not found, timeout, rate limited, blocked by CORS/HEAD policy, and unknown. Browser policy and network errors cannot reliably be separated, so these are not labelled broken. See [MDN Fetch response restrictions](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch) and [GitHub repository endpoints](https://docs.github.com/en/rest/repos/repos). Redirects are reported when exposed by the browser. No scan changes source or blocks export.

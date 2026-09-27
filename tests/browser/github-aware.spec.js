@@ -140,3 +140,47 @@ test("profile opportunities dismiss per draft and public links require review", 
     page.getByRole("heading", { name: "Consider an About section" }),
   ).toHaveCount(0);
 });
+
+test("link scan is explicit, reports partial failures and never changes export source", async ({
+  page,
+}) => {
+  await start(page);
+  let calls = 0;
+  await page.route("https://health.example/**", (r) => {
+    if (r.request().method() === "HEAD") calls++;
+    return r.fulfill({
+      status: r.request().url().endsWith("/missing") ? 404 : 200,
+      contentType: "image/png",
+      body: "",
+    });
+  });
+  await page
+    .locator("app-shell")
+    .evaluate((e) =>
+      e.store.raw(
+        "[site](https://health.example/ok)\n![image](https://health.example/missing)",
+      ),
+    );
+  await page.getByRole("button", { name: "Check links", exact: true }).click();
+  expect(calls).toBe(0);
+  const before = calls;
+  await expect(page.locator("repository-health [role=status]")).toContainText(
+    "no requests started",
+  );
+  expect(calls).toBe(before);
+  await page
+    .locator("repository-health")
+    .getByRole("button", { name: "Check links", exact: true })
+    .click();
+  await expect(page.locator("repository-health [role=status]")).toContainText(
+    "Link check complete",
+  );
+  await expect(page.locator("repository-health")).toContainText("reachable");
+  await expect(page.locator("repository-health")).toContainText("not found");
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue(
+    "[site](https://health.example/ok)\n![image](https://health.example/missing)",
+  );
+});

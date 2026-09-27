@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.6.1** · Native Web Components · Local drafts · Static hosting
+**Version 0.6.2** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -189,3 +189,5 @@ Supported components inserted as sections reopen with **Edit visually**. Templat
 Repository-aware authoring is available from **Repositories**. Browse cached GitHub Autofill data or explicitly fetch public owner/repository metadata, select repositories, and review projects, lists, badges, links or technology suggestions before insertion. See [GitHub-aware authoring](docs/github-aware.md).
 
 **Profile Intelligence** offers explainable opportunities from loaded public data, with per-draft dismissal and reviewed contact links. It never auto-writes your README.
+
+**Check links** explicitly scans README repositories, links and remote images, with bounded requests and clear uncertainty when browser policy prevents verification.
