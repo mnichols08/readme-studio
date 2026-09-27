@@ -132,5 +132,8 @@ export function normalizeShowcase(settings = {}) {
     title: str(settings.title, "Selected Projects"),
     layout: str(settings.layout, "detailed"),
     items,
+    ...(settings.presentation
+      ? { presentation: structuredClone(settings.presentation) }
+      : {}),
   };
 }

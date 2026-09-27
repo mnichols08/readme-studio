@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.3.3** · Native Web Components · Local drafts · Static hosting
+**Version 0.4.0** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -167,3 +167,5 @@ Open **Project Studio** from the header or an existing project builder. Describe
 Project Studio can review public repositories by owner/repository or from the public repository list cached by GitHub Autofill. Filter/select multiple repositories, choose fields, confirm duplicates, and apply to the working showcase before saving. Refresh changes only untouched imported fields; your role, highlights, and manual edits remain yours.
 
 Project Studio now includes seven presentation choices, public GitHub import with field review and safe refresh, project Health guidance, optional link checks, search and bulk controls, and portable project packs. See the [project guide](docs/projects.md). Collapsed project forms and screenshots are deferred for larger showcases. Project packs append reviewed copies; full workspace backups retain draft structure and project metadata.
+
+Visual Theme Studio coordinates generated badge colors and builder section accents with draft-specific palettes. It does not recolor GitHub or rewrite Custom Markdown. See [themes and inheritance](docs/themes.md).

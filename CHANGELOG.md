@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- Added draft-specific visual themes, nine built-in palettes, custom palette/default editing, light/dark samples, and advisory contrast guidance.
+- Theme-owned settings follow subsequent theme changes while explicit overrides remain intact. Reset is explicit and confirmed; Custom Markdown is never decorated.
+- Integrated badge defaults and builder/project heading/divider presentation with undo, draft persistence, and ordinary Markdown output.
+
 ## 0.3.3
 
 - Added advisory project Health checks for missing context, links, alt text, roles, repeated names/repositories/technology aliases, large stacks, archived status conflicts, and stale source activity.

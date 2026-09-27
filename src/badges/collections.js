@@ -34,6 +34,24 @@ export function validateBadge(value) {
   }
   if (!badge.label && !badge.name && !badge.lightUrl)
     throw new Error("A badge needs a name, label, or image URL.");
+  if (value._theme && typeof value._theme === "object") {
+    const keys = [
+      "style",
+      "color",
+      "darkColor",
+      "labelColor",
+      "logoColor",
+      "darkLogoColor",
+    ];
+    badge._theme = {
+      derived: Object.fromEntries(
+        keys
+          .filter((k) => typeof value._theme.derived?.[k] === "string")
+          .map((k) => [k, value._theme.derived[k]]),
+      ),
+      overrides: keys.filter((k) => value._theme.overrides?.includes(k)),
+    };
+  }
   buildLinkedBadge(badge);
   return badge;
 }

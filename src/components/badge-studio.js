@@ -1,3 +1,9 @@
+import { baseTheme } from "../themes/theme-model.js";
+import {
+  derive,
+  badgeDefaults,
+  explicitOverride,
+} from "../themes/theme-resolver.js";
 import { contrastWarnings } from "../badges/contrast.js";
 import "./dynamic-badge-builder.js";
 import { html } from "../markdown/serialize.js";
@@ -21,7 +27,7 @@ export class BadgeStudio extends HTMLElement {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
   }
   draw() {
-    this.innerHTML = `<h1>Badge Studio</h1><p>Editable badges. Ordinary Markdown. Remote previews contact the image provider.</p><div class="badge-workbench"><div class="badge-config"><details class="dynamic-tools"><summary>Dynamic badge helpers</summary><dynamic-badge-builder></dynamic-badge-builder></details><label>Badge preset<select data-preset><option value="">Choose a preset</option>${badgePresets.map((p, i) => `<option value="${i}">${html(p.name)}</option>`).join("")}</select></label><label>Search logos<input data-logo-search placeholder="React, JS, Node, Postgres, Rust, WASM"></label><div class="logo-results" aria-label="Logo results"></div><div class="badge-fields">${[
+    this.innerHTML = `<h1>Badge Studio</h1><p>Editable badges. Ordinary Markdown. Remote previews contact the image provider.</p><div class="row-actions"><button data-use-theme>Use theme defaults</button><button data-use-custom>Use custom colors</button></div><div class="badge-workbench"><div class="badge-config"><details class="dynamic-tools"><summary>Dynamic badge helpers</summary><dynamic-badge-builder></dynamic-badge-builder></details><label>Badge preset<select data-preset><option value="">Choose a preset</option>${badgePresets.map((p, i) => `<option value="${i}">${html(p.name)}</option>`).join("")}</select></label><label>Search logos<input data-logo-search placeholder="React, JS, Node, Postgres, Rust, WASM"></label><div class="logo-results" aria-label="Logo results"></div><div class="badge-fields">${[
       ["label", "Label"],
       ["message", "Message"],
       ["logo", "Logo"],
@@ -38,6 +44,20 @@ export class BadgeStudio extends HTMLElement {
       .join(
         "",
       )}<label>Badge style<select data-badge-field="style">${styles.map((s) => `<option ${s === this.value.style ? "selected" : ""}>${s}</option>`).join("")}</select></label></div><label class="check"><input type="checkbox" data-pair ${this.value.darkColor ? "checked" : ""}> Light / dark badge pair</label><fieldset data-dark ${this.value.darkColor ? "" : "hidden"}><legend>Dark variant (main colors are the light variant)</legend><label>Dark background<input data-badge-field="darkColor" value="${html(this.value.darkColor || "20232A")}"></label><label>Dark logo color<input data-badge-field="darkLogoColor" value="${html(this.value.darkLogoColor || "white")}"></label></fieldset></div><div class="badge-result"><div class="badge-status" role="status"></div><div class="badge-advice" aria-label="Badge guidance"></div><div class="badge-preview" aria-label="Badge preview"></div><label>Generated Markdown<textarea data-output="markdown" readonly rows="3"></textarea></label><label>Generated HTML<textarea data-output="html" readonly rows="3"></textarea></label><label>Final Shields URL<textarea data-output="url" readonly rows="2"></textarea></label><div class="row-actions"><button data-badge-copy="markdown">Copy Markdown</button><button data-badge-copy="html">Copy HTML</button><button data-duplicate-badge>Duplicate badge</button><button data-reset-badge>Reset</button></div><div class="badge-collection-controls"></div><div class="badge-insertion"></div><button class="primary" data-insert-badge>Add to README</button></div></div>`;
+    this.querySelector("[data-use-theme]").onclick = () => {
+      this.badge = derive(
+        this.value,
+        badgeDefaults(this.activeTheme || baseTheme),
+        { reset: true },
+      );
+      this.querySelector("[data-use-theme]").focus();
+    };
+    this.querySelector("[data-use-custom]").onclick = () => {
+      for (const k of Object.keys(badgeDefaults(this.activeTheme || baseTheme)))
+        explicitOverride(this.value, k);
+      this.querySelector(".badge-status").textContent =
+        "Custom colors selected. Future theme changes will preserve these settings.";
+    };
     this.querySelector("[data-logo-search]").oninput = (e) =>
       this.search(e.target.value);
     this.querySelector("[data-preset]").onchange = (e) => {
@@ -50,10 +70,13 @@ export class BadgeStudio extends HTMLElement {
       (el) =>
         (el.oninput = () => {
           this.value[el.dataset.badgeField] = el.value;
+          explicitOverride(this.value, el.dataset.badgeField);
           this.update();
         }),
     );
     this.querySelector("[data-pair]").onchange = (e) => {
+      explicitOverride(this.value, "darkColor");
+      explicitOverride(this.value, "darkLogoColor");
       this.value.darkColor = e.target.checked
         ? this.querySelector('[data-badge-field="darkColor"]').value
         : "";

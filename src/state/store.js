@@ -1,3 +1,4 @@
+import { themeBlocks } from "../themes/theme-resolver.js";
 import { createBlock, serializeBlocks } from "../markdown/serialize.js";
 import { uniformContext } from "../markdown/source-context.js";
 export const HISTORY_LIMIT = 80;
@@ -59,6 +60,13 @@ export class Store extends EventTarget {
   }
   blocks(blocks, metadata = this.draft.metadata) {
     this.checkpoint();
+    if (metadata?.visualTheme) {
+      try {
+        blocks = themeBlocks(blocks, metadata.visualTheme);
+      } catch {
+        /* Preserve source editing if imported visual metadata is unsupported. */
+      }
+    }
     this.draft.blocks = blocks;
     this.draft.metadata = metadata;
     this.draft.markdown = serializeBlocks(blocks);
