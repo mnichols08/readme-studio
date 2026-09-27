@@ -155,3 +155,7 @@ Catalog results render in batches of forty and never load card images. Component
 `github/health.js` extracts tokenized links/images (including HTML picture variants) per import source segment. Explicit scans use four workers, a target cap, request timeouts, bounded body inspection and cancellable fetches. `health-cache.js` holds five-minute results only in memory. Ambiguous browser-policy failures remain unverified; no scanning is coupled to editing.
 
 `generated/registry.js` derives a source inventory from existing ownership records. `github/refresh.js` separates explicit fetching, pure preview/application and normalized snapshots. Profile path/link and project-field ownership preserve manual values; repository sections use exact generated-source ownership. Raw editing archives bounded detached source records. Recreating appends only after review. Refresh Center rejects stale draft snapshots, applies one Store checkpoint, and invalidates Health cache. Full-source diff DOM is lazy; no remote content is inserted into the UI as trusted HTML.
+
+## Structural analysis
+
+`analysis/source.js` maps normalized parser offsets back to original UTF-16 source and caches one token tree per worker. `analysis/analyze.js` emits bounded, explainable findings and section inventories. Health rejects stale source jumps. Preview sanitization and exported source remain independent.

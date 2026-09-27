@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+
+- Added source-aware README analysis, section inventories and neutral statistics.
+- Added explainable accessibility, structure, security, layout and clutter guidance with category views and keyboard source jumps.
+- Shared worker tokenization, bounded findings and added Unicode, CRLF, code-exclusion and large-document tests.
+
 ## 0.6.3
 
 - Added a consolidated Refresh Center with source inventory, fetch ages, selected/all refresh, per-source change review and partial-failure reporting.
