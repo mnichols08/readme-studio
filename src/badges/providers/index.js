@@ -13,7 +13,12 @@ export const providers = [
         kind === "workflow"
           ? "GitHub Actions workflow status"
           : `GitHub ${kind}`,
-      category: kind === "workflow" ? "CI/Deployment" : "GitHub",
+      category:
+        kind === "workflow"
+          ? "CI/Deployment"
+          : ["stars", "forks"].includes(kind)
+            ? "GitHub / Social"
+            : "GitHub",
       fields: [
         field("repository", "GitHub repository (owner/repository)"),
         ...(kind === "workflow"

@@ -1,3 +1,4 @@
+import { namedColors } from "./contrast.js";
 import { safeUrl } from "../markdown/url-safety.js";
 export const styles = [
   "flat",
@@ -23,7 +24,10 @@ const dest = (s) =>
 export function normalizeColor(value = "") {
   const v = String(value).trim().replace(/^#/, "");
   if (!v) return "";
-  if (/^(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(v) || /^[a-z]+$/i.test(v))
+  if (
+    /^(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(v) ||
+    namedColors.has(v.toLowerCase())
+  )
     return v;
   throw new Error("Use a named color or a 3, 6, or 8 digit hex color.");
 }
@@ -35,6 +39,8 @@ export const encodeBadgeText = (value) =>
     (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
   );
 export function badgeOptions(s = {}) {
+  if (s.style && !styles.includes(s.style))
+    throw new Error("Choose a supported badge style.");
   const q = new URLSearchParams({
     style: styles.includes(s.style) ? s.style : "flat",
   });

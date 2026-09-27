@@ -17,8 +17,10 @@ const badgeFields = [
     "flat-square",
     "for-the-badge",
     "plastic",
+    "social",
   ]),
   field("color", "Background color"),
+  field("labelColor", "Label color"),
   field("logoColor", "Logo color"),
   field("link", "Link URL"),
   field("alt", "Alt text"),
@@ -236,6 +238,7 @@ export class BuilderForm extends HTMLElement {
       );
     this.querySelector("form").onsubmit = (e) => {
       e.preventDefault();
+      if (!this.output()) return;
       this.dispatchEvent(
         new CustomEvent("commit", {
           detail: structuredClone(this.value),
@@ -373,9 +376,29 @@ export class BuilderForm extends HTMLElement {
       '<p class="hint">No matches. Add a custom technology below.</p>';
   }
   output() {
-    const md = serializeBlock(this.value);
-    this.querySelector("[data-output]").textContent = md;
-    this.querySelector(".mini-preview").innerHTML = render(md);
+    try {
+      const md = serializeBlock(this.value);
+      this.querySelector("[data-output]").textContent = md;
+      this.querySelector(".mini-preview").innerHTML = render(md);
+      this.querySelectorAll('[type="submit"],[data-copy]').forEach(
+        (b) => (b.disabled = false),
+      );
+      this.querySelector(".builder-validation")?.remove();
+      return true;
+    } catch (error) {
+      let status = this.querySelector(".builder-validation");
+      if (!status) {
+        status = document.createElement("p");
+        status.className = "builder-validation";
+        status.setAttribute("role", "status");
+        this.querySelector(".form-actions").before(status);
+      }
+      status.textContent = error.message;
+      this.querySelectorAll('[type="submit"],[data-copy]').forEach(
+        (b) => (b.disabled = true),
+      );
+      return false;
+    }
   }
 }
 customElements.define("builder-form", BuilderForm);

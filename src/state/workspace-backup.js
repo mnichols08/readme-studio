@@ -1,4 +1,7 @@
-import { validateCollections } from "../badges/collections.js";
+import {
+  validateCollections,
+  recoverCollections,
+} from "../badges/collections.js";
 import { validateDraft } from "./drafts.js";
 export const BACKUP_LIMIT = 50_000_000;
 export const workspaceSettings = (s = {}) => ({
@@ -102,7 +105,13 @@ export function recoverWorkspace(raw) {
         /* Keep unreadable originals in the recovery download. */
       }
     }
-    return drafts.length ? validateWorkspace({ ...data, drafts }) : null;
+    return drafts.length
+      ? validateWorkspace({
+          ...data,
+          drafts,
+          badgeCollections: recoverCollections(data.badgeCollections),
+        })
+      : null;
   } catch {
     return null;
   }

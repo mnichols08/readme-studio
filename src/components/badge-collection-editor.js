@@ -1,3 +1,5 @@
+import { badgeWarnings, previewWidths } from "../badges/duplicates.js";
+import { badgeImages } from "../badges/shields.js";
 import { html } from "../markdown/serialize.js";
 import { render } from "../markdown/render.js";
 import {
@@ -14,6 +16,12 @@ export class BadgeCollectionEditor extends HTMLElement {
   connectedCallback() {
     this.items ||= [];
     this.draw();
+  }
+  isDirty() {
+    return (
+      this.initial !== JSON.stringify(this.items) ||
+      !!this.querySelector(".collection-composer badge-studio")
+    );
   }
   emit(name, detail) {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
@@ -40,7 +48,16 @@ export class BadgeCollectionEditor extends HTMLElement {
             )
             .join(
               "",
-            )}</ol><button data-add-collection-badge>Add badge to collection</button><div class="collection-composer"></div><label>Collection preview width<select data-collection-width><option value="900">Desktop</option><option value="640">Narrow</option><option value="320">Mobile</option></select></label><div class="collection-preview markdown-body"></div>`
+            )}</ol><button data-add-collection-badge>Add badge to collection</button><div class="collection-composer"></div><label>Collection preview width<select data-collection-width>${Object.entries(
+            previewWidths,
+          )
+            .map(
+              ([name, width]) =>
+                `<option value="${width}">${name[0].toUpperCase() + name.slice(1)}</option>`,
+            )
+            .join(
+              "",
+            )}</select></label><div class="collection-advice"></div><div class="collection-preview markdown-body"></div>`
         : ""
     }`;
     this.list();
@@ -206,6 +223,19 @@ export class BadgeCollectionEditor extends HTMLElement {
       el = this.querySelector(".collection-preview");
     el.style.maxWidth =
       this.querySelector("[data-collection-width]").value + "px";
+    const warnings = badgeWarnings(
+      c.badges.map((b) => ({
+        url: badgeImages(b).light,
+        alt: b.alt,
+        section: c.name,
+      })),
+    );
+    this.querySelector(".collection-advice").innerHTML = warnings
+      .map(
+        (i) =>
+          `<p><strong>${html(i.category)}:</strong> ${html(i.message)}</p>`,
+      )
+      .join("");
     el.innerHTML = render(
       collectionMarkdown({ ...c, badges: c.badges.slice(0, 20) }),
     );
