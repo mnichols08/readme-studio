@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+- Added a lazy local WASM statistics core with JavaScript fallback and a portable, parity-tested Rust structural API.
+- Benchmarked JavaScript before migration and reduced transfer overhead based on measurements.
+- Added native Rust tests, rebuilt-WASM CI, 1 MB parity checks and bounded Health rendering.
+
 ## 0.7.0
 
 - Added source-aware README analysis, section inventories and neutral statistics.

@@ -197,3 +197,5 @@ Repository-aware authoring is available from **Repositories**. Browse cached Git
 ### README Analyzer (0.7.0)
 
 Health provides category views, neutral statistics, section inventories and source jumps. Findings explain their reasoning and remain advisory; analysis never fetches remote URLs or changes source. See [the analyzer guide](docs/analyzer.md).
+
+Health optionally accelerates source statistics with a local WASM core. Missing or failed WASM falls back to JavaScript; the editor never waits for it. See [benchmarks and contributor instructions](docs/rust-core.md).

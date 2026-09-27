@@ -34,6 +34,8 @@ export class ReadmeHealth extends HTMLElement {
             this.failure();
             return;
           }
+          this.dataset.engine = data.engine?.engine || "JavaScript";
+          this.engineStatus = data.engine;
           this.display(data.result.analysis);
           const warnings = data.result.warnings;
           if (navigator.onLine === false)
@@ -92,21 +94,44 @@ export class ReadmeHealth extends HTMLElement {
         "Security",
       ];
       const view = this.view || "Overview";
-      const issues = a.detail.issues.filter(
+      const allIssues = a.detail.issues.filter(
         (i) => view === "Overview" || i.category === view,
       );
+      const issues = allIssues.slice(0, this.issueLimit || 100);
       this.innerHTML = `<h2 tabindex="-1">README Health</h2><p class="hint">Suggestions, not a score. Analysis stays local and makes no network requests.</p><label>Analysis view<select data-view>${views.map((v) => `<option ${v === view ? "selected" : ""}>${v}</option>`).join("")}</select></label><div class="stats">${Object.entries(
         a.detail.stats,
       )
         .map(([key, value]) => `<span><b>${value}</b> ${html(key)}</span>`)
         .join(
           "",
-        )}</div><p class="hint">Heuristics are advisory. Source locations marked approximate may include surrounding content.</p>${issues.map((i, index) => `<section class="health-group"><h3>${html(i.category)} · ${html(i.severity)}</h3><p>${html(i.message)}</p><p class="hint">${html(i.reason)}</p>${i.sourceRange ? `<button data-jump="${index}">Go to ${i.sourceRange.approximate ? "approximate " : ""}line ${i.sourceRange.line}, column ${i.sourceRange.column}</button>` : ""}</section>`).join("") || "<p>No suggestions in this view.</p>"}<details><summary>Section inventory</summary>${a.detail.sections.map((s) => `<p>${html(s.title)}: ${s.words} words, ${s.imageCount} images, ${s.badgeCount} badges, ${s.linkCount} links, ${s.codeCount} code blocks</p>`).join("")}</details><details><summary>Additional builder and import guidance</summary>${a.issues.map((i) => `<p class="issue">${html(i.message.replace("Clutter suggestions: ", ""))}</p>`).join("")}</details>`;
+        )}</div><p class="hint">Heuristics are advisory. Source locations marked approximate may include surrounding content.</p>${issues.map((i, index) => `<section class="health-group"><h3>${html(i.category)} · ${html(i.severity)}</h3><p>${html(i.message)}</p><p class="hint">${html(i.reason)}</p>${i.sourceRange ? `<button data-jump="${index}">Go to ${i.sourceRange.approximate ? "approximate " : ""}line ${i.sourceRange.line}, column ${i.sourceRange.column}</button>` : ""}</section>`).join("") || "<p>No suggestions in this view.</p>"}${allIssues.length > issues.length ? `<button data-more>Show more findings (${issues.length} of ${allIssues.length})</button>` : ""}<details><summary>Section inventory (first 100 of ${a.detail.sections.length})</summary>${a.detail.sections
+        .slice(0, 100)
+        .map(
+          (s) =>
+            `<p>${html(s.title)}: ${s.words} words, ${s.imageCount} images, ${s.badgeCount} badges, ${s.linkCount} links, ${s.codeCount} code blocks</p>`,
+        )
+        .join(
+          "",
+        )}</details><details><summary>Additional builder and import guidance</summary>${a.issues
+        .slice(0, 100)
+        .map(
+          (i) =>
+            `<p class="issue">${html(i.message.replace("Clutter suggestions: ", ""))}</p>`,
+        )
+        .join("")}</details>`;
       this.querySelector("[data-view]").onchange = (e) => {
         this.view = e.target.value;
+        this.issueLimit = 100;
         this.display(a);
         this.querySelector("[data-view]").focus();
       };
+      const more = this.querySelector("[data-more]");
+      if (more)
+        more.onclick = () => {
+          this.issueLimit = (this.issueLimit || 100) + 100;
+          this.display(a);
+          this.querySelector("[data-more]")?.focus();
+        };
       this.querySelectorAll("[data-jump]").forEach(
         (b) =>
           (b.onclick = () =>

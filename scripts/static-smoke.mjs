@@ -20,6 +20,7 @@ const server = createServer(async (req, res) => {
       {
         ".html": "text/html",
         ".js": "text/javascript",
+        ".wasm": "application/wasm",
         ".css": "text/css",
         ".woff2": "font/woff2",
         ".woff": "font/woff",
@@ -53,8 +54,15 @@ try {
       .waitFor();
     await page.getByRole("button", { name: "Health", exact: true }).click();
     await page.locator("readme-health .stats").waitFor();
+    if (
+      (await page.locator("readme-health").getAttribute("data-engine")) !==
+      "WASM"
+    )
+      throw new Error("Production WASM asset failed to load");
     if (errors.length) throw new Error(errors.join("\n"));
-    console.log(`Static smoke passed: ${path} (preview and Health Worker)`);
+    console.log(
+      `Static smoke passed: ${path} (preview, Health Worker and WASM)`,
+    );
     await page.close();
   }
 } finally {
