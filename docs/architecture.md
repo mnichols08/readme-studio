@@ -121,3 +121,9 @@ Collapsed editors defer form creation. Preview HTML is prepared in an inert temp
 `workspace-backup.js` includes the optional versioned visual library; old workspaces normalize to an empty library without rewriting their source. Library mutations validate and write before changing persisted in-memory state. Invalid library data uses the existing storage recovery boundary and preserves original recovery bytes. Restore resolves IDs and names without silent overwrite. Saved libraries do not establish live references to drafts.
 
 Workspace app theme changes synchronize `previewTheme`, then apply preview colors and temporary picture media overrides. The separate preview control may override that mode afterward. Both preferences persist outside document undo and never mutate source.
+
+## Component Library (v0.5.0)
+
+`components-library/` owns versioned component normalization, explicit interpolation, immutable catalog copies, pure filtering/insertion and local preference storage. Templates are data, never executable functions. Custom snippets bypass interpolation and retain exact source. Metadata is bounded plain text; generated URL fields share the safe URL boundary. Raw template HTML is sanitized only in preview and remains ordinary source in exports.
+
+The component dialog renders at most forty search cards initially, loads no card images and renders a selected source only on request. Native controls retain keyboard operation; insertion captures a draft snapshot and cursor before opening, rejects stale drafts and offers append/before/after/cursor without replacing selected text. v0.5.0 insertion creates Custom Markdown blocks. Workspace validation/recovery includes the optional component library, preserving old workspaces and original damaged storage.

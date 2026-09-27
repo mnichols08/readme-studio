@@ -1861,3 +1861,38 @@ banner-builder textarea {
 .visual-apply-review {
   scroll-margin-block: 1rem;
 }
+
+.component-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 12px;
+}
+.component-results article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 0;
+}
+.component-results h2 {
+  font-size: 16px;
+}
+.component-detail {
+  margin-block: 24px;
+}
+.component-detail h2 {
+  scroll-margin-block: 12px;
+}
+.component-preview {
+  overflow: auto;
+  max-height: 420px;
+  padding: 12px;
+  border: 1px solid var(--line);
+}
+.component-preview img {
+  max-width: 100%;
+}
+component-library textarea,
+component-library input,
+component-library select {
+  max-width: 100%;
+}

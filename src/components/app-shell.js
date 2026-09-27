@@ -1,3 +1,9 @@
+import "./component-library.js";
+import {
+  validateComponents,
+  usedComponent,
+} from "../components-library/storage.js";
+import { insertion } from "../components-library/insertion.js";
 import "./visual-preset-gallery.js";
 import {
   validateVisualLibrary,
@@ -88,7 +94,7 @@ export class AppShell extends HTMLElement {
     });
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
@@ -107,7 +113,8 @@ export class AppShell extends HTMLElement {
         this.querySelector("project-studio")?.isDirty() ||
         this.querySelector("theme-studio")?.isDirty() ||
         this.querySelector("banner-builder")?.isDirty() ||
-        this.querySelector("section-style-editor")?.isDirty()
+        this.querySelector("section-style-editor")?.isDirty() ||
+        this.querySelector("component-library")?.isDirty()
       ) {
         e.preventDefault();
         this.closeDialog();
@@ -196,6 +203,12 @@ export class AppShell extends HTMLElement {
     });
     this.addEventListener("open-project-studio", () =>
       this.openProjects(this.selectedBlock),
+    );
+    this.addEventListener("component-library-save", (e) =>
+      this.saveComponentLibrary(e.detail),
+    );
+    this.addEventListener("component-insert", (e) =>
+      this.insertComponent(e.detail),
     );
     this.addEventListener("visual-library-save", (e) =>
       this.saveVisualLibrary(e.detail.library, e.detail.message),
@@ -531,7 +544,8 @@ export class AppShell extends HTMLElement {
         this.querySelector("project-studio")?.isDirty() ||
         this.querySelector("theme-studio")?.isDirty() ||
         this.querySelector("banner-builder")?.isDirty() ||
-        this.querySelector("section-style-editor")?.isDirty()) &&
+        this.querySelector("section-style-editor")?.isDirty() ||
+        this.querySelector("component-library")?.isDirty()) &&
       !confirm(
         "Discard unsaved studio edits? Save or export your work to keep it.",
       )
@@ -572,6 +586,86 @@ export class AppShell extends HTMLElement {
       );
       this.notify("Could not save collections: " + e.message);
       return false;
+    }
+  }
+  saveComponentLibrary({
+    library,
+    message = "Component library saved.",
+    savedSnippet = false,
+  }) {
+    try {
+      if (this.storageBlocked)
+        throw Error(
+          "Storage recovery is active. Export recovery data before restoring storage.",
+        );
+      const next = validateComponents(library);
+      saveDrafts({
+        ...this.data,
+        componentLibrary: next,
+        drafts: this.data.drafts.map((d) =>
+          d.id === this.store.draft.id ? this.store.draft : d,
+        ),
+      });
+      this.data.componentLibrary = next;
+      this.querySelector("component-library")?.accept(
+        next,
+        message,
+        savedSnippet,
+      );
+      this.notify(message);
+      return true;
+    } catch (e) {
+      this.querySelector("component-library")?.status(
+        "Could not save components: " + e.message,
+      );
+      this.notify("Could not save components: " + e.message);
+      return false;
+    }
+  }
+  openComponents() {
+    this.componentSnapshot = JSON.stringify(this.store.draft);
+    this.componentCursor = this.editor.input.selectionStart;
+    const selection = this.editor.value.slice(
+      this.editor.input.selectionStart,
+      this.editor.input.selectionEnd,
+    );
+    this.modal("<component-library></component-library>");
+    this.dialog.classList.add("import-modal");
+    this.querySelector("component-library").configure({
+      library: this.data.componentLibrary,
+      blocks: this.store.draft.blocks,
+      selectedBlock: this.selectedBlock,
+      selection,
+    });
+  }
+  insertComponent(detail) {
+    if (
+      this.querySelector("component-library")?.isDirty() &&
+      !confirm("Insert this component and discard the unsaved My Snippet form?")
+    )
+      return;
+    if (this.componentSnapshot !== JSON.stringify(this.store.draft)) {
+      this.notify(
+        "Draft changed. Reopen the component library before inserting.",
+      );
+      return;
+    }
+    try {
+      const result = insertion(this.store.draft, detail.markdown, {
+        ...detail,
+        cursor: this.componentCursor,
+      });
+      if (result.blocks) this.store.blocks(result.blocks);
+      else this.store.raw(result.markdown);
+      this.saveComponentLibrary({
+        library: usedComponent(this.data.componentLibrary, detail.component.id),
+        message: "Component inserted; recent usage saved.",
+      });
+      this.querySelector("component-library").dirty = false;
+      this.closeDialog();
+      this.focusDocument();
+    } catch (e) {
+      this.querySelector("component-library")?.status(e.message);
     }
   }
   saveVisualLibrary(value, message) {
@@ -806,7 +900,7 @@ export class AppShell extends HTMLElement {
         )
         .join(
           "",
-        )}</div><button class="wide" data-action="templates">Browse templates →</button><button class="wide" data-action="banner">Open Banner Builder</button>`;
+        )}</div><button class="wide" data-action="components">Browse Component Library</button><button class="wide" data-action="templates">Browse templates →</button><button class="wide" data-action="banner">Open Banner Builder</button>`;
       return;
     }
     const blocks = this.store.draft.blocks;
@@ -1140,6 +1234,7 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (action === "components") this.openComponents();
     if (action === "visual-presets") this.openVisualPresets();
     if (action === "section-style") this.openSectionStyle();
     if (action === "banner") this.openBanner();
