@@ -1,3 +1,5 @@
+import "./snippet-pack-dialog.js";
+import { importPack } from "../snippets/pack-schema.js";
 import "./widget-hub.js";
 import "./component-library.js";
 import {
@@ -95,7 +97,7 @@ export class AppShell extends HTMLElement {
     });
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
@@ -205,6 +207,9 @@ export class AppShell extends HTMLElement {
     });
     this.addEventListener("open-project-studio", () =>
       this.openProjects(this.selectedBlock),
+    );
+    this.addEventListener("snippet-pack-import", (e) =>
+      this.applySnippetPack(e.detail),
     );
     this.addEventListener("component-library-save", (e) =>
       this.saveComponentLibrary(e.detail),
@@ -624,6 +629,42 @@ export class AppShell extends HTMLElement {
       );
       this.notify("Could not save components: " + e.message);
       return false;
+    }
+  }
+  openSnippetPacks() {
+    this.modal("<snippet-pack-dialog></snippet-pack-dialog>");
+    this.dialog.classList.add("import-modal");
+    this.querySelector("snippet-pack-dialog").configure(
+      this.data,
+      this.store.draft,
+    );
+  }
+  applySnippetPack({ pack, mode }) {
+    try {
+      if (this.storageBlocked)
+        throw Error(
+          "Storage recovery is active. Restore storage before importing reusable snippets.",
+        );
+      const next = importPack(this.data, pack, mode);
+      saveDrafts({
+        ...this.data,
+        ...next,
+        drafts: this.data.drafts.map((d) =>
+          d.id === this.store.draft.id ? this.store.draft : d,
+        ),
+      });
+      Object.assign(this.data, next);
+      const dialog = this.querySelector("snippet-pack-dialog");
+      dialog.configure(this.data, this.store.draft);
+      dialog.status(
+        "Snippet pack imported locally. Draft Markdown is unchanged.",
+      );
+      dialog.querySelector("[data-review-pack]").focus();
+      this.notify("Snippet pack imported.");
+    } catch (e) {
+      this.querySelector("snippet-pack-dialog")?.status(
+        "Could not import pack: " + e.message,
+      );
     }
   }
   openWidgets() {
@@ -1207,7 +1248,7 @@ export class AppShell extends HTMLElement {
         if (ticket !== generation || !input.isConnected) return;
         const snapshot = JSON.stringify(this.data);
         this.querySelector("#restore-status").textContent =
-          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.badgeCollections.items.length} badge collections · ${backup.visualLibrary.themes.length} themes · ${backup.visualLibrary.banners.length} banner presets · ${backup.visualLibrary.bundles.length} visual bundles`;
+          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.badgeCollections.items.length} badge collections · ${backup.visualLibrary.themes.length} themes · ${backup.visualLibrary.banners.length} banner presets · ${backup.visualLibrary.bundles.length} visual bundles · ${backup.componentLibrary.snippets.length} reusable snippets`;
         this.querySelector("#restore-review").innerHTML =
           '<label>Restore mode<select id="restore-mode" aria-label="Restore mode"><option value="merge">Merge with local drafts</option><option value="replace">Replace local drafts</option></select></label><label class="check"><input id="restore-confirm" type="checkbox"> I confirm replacing local drafts, collections, or original recovery data</label><button id="apply-restore" class="primary">Restore backup</button>';
         this.querySelector("#restore-mode").focus();
@@ -1249,6 +1290,7 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (action === "snippet-packs") this.openSnippetPacks();
     if (action === "widgets") this.openWidgets();
     if (action === "components") this.openComponents();
     if (action === "visual-presets") this.openVisualPresets();

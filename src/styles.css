@@ -1915,3 +1915,19 @@ widget-hub textarea,
 widget-hub select {
   max-width: 100%;
 }
+
+.pack-choices {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  padding: 8px;
+}
+.pack-item-preview {
+  max-height: 400px;
+  overflow: auto;
+}
+snippet-pack-dialog input,
+snippet-pack-dialog textarea,
+snippet-pack-dialog select {
+  max-width: 100%;
+}
