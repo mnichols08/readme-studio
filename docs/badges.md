@@ -17,3 +17,22 @@ Collections live in the local workspace independently of drafts. Create one from
 Choose plain HTML row, centered row, picture wrappers, or a Markdown category heading. Preview desktop, narrow or mobile wrapping; only the first 20 images are previewed for large collections, while export includes all badges. Search supports collection names, badge labels, logos and catalog aliases.
 
 Inserting into a README copies the markup. Inserting through a saved stack block copies badge settings into that stack. Future collection edits never rewrite existing drafts. Save pending stack edits before opening collections.
+
+## Dynamic providers
+
+Open Dynamic badge helpers in Badge Studio. Search by provider or category, enter the configuration, and choose Generate dynamic badge. Typing performs no API requests. The generated badge can be styled, linked, paired for dark mode, and saved to a collection. Label/message fields are hidden because the provider supplies them. Cache seconds is optional and Shields may enforce a higher minimum. Repository suggestions from import/autofill metadata require explicit selection; a profile repository suggestion does not establish that it exists.
+
+| Helper                                           | Inputs                                                      | Suggested destination                             |
+| ------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------- |
+| GitHub stars/forks/issues/license/latest release | owner/repository                                            | matching repository page                          |
+| GitHub Actions                                   | owner/repository, workflow file/name, optional branch/event | workflow Actions page                             |
+| npm version/monthly downloads                    | package or @scope/package                                   | npm package page                                  |
+| crates.io version/total downloads                | crate name                                                  | crates.io crate page                              |
+| PyPI version                                     | package                                                     | PyPI project page                                 |
+| Docker version/pulls                             | user/repository; _/name for official images                 | Docker Hub image page                             |
+| Netlify                                          | site ID (UUID)                                              | Netlify dashboard; override with your project URL |
+| Custom endpoint                                  | public HTTP(S) JSON endpoint                                | endpoint; override as needed                      |
+
+These are URL helpers, not service validators. No workflow existence or badge value is guaranteed. An image can load while containing a provider error message; inspect it. No authentication, proxy or draft upload is involved. Preview requests disclose the configured repository/package/endpoint URL to Shields and normal network metadata to image providers. For custom endpoint badges, Shields fetches the public endpoint; never enter secrets. Offline generation still works, while remote images may fail.
+
+Provider references: [GitHub Actions](https://shields.io/badges/git-hub-actions-workflow-status), [npm](https://shields.io/badges/npm-version), [crates.io](https://shields.io/badges/crates-io-version), [Docker](https://shields.io/badges/docker-image-version), [Netlify](https://shields.io/badges/netlify), [JSON endpoint schema](https://shields.io/badges/endpoint-badge).

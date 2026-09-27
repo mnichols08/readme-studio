@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.2.1** · Native Web Components · Local drafts · Static hosting
+**Version 0.2.2** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -149,3 +149,7 @@ Open **Badge Studio** in the header or from a builder section. Search a logo, ch
 ### Badge collections (v0.2.1)
 
 Save badges into named collections, or open **Collections** for editable starters and keyboard management. Import/export collection JSON, choose plain/centered/picture/category markup, and preview wrapping. Stack builder can save categories and insert saved collections. Insertions are independent copies.
+
+### Dynamic badge helpers (v0.2.2)
+
+Open **Dynamic badge helpers** inside Badge Studio for GitHub Actions/repository stats, npm, crates.io, PyPI, Docker, Netlify, or a public JSON endpoint. Choose a helper, enter its fields, then generate. Repository suggestions are opt-in. Customize colors, style, alt text and click-through link before insertion or collection saving. Generation validates formats locally; a preview image does not guarantee a successful workflow or correct status.

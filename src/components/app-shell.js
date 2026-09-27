@@ -1,3 +1,4 @@
+import { repositorySuggestions } from "../badges/providers/index.js";
 import "./badge-collection-editor.js";
 import {
   validateCollection,
@@ -192,6 +193,10 @@ export class AppShell extends HTMLElement {
         this.saveCollections(items);
         const studio = this.querySelector("badge-studio");
         if (studio) {
+          studio.suggestions = repositorySuggestions(this.store.draft);
+          studio.querySelector("dynamic-badge-builder").suggestions =
+            studio.suggestions;
+          studio.querySelector("dynamic-badge-builder").fields();
           studio.collections = this.data.badgeCollections.items;
           studio.collectionControls();
         }
@@ -436,6 +441,10 @@ export class AppShell extends HTMLElement {
     const studio = this.querySelector("badge-studio");
     studio.blocks = structuredClone(this.store.draft.blocks);
     studio.selectedBlock = selectedBlock;
+    studio.suggestions = repositorySuggestions(this.store.draft);
+    studio.querySelector("dynamic-badge-builder").suggestions =
+      studio.suggestions;
+    studio.querySelector("dynamic-badge-builder").fields();
     studio.collections = this.data.badgeCollections.items;
     studio.collectionControls();
     studio.targets();
