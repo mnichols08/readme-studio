@@ -98,7 +98,7 @@ export class ReadmeHealth extends HTMLElement {
         (i) => view === "Overview" || i.category === view,
       );
       const issues = allIssues.slice(0, this.issueLimit || 100);
-      this.innerHTML = `<h2 tabindex="-1">README Health</h2><p class="hint">Suggestions, not a score. Analysis stays local and makes no network requests.</p><label>Analysis view<select data-view>${views.map((v) => `<option ${v === view ? "selected" : ""}>${v}</option>`).join("")}</select></label><div class="stats">${Object.entries(
+      this.innerHTML = `<h2 tabindex="-1">README Health</h2><p class="hint">Suggestions, not a score. Analysis stays local and makes no network requests.</p><button data-action="compatibility">GitHub Compatibility</button><label>Analysis view<select data-view>${views.map((v) => `<option ${v === view ? "selected" : ""}>${v}</option>`).join("")}</select></label><div class="stats">${Object.entries(
         a.detail.stats,
       )
         .map(([key, value]) => `<span><b>${value}</b> ${html(key)}</span>`)

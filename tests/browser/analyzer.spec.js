@@ -87,3 +87,38 @@ test("Health loads the optional local WASM core", async ({ page }) => {
     "WASM",
   );
 });
+
+test("Compatibility Lab explains risks, filters and jumps without changing source", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Explore the sample profile" })
+    .click();
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const editor = page.getByRole("textbox", {
+    name: "Markdown editor",
+    exact: true,
+  });
+  const source =
+    '# Title\n\n<script>alert(1)</script>\n\n<picture><source srcset="dark.svg"></picture>';
+  await editor.fill(source);
+  await page.getByRole("button", { name: "Health", exact: true }).click();
+  await page
+    .getByRole("button", { name: "GitHub Compatibility", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Compatibility view").selectOption("Unsafe");
+  await expect(dialog).toContainText("Executable content");
+  const jump = dialog
+    .getByRole("button", { name: "Go to line 3, column 1" })
+    .first();
+  await jump.press("Enter");
+  await expect(dialog).not.toBeVisible();
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveValue(source);
+  expect(await editor.evaluate((e) => e.selectionStart)).toBe(
+    source.indexOf("<script>"),
+  );
+});

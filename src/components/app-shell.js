@@ -1,3 +1,4 @@
+import "./compatibility-lab.js";
 import "./refresh-center.js";
 import { invalidateHealth } from "../github/health-cache.js";
 import "./repository-health.js";
@@ -186,6 +187,7 @@ export class AppShell extends HTMLElement {
         this.notify("The document changed. Wait for updated analysis.");
         return;
       }
+      if (this.dialog.open) this.closeDialog(this.editor.input);
       this.mobile("markdown");
       this.editor.input.focus();
       this.editor.input.setSelectionRange(
@@ -1526,6 +1528,10 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (action === "compatibility") {
+      this.modal("<compatibility-lab></compatibility-lab>");
+      this.querySelector("compatibility-lab").draft = this.store.draft;
+    }
     if (action === "snippet-packs") this.openSnippetPacks();
     if (action === "refresh-github") this.openRefresh();
     if (action === "repository-health") this.openRepositoryHealth();
