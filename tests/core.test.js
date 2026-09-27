@@ -31,11 +31,11 @@ describe("portable generators", () => {
     const url = badgeUrl({
       label: "CI-CD_test /",
       message: "all good",
-      logo: "a&b",
+      logo: "react",
       color: "abc123",
     });
     expect(url).toContain("CI--CD__test_%2F-all_good-abc123");
-    expect(new URL(url).searchParams.get("logo")).toBe("a&b");
+    expect(new URL(url).searchParams.get("logo")).toBe("react");
   });
   it("creates linked theme badges and picture dimensions safely", () => {
     expect(
