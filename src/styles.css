@@ -1601,3 +1601,41 @@ label textarea {
     grid-template-columns: 1fr;
   }
 }
+badge-studio {
+  display: block;
+  min-width: 0;
+}
+.badge-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.logo-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+.badge-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px;
+  overflow: auto;
+}
+.badge-preview img {
+  max-width: 100%;
+  object-fit: contain;
+}
+badge-studio textarea {
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+.badge-status {
+  margin: 12px 0;
+}
+@media (max-width: 540px) {
+  .badge-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -49,7 +49,9 @@ export class GithubProfileForm extends HTMLElement {
   connectedCallback() {
     this.generation = 0;
     this.dialog = this.closest("dialog");
-    this.closeHandler = () => this.cancelLookup();
+    this.closeHandler = () => {
+      if (!this.dialog?.open) this.cancelLookup();
+    };
     this.dialog?.addEventListener("close", this.closeHandler);
     this.innerHTML = `<div class="eyebrow">MAKE IT YOURS, FROM GITHUB</div><h1>Start with your public profile.</h1><p>Look up a username, review what’s available, and fill your README in one step.</p><form class="profile-lookup"><label>GitHub username or profile URL<input name="username" placeholder="octocat or https://github.com/octocat" required autocomplete="off"></label><button class="primary">Look up profile</button></form><p class="profile-status" role="status"></p><div class="profile-result"></div><p class="hint">Public data only. No token or sign-in. Applying changes is undoable. Private activity and contribution streaks are not available here.</p>`;
     this.querySelector("input").oninput = () => {

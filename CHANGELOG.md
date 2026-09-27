@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Dedicated Badge Studio with editable presets, searchable technology logos, smart defaults, and live Markdown/HTML/URL previews.
+- Theme-aware light/dark badge pairs and safe centralized Shields serialization.
+- Insert at the cursor, into a badge row, or at the end of a builder section; undo remains available.
+
 ## 0.1.3
 
 Foundation Hardening.

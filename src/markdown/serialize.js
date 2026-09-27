@@ -14,27 +14,8 @@ export const text = (value = "") =>
     .replace(/\r?\n/g, " ");
 const destination = (value, image = false) =>
   safeUrl(value, { image }).replace(/[()\s]/g, (c) => encodeURIComponent(c));
-export function badgeUrl(s = {}, dark = false) {
-  const segment = (v) =>
-    encodeURIComponent(
-      String(v || "")
-        .replace(/-/g, "--")
-        .replace(/_/g, "__")
-        .replace(/ /g, "_"),
-    );
-  const color = (dark ? s.darkColor : s.color) || s.brandColor || "6558d3";
-  const query = new URLSearchParams({
-    style: s.style || "flat",
-    logo: s.logo || "",
-    logoColor: (dark ? s.darkLogoColor : s.logoColor) || "white",
-  });
-  const label = s.label || s.name || "";
-  const parts =
-    s.message && label
-      ? [label, s.message, color]
-      : [s.message || label || "badge", color];
-  return `https://img.shields.io/badge/${parts.map(segment).join("-")}?${query}`;
-}
+export { buildStaticBadge as badgeUrl } from "../badges/shields.js";
+import { buildLinkedBadge } from "../badges/shields.js";
 export function picture(s) {
   const size = ["width", "height"]
     .filter((k) => /^\d+$/.test(String(s[k])))
@@ -45,17 +26,7 @@ export function picture(s) {
     result = `<a href="${html(safeUrl(s.link))}">\n${result}\n</a>`;
   return s.align === "center" ? `<p align="center">\n${result}\n</p>` : result;
 }
-export function badge(s) {
-  if (s.darkColor || s.darkUrl)
-    return picture({
-      light: s.lightUrl || badgeUrl(s),
-      dark: s.darkUrl || badgeUrl(s, true),
-      alt: s.alt || s.label || s.name,
-      link: s.link,
-    });
-  const img = `![${text(s.alt || s.label || s.name)}](${destination(s.lightUrl, true) || badgeUrl(s)})`;
-  return safeUrl(s.link) ? `[${img}](${destination(s.link)})` : img;
-}
+export const badge = (s) => buildLinkedBadge(s);
 export function widget(s) {
   const img = `<img src="${html(safeUrl(s.image, { image: true }))}" alt="${html(s.alt)}">`;
   if (s.align === "center")

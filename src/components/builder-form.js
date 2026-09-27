@@ -199,7 +199,11 @@ export class BuilderForm extends HTMLElement {
           [field("title", "Heading"), field("body", "Content", "textarea")],
           s,
         );
-    this.innerHTML = `<form>${form}<details class="markup"><summary>Generated Markdown & preview</summary><pre data-output></pre><div class="mini-preview markdown-body"></div></details><div class="form-actions"><button type="submit" class="primary">${this.value.id ? "Save section" : "Add to README"}</button><button type="button" data-copy>Copy Markdown</button><button type="button" data-cancel>Cancel</button></div></form>`;
+    this.innerHTML = `<form><button type="button" data-studio>Open Badge Studio for this section</button>${form}<details class="markup"><summary>Generated Markdown & preview</summary><pre data-output></pre><div class="mini-preview markdown-body"></div></details><div class="form-actions"><button type="submit" class="primary">${this.value.id ? "Save section" : "Add to README"}</button><button type="button" data-copy>Copy Markdown</button><button type="button" data-cancel>Cancel</button></div></form>`;
+    this.querySelector("[data-studio]").onclick = () =>
+      this.dispatchEvent(
+        new CustomEvent("open-badge-studio", { bubbles: true }),
+      );
     this.querySelector("form").onsubmit = (e) => {
       e.preventDefault();
       this.dispatchEvent(

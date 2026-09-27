@@ -1,3 +1,4 @@
+import "./badge-studio.js";
 import { html, createBlock, serializeBlock } from "../markdown/serialize.js";
 import { detectSections } from "../markdown/sections.js";
 import { splitDraft, draftSnapshot } from "../state/import-plan.js";
@@ -59,7 +60,7 @@ export class AppShell extends HTMLElement {
     });
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="badges">Badge Studio</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
@@ -73,6 +74,7 @@ export class AppShell extends HTMLElement {
     this.dialog = this.querySelector("dialog");
     this.querySelector(".close-dialog").onclick = () => this.closeDialog();
     this.dialog.addEventListener("close", () => {
+      if (this.dialog.open) return; // Ignore a queued close event from the previous dialog content.
       this.querySelector("import-dialog")?.cancel();
       const target = this.afterDialogFocus || this.dialogTrigger;
       this.afterDialogFocus = null;
@@ -98,7 +100,10 @@ export class AppShell extends HTMLElement {
     this.onclick = (e) => {
       const b = e.target.closest("button");
       if (!b) return;
-      if (b.dataset.action) this.action(b.dataset.action);
+      if (b.dataset.action) {
+        b.focus();
+        this.action(b.dataset.action);
+      }
       if (b.dataset.tab) this.showTab(b.dataset.tab);
       if (b.dataset.pane) this.mobile(b.dataset.pane);
       if (b.dataset.blockType)
@@ -149,6 +154,10 @@ export class AppShell extends HTMLElement {
         this.content.querySelector("button")?.focus();
       }
     });
+    this.addEventListener("badge-insert", (e) => this.insertBadge(e.detail));
+    this.addEventListener("open-badge-studio", () =>
+      this.openBadges(this.selectedBlock),
+    );
     this.addEventListener("copy-markup", (e) => this.copy(e.detail));
     this.querySelector("#draft-select").onchange = (e) =>
       this.load(e.target.value);
@@ -304,6 +313,46 @@ export class AppShell extends HTMLElement {
       )
       .join("");
   }
+  openBadges(selectedBlock) {
+    this.badgeCursor = this.editor.input.selectionStart;
+    this.badgeSnapshot = this.store.draft.markdown;
+    this.modal("<badge-studio></badge-studio>");
+    this.dialog.classList.add("import-modal");
+    const studio = this.querySelector("badge-studio");
+    studio.blocks = structuredClone(this.store.draft.blocks);
+    studio.selectedBlock = selectedBlock;
+    studio.targets();
+  }
+  insertBadge({ badge, markdown, target }) {
+    if (this.badgeSnapshot !== this.store.draft.markdown) {
+      this.notify("The draft changed. Reopen Badge Studio before inserting.");
+      return;
+    }
+    if (target === "cursor") {
+      const source = this.store.draft.markdown;
+      const at = Math.min(this.badgeCursor, source.length);
+      this.store.raw(
+        source.slice(0, at) + "\n\n" + markdown + "\n\n" + source.slice(at),
+      );
+    } else {
+      const blocks = structuredClone(this.store.draft.blocks);
+      const block = blocks.find((b) => b.id === target);
+      if (!block) {
+        this.notify("This section is no longer available.");
+        return;
+      }
+      if (block.type === "badges") block.settings.items.push(badge);
+      else {
+        const source = serializeBlock(block);
+        block.type = "custom";
+        block.settings = { markdown: source + "\n\n" + markdown };
+      }
+      this.store.blocks(blocks);
+    }
+    this.closeDialog();
+    this.focusDocument();
+    this.notify("Badge added. Use Undo to restore the previous draft.");
+  }
   showTab(tab) {
     this.tab = tab;
     this.querySelectorAll("[data-tab]").forEach(
@@ -334,6 +383,7 @@ export class AppShell extends HTMLElement {
     this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button>${this.store.draft.metadata.importSource?.type === "github" ? '<button class="wide" data-action="reimport">Re-import current GitHub README</button>' : ""}<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(b.section?.title || blockTypes[b.type] || "Section")}</strong><small>${html((b.section ? `Suggested ${b.section.kind} · Custom Markdown` : "") || b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small></span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p>' : ""}${this.store.draft.markdown ? '<button class="wide" data-action="split">Split into sections</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for your GitHub profile</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
   }
   edit(block) {
+    this.selectedBlock = block.id;
     this.tab = "form";
     this.content.innerHTML = `<div class="section-title"><h2>${html(blockTypes[block.type])}</h2><p>Customize, preview, then add to your story.</p></div><builder-form></builder-form>`;
     try {
@@ -656,6 +706,7 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (action === "badges") this.openBadges();
     switch (action) {
       case "backup-all":
         this.download(
