@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 async function start(page) {
   await page.route("https://**/*", (r) =>
@@ -60,4 +61,66 @@ test("theme controls fit mobile and invalid colors cannot apply", async ({
   page.once("dialog", (d) => d.dismiss());
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeVisible();
+});
+
+test("local theme-aware banners download safe SVG and insert portable markup", async ({
+  page,
+}) => {
+  await start(page);
+  await page
+    .getByRole("button", { name: "Banner Builder", exact: true })
+    .click();
+  await page.locator('[data-banner="name"]').fill("Ada 雪");
+  await page.locator('[data-banner="title"]').fill("Systems developer");
+  await page
+    .getByRole("button", { name: "Suggest alt from name and title" })
+    .click();
+  await page
+    .getByLabel("Banner style", { exact: true })
+    .selectOption("constellation");
+  await expect(page.locator("[data-banner-svg]")).toHaveValue(/Ada 雪/);
+  await page
+    .getByLabel("Banner preview mode", { exact: true })
+    .selectOption("dark");
+  await page
+    .getByLabel("Banner preview width", { exact: true })
+    .selectOption("320px");
+  expect(
+    await page
+      .locator(".banner-preview")
+      .evaluate((e) => e.getBoundingClientRect().width),
+  ).toBeLessThanOrEqual(320);
+  const download = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Download banner-dark.svg", exact: true })
+    .click();
+  const asset = await download;
+  expect(asset.suggestedFilename()).toBe("banner-dark.svg");
+  const svg = await readFile(await asset.path(), "utf8");
+  expect(svg).toContain("Ada 雪");
+  expect(svg).not.toContain("<script");
+  await page.evaluate(() =>
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async () => {
+          throw Error("denied");
+        },
+      },
+    }),
+  );
+  await page
+    .getByRole("button", { name: "Copy SVG source", exact: true })
+    .click();
+  await expect(page.locator("[data-banner-svg]")).toBeFocused();
+  await page
+    .getByRole("button", { name: "Insert banner markup", exact: true })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue(/assets\/banner-light.svg/);
+  await page
+    .getByRole("button", { name: "Banner Builder", exact: true })
+    .click();
+  await expect(page.locator('[data-banner="name"]')).toHaveValue("Ada 雪");
 });

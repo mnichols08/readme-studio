@@ -1805,3 +1805,16 @@ project-studio {
   flex-wrap: wrap;
   max-width: 100%;
 }
+
+.banner-preview {
+  width: 100%;
+  min-width: 0;
+}
+.banner-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+banner-builder textarea {
+  max-width: 100%;
+}
