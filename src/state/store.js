@@ -1,3 +1,4 @@
+import { detachGenerated } from "../generated/registry.js";
 import { themeBlocks } from "../themes/theme-resolver.js";
 import { createBlock, serializeBlocks } from "../markdown/serialize.js";
 import { uniformContext } from "../markdown/source-context.js";
@@ -45,6 +46,17 @@ export class Store extends EventTarget {
   raw(markdown) {
     if (markdown === this.draft.markdown) return;
     this.checkpoint();
+    let detached = [];
+    try {
+      detached = detachGenerated(this.draft);
+    } catch {
+      /* Malformed optional ownership must never block manual source editing. */
+    }
+    if (detached.length)
+      this.draft.metadata = {
+        ...this.draft.metadata,
+        detachedGenerated: detached,
+      };
     const sourceContext = uniformContext(this.draft);
     const current =
       this.draft.blocks.length === 1 && this.draft.blocks[0].type === "custom"
@@ -56,6 +68,13 @@ export class Store extends EventTarget {
         ? { ...current, settings: { markdown }, sourceContext }
         : { ...createBlock("custom", { markdown }), sourceContext },
     ];
+    for (const b of this.draft.blocks) {
+      delete b.githubGenerated;
+      delete b.profileAutofill;
+      delete b.profileIdentity;
+      delete b.profileIntro;
+      delete b.profileLinks;
+    }
     this.emit("raw");
   }
   blocks(blocks, metadata = this.draft.metadata) {
