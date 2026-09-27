@@ -114,7 +114,10 @@ export function stack(s) {
     )
     .join("\n\n");
 }
-export const serializeBlock = (b) => present(serializeContent(b), b);
+export const serializeBlock = (b) =>
+  b.type === "component"
+    ? b.settings.markdown
+    : present(serializeContent(b), b);
 function serializeContent({ type, settings: s }) {
   switch (type) {
     case "callout":

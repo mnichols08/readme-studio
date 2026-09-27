@@ -1,5 +1,5 @@
 import { safeUrl } from "../markdown/url-safety.js";
-import { escapeHTML as html } from "../components-library/model.js";
+import { escapeHTML as html } from "../components-library/escape.js";
 export function normalizeEmbed(raw = {}) {
   const s = {};
   for (const key of ["image", "light", "dark", "link"]) {

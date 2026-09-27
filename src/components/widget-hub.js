@@ -82,6 +82,7 @@ export class WidgetHub extends HTMLElement {
   }
   open(id) {
     this.provider = id;
+    this.typing = undefined;
     const w = widgetRegistry.find((w) => w.id === id);
     this.value = {
       image: "",
@@ -129,6 +130,7 @@ export class WidgetHub extends HTMLElement {
     for (const el of detail.querySelectorAll("[data-embed]"))
       el.oninput = () => {
         this.value[el.dataset.embed] = el.value;
+        if (el.dataset.embed === "image") this.typing = undefined;
         this.dirty = true;
         this.update();
         detail.querySelector(".widget-preview").replaceChildren();
@@ -240,6 +242,36 @@ export class WidgetHub extends HTMLElement {
     };
     this.update();
     detail.querySelector("h2").focus();
+  }
+  loadPreset(preset, library) {
+    this.library = validateComponents(library);
+    this.open(preset.provider);
+    this.value = structuredClone(preset.embed);
+    this.typing = preset.typing ? structuredClone(preset.typing) : undefined;
+    for (const el of this.querySelectorAll("[data-embed]"))
+      el.value = this.value[el.dataset.embed] ?? "";
+    for (const el of this.querySelectorAll("[data-typing]")) {
+      const v = this.typing?.[el.dataset.typing];
+      if (v !== undefined) {
+        if (el.type === "checkbox") el.checked = v;
+        else el.value = v;
+      }
+    }
+    const credit = this.querySelector("[data-widget-credit]");
+    if (credit) credit.checked = preset.credit === true;
+    this.dirty = false;
+    this.update();
+  }
+  currentPreset() {
+    if (!this.update()) throw Error("Correct the widget fields before saving.");
+    return {
+      version: 1,
+      type: "widget",
+      provider: this.provider,
+      embed: structuredClone(this.value),
+      typing: this.typing,
+      credit: this.querySelector("[data-widget-credit]")?.checked === true,
+    };
   }
   favoriteState() {
     this.querySelector("[data-widget-favorite]")?.setAttribute(

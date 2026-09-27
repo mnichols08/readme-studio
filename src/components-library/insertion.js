@@ -1,8 +1,9 @@
+import { instanceBlock } from "../component-instances/ownership.js";
 import { createBlock } from "../markdown/serialize.js";
 export function insertion(
   draft,
   markdown,
-  { position = "append", blockId, cursor = 0 } = {},
+  { position = "append", blockId, cursor = 0, instance } = {},
 ) {
   if (position === "cursor") {
     const at = Math.max(
@@ -19,7 +20,9 @@ export function insertion(
     };
   }
   const blocks = structuredClone(draft.blocks),
-    block = createBlock("custom", { markdown });
+    block = instance
+      ? instanceBlock(instance)
+      : createBlock("custom", { markdown });
   if (position === "append") blocks.push(block);
   else {
     const index = blocks.findIndex((b) => b.id === blockId);

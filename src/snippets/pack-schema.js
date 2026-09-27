@@ -1,4 +1,8 @@
 import {
+  configuredPreset,
+  synchronized,
+} from "../component-instances/ownership.js";
+import {
   plain,
   normalizeComponent,
   componentSource,
@@ -85,23 +89,29 @@ export function packChoices(data, draft) {
           : b.type === "widget" || b.type === "picture"
             ? "widget"
             : "layout/snippet",
-      component: normalizeComponent({
-        version: 1,
-        id: crypto.randomUUID(),
-        name: `Draft section ${i + 1} (${b.type})`,
-        category:
-          b.type === "projects"
-            ? "Projects"
-            : b.type === "widget"
-              ? "Widgets"
-              : "Layout",
-        description:
-          "Copied from a draft; relative assets may need repository context.",
-        kind: "custom",
-        template: serializeBlock(b),
-        fields: [],
-        tags: [b.type],
-      }),
+      component:
+        b.type === "component" && synchronized(b)
+          ? configuredPreset(
+              b.settings.instance,
+              b.settings.name || `Section ${i + 1}`,
+            )
+          : normalizeComponent({
+              version: 1,
+              id: crypto.randomUUID(),
+              name: `Draft section ${i + 1} (${b.type})`,
+              category:
+                b.type === "projects"
+                  ? "Projects"
+                  : b.type === "widget"
+                    ? "Widgets"
+                    : "Layout",
+              description:
+                "Copied from a draft; relative assets may need repository context.",
+              kind: "custom",
+              template: serializeBlock(b),
+              fields: [],
+              tags: [b.type],
+            }),
     })),
   ];
 }

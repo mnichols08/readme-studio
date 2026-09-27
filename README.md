@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.5.2** · Native Web Components · Local drafts · Static hosting
+**Version 0.5.3** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -33,7 +33,7 @@ Choose Minimal, Developer Showcase, Open Source, Student, or Terminal on first l
 
 The Markdown editor preserves formatting and supports undo/redo and two-space Tab insertion. **Shift+Tab leaves the editor**, so keyboard users are never trapped. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redoes; Ctrl/Cmd+S saves. Alt+1–4 selects Build, Markdown, Preview, or Health on mobile. Section controls provide keyboard reordering, duplication, removal, and copying. The builder can collapse on desktop.
 
-Builder-created documents retain editable block settings. **Editing raw Markdown turns the document into one Custom Markdown block**. This deliberately gives manual text priority: new builder sections append to the preserved text. Undo restores the previous block state. “Split into sections” explicitly divides raw content into Custom Markdown sections and preserves its exact text; it does not infer structured form fields.
+Builder-created documents retain editable block settings. **Editing raw Markdown turns the document into one Custom Markdown block**. Structured component ownership detaches with a visible explanation; Undo restores it. This deliberately gives manual text priority: new builder sections append to the preserved text. Undo restores the previous block state. “Split into sections” explicitly divides raw content into Custom Markdown sections and preserves its exact text; it does not infer structured form fields.
 
 The app light/dark toggle also switches the README preview and its theme-aware picture sources. The preview toggle can then select a different preview mode independently. Neither changes Markdown.
 
@@ -41,7 +41,7 @@ Drafts and theme/preview settings autosave to this browser’s localStorage. Use
 
 ## Backups and recovery
 
-Open **Manage drafts → Download all drafts backup** to export all drafts, badge collections, saved themes/banner presets/visual bundles, workspace settings, schema version, and the backup creation date. Single-draft backups remain available separately. **Restore backup** validates the file and shows its draft count/version/date before applying. Merge is the default: imported drafts receive fresh IDs and colliding names receive numbered suffixes. Replacement requires explicit confirmation. Workspace restore accepts up to 500 drafts and a 50 MB file.
+Open **Manage drafts → Download all drafts backup** to export all drafts, reusable snippets/component presets, badge collections, saved themes/banner presets/visual bundles, workspace settings, schema version, and the backup creation date. Single-draft backups remain available separately. **Restore backup** validates the file and shows its draft count/version/date before applying. Merge is the default: imported drafts receive fresh IDs and colliding names receive numbered suffixes. Replacement requires explicit confirmation. Workspace restore accepts up to 500 drafts and a 50 MB file.
 
 Unreadable JSON, unsupported future schemas, or partially damaged storage open a temporary workspace without overwriting the original. Recoverable drafts are retained when possible. The recovery notice offers **Download original recovery data** as well as a backup of the temporary workspace. Restore can replace the original data only after confirmation and a successful storage write. A failed save stays visible; export your work before closing the tab. Browser storage quotas and private browsing restrictions vary.
 
@@ -183,3 +183,5 @@ Visual Theme Studio coordinates generated badge colors and builder section accen
 [Dynamic Widget Hub](docs/widgets.md) provides attributed setup guides, a generic image/picture assistant and Typing SVG fields. Preview requests go directly to remote image hosts only when requested; provider configuration stays upstream.
 
 [Portable snippet packs](docs/snippet-packs.md) export selected snippets, badge collections and draft-section copies as JSON. Review imported contents and choose Keep both, Replace or Skip for collisions. Four example kits provide editable starting points.
+
+Supported components inserted as sections reopen with **Edit visually**. Template fields, widget helpers and badge row editors preserve independent settings. Save configured presets, duplicate them, or detach to exact Custom Markdown. Current/generated source review prevents silent overwrite when stored source has diverged.

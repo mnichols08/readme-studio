@@ -1,3 +1,9 @@
+import "./component-customizer.js";
+import {
+  instanceFromDetail,
+  instanceBlock,
+  detachBlock,
+} from "../component-instances/ownership.js";
 import "./snippet-pack-dialog.js";
 import { importPack } from "../snippets/pack-schema.js";
 import "./widget-hub.js";
@@ -118,7 +124,8 @@ export class AppShell extends HTMLElement {
         this.querySelector("banner-builder")?.isDirty() ||
         this.querySelector("section-style-editor")?.isDirty() ||
         this.querySelector("component-library")?.isDirty() ||
-        this.querySelector("widget-hub")?.isDirty()
+        this.querySelector("widget-hub")?.isDirty() ||
+        this.querySelector("component-customizer")?.isDirty()
       ) {
         e.preventDefault();
         this.closeDialog();
@@ -165,7 +172,16 @@ export class AppShell extends HTMLElement {
       if (b.dataset.blockAction)
         this.blockAction(b.dataset.blockAction, b.dataset.id);
     };
-    this.addEventListener("markdown-change", (e) => this.store.raw(e.detail));
+    this.addEventListener("markdown-change", (e) => {
+      const detached =
+        e.detail !== this.store.draft.markdown &&
+        this.store.draft.blocks.some((b) => b.type === "component");
+      this.store.raw(e.detail);
+      if (detached)
+        this.notify(
+          "Component source was manually edited and is now Custom Markdown. Undo restores visual ownership.",
+        );
+    });
     this.addEventListener("undo", () => this.store.undo());
     this.addEventListener("redo", () => this.store.redo());
     this.addEventListener("profile-apply", (e) => {
@@ -207,6 +223,21 @@ export class AppShell extends HTMLElement {
     });
     this.addEventListener("open-project-studio", () =>
       this.openProjects(this.selectedBlock),
+    );
+    this.addEventListener("component-widget-helper", (e) => {
+      if (
+        this.querySelector("component-library")?.isDirty() &&
+        !confirm("Discard unsaved component fields and open the widget helper?")
+      )
+        return;
+      this.openWidgets();
+      const hub = this.querySelector("widget-hub");
+      if (e.detail.preset)
+        hub.loadPreset(e.detail.preset, this.data.componentLibrary);
+      else hub.open(e.detail.provider);
+    });
+    this.addEventListener("component-edit-apply", (e) =>
+      this.applyComponentEdit(e.detail),
     );
     this.addEventListener("snippet-pack-import", (e) =>
       this.applySnippetPack(e.detail),
@@ -553,7 +584,8 @@ export class AppShell extends HTMLElement {
         this.querySelector("banner-builder")?.isDirty() ||
         this.querySelector("section-style-editor")?.isDirty() ||
         this.querySelector("component-library")?.isDirty() ||
-        this.querySelector("widget-hub")?.isDirty()) &&
+        this.querySelector("widget-hub")?.isDirty() ||
+        this.querySelector("component-customizer")?.isDirty()) &&
       !confirm(
         "Discard unsaved studio edits? Save or export your work to keep it.",
       )
@@ -615,6 +647,11 @@ export class AppShell extends HTMLElement {
         ),
       });
       this.data.componentLibrary = next;
+      const customizer = this.querySelector("component-customizer");
+      if (customizer) {
+        customizer.library = next;
+        customizer.status(message);
+      }
       this.querySelector("widget-hub")?.accept(next, message);
       this.querySelector("component-library")?.accept(
         next,
@@ -627,8 +664,64 @@ export class AppShell extends HTMLElement {
       this.querySelector("component-library")?.status(
         "Could not save components: " + e.message,
       );
+      this.querySelector("component-customizer")?.status(
+        "Could not save components: " + e.message,
+      );
+      this.querySelector("widget-hub")?.status(
+        "Could not save components: " + e.message,
+      );
       this.notify("Could not save components: " + e.message);
       return false;
+    }
+  }
+  openComponentEditor(block) {
+    this.componentEditId = block.id;
+    this.componentEditSnapshot = JSON.stringify(block);
+    this.modal("<component-customizer></component-customizer>");
+    this.dialog.classList.add("import-modal");
+    try {
+      this.querySelector("component-customizer").configure(
+        block,
+        this.data.componentLibrary,
+      );
+    } catch {
+      this.dialog.querySelector(".dialog-content").innerHTML =
+        "<h1>Visual settings unavailable</h1><p>This component has unsupported settings. Its Markdown is preserved; edit source or export the draft.</p>";
+    }
+  }
+  applyComponentEdit({ id, mode, instance }) {
+    const customizer = this.querySelector("component-customizer"),
+      blocks = structuredClone(this.store.draft.blocks),
+      index = blocks.findIndex((b) => b.id === id);
+    if (index < 0 || blocks[index].type !== "component") {
+      customizer.status(
+        "This component was detached or removed. Its Markdown remains yours; reopen the current section.",
+      );
+      return;
+    }
+    if (JSON.stringify(blocks[index]) !== this.componentEditSnapshot) {
+      this.componentEditSnapshot = JSON.stringify(blocks[index]);
+      customizer.reviewConflict(blocks[index]);
+      return;
+    }
+    try {
+      if (mode === "detach") blocks[index] = detachBlock(blocks[index]);
+      else {
+        const next = instanceBlock(instance);
+        if (mode === "duplicate") blocks.splice(index + 1, 0, next);
+        else blocks[index] = { ...blocks[index], settings: next.settings };
+      }
+      this.store.blocks(blocks);
+      customizer.markSaved();
+      this.closeDialog();
+      this.focusDocument();
+      this.notify(
+        mode === "detach"
+          ? "Component is now Custom Markdown; source preserved."
+          : "Component saved. Undo restores the previous source.",
+      );
+    } catch (e) {
+      customizer.status(e.message);
     }
   }
   openSnippetPacks() {
@@ -692,7 +785,7 @@ export class AppShell extends HTMLElement {
   }
   insertComponent(detail) {
     if (
-      this.querySelector("component-library")?.isDirty() &&
+      this.querySelector("component-library")?.dirty &&
       !confirm("Insert this component and discard the unsaved My Snippet form?")
     )
       return;
@@ -703,7 +796,9 @@ export class AppShell extends HTMLElement {
       return;
     }
     try {
+      const instance = instanceFromDetail(detail);
       const result = insertion(this.store.draft, detail.markdown, {
+        instance,
         ...detail,
         cursor: this.componentCursor,
       });
@@ -713,8 +808,10 @@ export class AppShell extends HTMLElement {
         library: usedComponent(this.data.componentLibrary, detail.component.id),
         message: "Component inserted; recent usage saved.",
       });
-      if (this.querySelector("component-library"))
+      if (this.querySelector("component-library")) {
         this.querySelector("component-library").dirty = false;
+        this.querySelector("component-library").composerDirty = false;
+      }
       if (this.querySelector("widget-hub"))
         this.querySelector("widget-hub").dirty = false;
       this.closeDialog();
@@ -960,9 +1057,14 @@ export class AppShell extends HTMLElement {
       return;
     }
     const blocks = this.store.draft.blocks;
-    this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button>${this.store.draft.metadata.importSource?.type === "github" ? '<button class="wide" data-action="reimport">Re-import current GitHub README</button>' : ""}<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(b.section?.title || blockTypes[b.type] || "Section")}</strong><small>${html((b.section ? `Suggested ${b.section.kind} · Custom Markdown` : "") || b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small></span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p>' : ""}${this.store.draft.markdown ? '<button class="wide" data-action="split">Split into sections</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for your GitHub profile</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
+    this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button>${this.store.draft.metadata.importSource?.type === "github" ? '<button class="wide" data-action="reimport">Re-import current GitHub README</button>' : ""}<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(b.section?.title || (b.type === "component" ? "Edit visually: " + b.settings.name : blockTypes[b.type]) || "Section")}</strong><small>${html((b.section ? `Suggested ${b.section.kind} · Custom Markdown` : "") || b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small></span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p>' : ""}${this.store.draft.markdown ? '<button class="wide" data-action="split">Split into sections</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for your GitHub profile</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
   }
   edit(block) {
+    if (block.type === "component") {
+      this.selectedBlock = block.id;
+      this.openComponentEditor(block);
+      return;
+    }
     if (block.type === "projects" && block.settings.version === 1) {
       this.openProjects(block.id);
       return;

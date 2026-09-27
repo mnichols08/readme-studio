@@ -14,14 +14,12 @@ export const categories = [
   "GitHub",
   "Utilities",
 ];
-export const escapeHTML = (v) =>
-  String(v).replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ],
-  );
+export { escapeHTML } from "./escape.js";
+import { escapeHTML } from "./escape.js";
+import {
+  normalizePreset,
+  renderPreset,
+} from "../component-instances/preset.js";
 export function plain(value, max = 200) {
   if (
     typeof value !== "string" ||
@@ -65,12 +63,14 @@ export function normalizeComponent(raw) {
       !["markdown", "html", "url"].includes(f.context)
     )
       throw Error("Unsupported component field type.");
+    const label = plain(f.label, 100).trim();
+    if (!label) throw Error("Name each component field.");
     return {
       key: f.key,
-      label: plain(f.label, 100),
+      label,
       type: f.type,
       context: f.context,
-      default: plain(f.default ?? "", 4000),
+      default: plain(f.default ?? "", 10000),
     };
   });
   const attribution = raw.attribution
@@ -81,7 +81,12 @@ export function normalizeComponent(raw) {
     : null;
   if (attribution && !/^https?:\/\//.test(attribution.url))
     throw Error("Attribution needs a safe public project URL.");
+  if (attribution && !attribution.name.trim())
+    throw Error("Name the attributed project.");
+  const preset =
+    raw.kind !== "custom" && raw.preset ? normalizePreset(raw.preset) : null;
   return {
+    ...(preset ? { preset } : {}),
     version: 1,
     id:
       typeof raw.id === "string" && /^[a-z\d:-]{1,100}$/i.test(raw.id)
@@ -90,7 +95,7 @@ export function normalizeComponent(raw) {
     name,
     category: raw.category,
     description: plain(raw.description ?? "", 1000),
-    kind: raw.kind,
+    kind: raw.preset && !preset ? "custom" : raw.kind,
     template: raw.template,
     fields,
     tags: raw.tags.map((t) => plain(t, 60)),
@@ -100,6 +105,8 @@ export function normalizeComponent(raw) {
 }
 export function componentSource(raw, values = {}) {
   const c = normalizeComponent(raw);
+  if (c.preset && c.preset.type !== "fields") return renderPreset(c.preset);
+  values = { ...(c.preset?.values || {}), ...values };
   if (c.kind === "custom" || !c.fields.length) return c.template;
   const fields = new Map(c.fields.map((f) => [f.key, f]));
   return c.template.replace(/\{\{([a-z][a-zA-Z0-9_]*)\}\}/g, (token, key) => {
@@ -146,7 +153,10 @@ export function searchComponents(
     .sort((a, b) =>
       view === "recent"
         ? recents.indexOf(a.id) - recents.indexOf(b.id)
-        : Number(b.name.toLowerCase().startsWith(q)) -
+        : Number(favorites.includes(b.id)) - Number(favorites.includes(a.id)) ||
+          Number(b.name.toLowerCase() === q) -
+            Number(a.name.toLowerCase() === q) ||
+          Number(b.name.toLowerCase().startsWith(q)) -
             Number(a.name.toLowerCase().startsWith(q)) ||
           a.name.localeCompare(b.name),
     );

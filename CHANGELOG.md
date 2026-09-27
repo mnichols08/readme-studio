@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.3
+
+- Added structured component ownership, visual re-editing for template/widget/badge forms, independent duplication and reusable configured presets.
+- Raw edits detach safely with undo; mismatched or stale component source requires explicit current/generated review before replacement.
+- Extended snippet packs with backward-compatible preset fallbacks and advisory component Health checks that ignore code examples.
+- Polished favorite ranking, saved-entry management, bounded 200-item library rendering, hidden-control accessibility and badge-editor focus; split syntax highlighting into a reusable static bundle chunk.
+
 ## 0.5.2
 
 - Added versioned portable snippet packs with metadata, saved snippet/badge collection selection and exact draft-section copies.
