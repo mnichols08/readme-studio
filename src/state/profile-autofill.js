@@ -319,6 +319,9 @@ export function autofillProfile(draft, p, options = profileOptions) {
       align: "left",
     });
   metadata.githubProfile = {
+    repositories: structuredClone(
+      p.repositories || previous?.repositories || [],
+    ),
     login: p.login,
     fetchedAt: p.fetchedAt,
     sections: {

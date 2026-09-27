@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Review public GitHub repository metadata before creating or refreshing project entries.
+- Filter and select cached GitHub Autofill repositories; bounded multi-import preserves partial successes and explains unavailable/rate-limited repositories.
+- Confirm duplicate repositories, explicitly select language/topic and archived-status suggestions, and preserve manually edited fields during ownership-aware refresh. No roles, highlights, or statistics are invented.
+
 ## 0.3.0
 
 - Project Studio adds normalized editable projects, roles/types, engineering highlights, catalog/custom technologies, status, links, and accessible screenshots.
