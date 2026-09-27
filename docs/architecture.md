@@ -10,7 +10,7 @@
 
 1. The editor emits untouched Markdown.
 2. The store records a bounded undo checkpoint and updates the draft.
-3. A 180ms debounce batches preview rendering, health analysis, and local persistence.
+3. Independent debounces schedule preview at 180ms, Health at 600ms, and autosave at 900ms. Raw input updates the source immediately.
 4. Marked parses GFM; highlight.js highlights explicitly recognized code languages.
 5. DOMPurify sanitizes the HTML against explicit tag and attribute allowlists.
 6. Safe links receive a new tab target and `noopener noreferrer`; task inputs are disabled.
@@ -30,7 +30,7 @@ The explicit section splitter recognizes H1/H2 boundaries outside backtick and t
 
 ## Local state and recovery
 
-`state/store.js` maintains one active draft and up to 80 history checkpoints. Drafts store names, Markdown, blocks, project metadata, IDs, and timestamps. `state/drafts.js` persists a versioned draft collection and workspace settings under `readme-studio:v1`. Draft JSON import validates its basic structure and compares serialization to raw Markdown; incompatible block metadata falls back to preserved source.
+`state/store.js` maintains one active draft and up to 80 history checkpoints, with a shared estimated 8,000,000-byte snapshot budget for undo/redo. Drafts store names, Markdown, blocks, project metadata, IDs, and timestamps. `state/drafts.js` persists a versioned draft collection and workspace settings under `readme-studio:v1`. Draft JSON import validates its basic structure and compares serialization to raw Markdown; incompatible block metadata falls back to preserved source.
 
 Malformed saved data is not overwritten automatically: the app opens a temporary working draft, reports the storage problem, and allows exports. Quota/unavailable-storage errors are visible. JSON backups preserve settings for individual blocks; exported README files intentionally have no application metadata. History is session-local.
 
@@ -66,6 +66,24 @@ Profile metadata is scoped to the draft and included in JSON backups; no account
 
 Editor input is native textarea editing; unrelated component trees do not rerender continuously. Preview and analysis are debounced. Unit coverage includes a Unicode document over 100 KB, with browser workflow coverage separately. Performance depends on markup complexity and device capability; this is not a latency guarantee.
 
-Rust is not included in v0.1. Future measurements could justify moving deterministic analysis or large-document transforms behind the existing `analyze(markdown)` interface, optionally in a worker. A WASM loader should always preserve the JavaScript implementation as fallback and keep editor/preview startup independent of WASM. DOM rendering, forms, and local state belong in JavaScript.
+Rust is not included in v0.1. Future measurements could justify moving deterministic analysis or large-document transforms behind the existing `analyze(markdown)` interface, behind the existing Worker boundary. A WASM loader should always preserve the JavaScript implementation as fallback and keep editor/preview startup independent of WASM. DOM rendering, forms, and local state belong in JavaScript.
 
 Future banners can emit ordinary light/dark asset URLs into the existing picture block. A future schema migration should be explicit and preserve raw source on failure. OAuth, remote persistence, and integrations are outside this release’s boundaries.
+
+## Foundation hardening boundaries
+
+`state/workspace-backup.js` validates version 1 workspaces, normalizes known settings, regenerates imported IDs, and resolves name collisions. Reads of malformed/partial/future-schema storage preserve the original string and enter a write-blocked temporary workspace. Valid drafts from a partial version 1 document can be salvaged. The original remains downloadable. Replace/merge restore builds a candidate workspace and writes it successfully before switching in-memory state. Confirmation is required before replacing local drafts or the blocked recovery data. Restore itself is not a document history operation.
+
+The store records source immediately and synchronizes it into the workspace before scheduling side effects. Draft switches save the outgoing workspace; pagehide and hidden-document events attempt a synchronous flush. Quota/access errors keep a persistent notice and download actions. A visual save status may change while typing; the separate live region announces settled saves rather than every keystroke. Local storage remains best-effort browser storage, not a durable database.
+
+History snapshot sizes use twice the serialized JSON character count as a conservative estimate, cached in a WeakMap. Both count and byte caps prune old snapshots. This bounds retained history, not total browser memory or a single active document. Each newly loaded draft has its own store/history. Workspace presentation settings do not enter Markdown undo.
+
+`markdown/url-safety.js` is shared by serializers, sanitizer, and preview URL resolution. It validates safe HTTP(S), mailto links, relative paths, and local anchors while rejecting credentials, control characters, backslashes, and unsafe schemes. Images exclude mailto/anchors/data payloads. DOMPurify remains the HTML boundary; only inert task checkboxes survive input sanitization. Preview CSS classes are limited to code/task-list classes so untrusted HTML cannot borrow application overlay styling. Preview DOM transformations never modify the store, source, or download path.
+
+`markdown/visit-tokens.js` traverses parsed tokens in source order without Marked's accumulating callback-result arrays. This removes quadratic allocation from analysis. `health.worker.js` computes pure Health/duplicate results off the UI thread. The Health component has at most one request running and one latest pending draft; obsolete results are discarded and the Worker terminates when the component leaves the page. Worker failure produces a local explanation rather than rerunning expensive analysis synchronously. Whole-Markdown and identical source-segment analysis are reused within a request.
+
+The preview catches rendering failures locally and keeps source/editor/export intact. Builder initialization failures show a local fallback. Unexpected window errors and unhandled rejections show a persistent recovery notice with reload/download actions, without exposing stacks in normal UI. Console diagnostics remain available for development. Clipboard errors open a readonly, selected-text dialog. Downloads use sanitized filenames, attached temporary anchors, and delayed object-URL revocation.
+
+Dialogs retain their original trigger through nested content changes, focus meaningful fields on open, and restore a connected visible target on close. Import/split completion can explicitly target the editor; draft deletion/restore targets the draft selector. Background rendering/saves do not steal focus. Native dialog modality keeps hidden workspace controls outside tab flow.
+
+Static builds include a separate Health Worker asset and relative Vite asset references. `scripts/static-smoke.mjs` verifies root and `/readme-studio/` deployments with a plain HTTP file server and no route fallback. A browser `file://` launch is not supported for ES modules/Workers; serve `dist/` over HTTP(S).

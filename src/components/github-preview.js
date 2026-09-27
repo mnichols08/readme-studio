@@ -21,32 +21,44 @@ export class GithubPreview extends HTMLElement {
     });
   }
   set value(markdown) {
-    this.querySelector("article").innerHTML =
-      render(markdown) ||
-      '<div class="empty-preview"><h2>A blank page. A fresh start.</h2><p>Add a Hero or About Me section from Build, or start typing Markdown.</p></div>';
-    this.applyTheme();
-    this.anchors();
+    try {
+      this.querySelector("article").innerHTML =
+        render(markdown) ||
+        '<div class="empty-preview"><h2>A blank page. A fresh start.</h2><p>Add a Hero or About Me section from Build, or start typing Markdown.</p></div>';
+      this.applyTheme();
+      this.anchors();
+    } catch {
+      this.failure();
+    }
   }
   set draft(draft) {
-    if (!draft.markdown) {
-      this.value = "";
-      return;
+    try {
+      if (!draft.markdown) {
+        this.value = "";
+        return;
+      }
+      const groups = [];
+      for (const segment of documentSegments(draft)) {
+        const last = groups.at(-1);
+        if (
+          last &&
+          contextKey(last.sourceContext) === contextKey(segment.sourceContext)
+        )
+          last.source += segment.source;
+        else groups.push({ ...segment });
+      }
+      this.querySelector("article").innerHTML = groups
+        .map((s) => render(s.source, { sourceContext: s.sourceContext }))
+        .join("");
+      this.applyTheme();
+      this.anchors();
+    } catch {
+      this.failure();
     }
-    const groups = [];
-    for (const segment of documentSegments(draft)) {
-      const last = groups.at(-1);
-      if (
-        last &&
-        contextKey(last.sourceContext) === contextKey(segment.sourceContext)
-      )
-        last.source += segment.source;
-      else groups.push({ ...segment });
-    }
-    this.querySelector("article").innerHTML = groups
-      .map((s) => render(s.source, { sourceContext: s.sourceContext }))
-      .join("");
-    this.applyTheme();
-    this.anchors();
+  }
+  failure() {
+    this.querySelector("article").innerHTML =
+      '<p role="alert">Preview could not be rendered. Your Markdown is preserved; you can keep editing or export it.</p>';
   }
   anchors() {
     const seen = new Set();

@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.1.2** · Native Web Components · Local drafts · Static hosting
+**Version 0.1.3** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -36,6 +36,24 @@ The Markdown editor preserves formatting and supports undo/redo and two-space Ta
 Builder-created documents retain editable block settings. **Editing raw Markdown turns the document into one Custom Markdown block**. This deliberately gives manual text priority: new builder sections append to the preserved text. Undo restores the previous block state. “Split into sections” explicitly divides raw content into Custom Markdown sections and preserves its exact text; it does not infer structured form fields.
 
 Drafts and theme/preview settings autosave to this browser’s localStorage. Use the menu beside the draft name to rename, duplicate, delete, or create drafts. Download a JSON draft backup to retain builder settings; Markdown export preserves only the portable document. Clearing browser storage removes drafts. Storage failures are reported without silently claiming a successful save.
+
+## Backups and recovery
+
+Open **Manage drafts → Download all drafts backup** to export all drafts, workspace settings, schema version, and the backup creation date. Single-draft backups remain available separately. **Restore backup** validates the file and shows its draft count/version/date before applying. Merge is the default: imported drafts receive fresh IDs and colliding names receive numbered suffixes. Replacement requires explicit confirmation. Workspace restore accepts up to 500 drafts and a 50 MB file.
+
+Unreadable JSON, unsupported future schemas, or partially damaged storage open a temporary workspace without overwriting the original. Recoverable drafts are retained when possible. The recovery notice offers **Download original recovery data** as well as a backup of the temporary workspace. Restore can replace the original data only after confirmation and a successful storage write. A failed save stays visible; export your work before closing the tab. Browser storage quotas and private browsing restrictions vary.
+
+Autosave waits briefly after editing, saves before switching drafts, and flushes on page hide where the browser allows it. Document undo/redo is scoped to the active draft and bounded by both 80 checkpoints and an estimated 8 MB of snapshot data; older steps expire sooner for large documents. Undo history is not persisted. Workspace theme/preview preferences and whole-workspace restore are outside document undo; download a backup before replacement.
+
+## Accessibility and resilience
+
+Dialogs focus a meaningful field and return to their trigger when closed. Applying an import focuses the editor (or the import trigger on small screens); deleting/restoring drafts focuses the draft selector. Mobile pane buttons announce their selected state, and hidden panes leave the tab order. Section and form-row reorder controls work with the keyboard. Visible focus indicators, stronger control contrast, reduced-motion support, and mobile touch targets are included. Clipboard denial opens selectable text for manual copying.
+
+Preview and Health errors stay local and preserve source/export. Unexpected runtime errors offer reload and current-draft download. Health runs in a Web Worker and does not block the editor. The app is tested with 100 KB and 250 KB READMEs; complexity and device speed still affect latency. See [hardening results](docs/hardening.md) for measurements and limits.
+
+After the app has loaded, editing, local preview, existing drafts, and downloads work offline. GitHub import/autofill require connectivity; rate-limit responses include a retry time when GitHub provides one. Remote images, badges, and widgets may fail offline. There is no service worker or offline reload/install guarantee.
+
+Current Chromium, Firefox, and WebKit engines run the core workflow suite, including 320, 375, 390, 430, and 768px layouts. Keyboard tests are regression coverage, not a complete screen-reader or accessibility certification.
 
 ## Import Intelligence
 
@@ -88,15 +106,17 @@ See [docs/architecture.md](docs/architecture.md). Vite builds a small JavaScript
 
 ```sh
 npm test
-npx playwright install chromium
-npm run test:browser
+npx playwright install chromium firefox webkit
+npm run test:browser        # Chromium
+npm run test:browser:all    # Chromium, Firefox, WebKit
 npm run build
+npm run test:static         # root and repository subpath hosting
 npm run preview
 ```
 
 Unit tests cover serializers, templates, sanitization, warnings, section splitting, document statistics, raw/block ownership, drafts, import errors, Unicode, and 100 KB documents. Playwright covers the showcase acceptance workflow, badges, projects, stack/social/widget/picture builders, themes, preview sizes, raw editing, history, import, storage, export, and mobile layout. GitHub responses and badge images are mocked; tests do not depend on live GitHub.
 
-GitHub Actions runs tests, browser tests, and the production build. It does not deploy.
+GitHub Actions runs unit tests, browser tests, the production build, and static-hosting smoke checks. Release branches run all three browser engines; other branches use Chromium. It does not deploy. See [contributor notes](docs/contributing.md) for formatting, fixtures, and test commands.
 
 Browser tests start their own server on port 4317 and refuse to reuse an unrelated running server. Set `README_STUDIO_TEST_PORT` to another unused port if needed.
 
@@ -115,7 +135,7 @@ Vite uses `base: './'`, so built assets work at repository subpaths. There is no
 - Local relative assets cannot be loaded from sibling files. GitHub imports resolve them in preview using saved source context. Cross-source reference definitions and HTML spanning different source contexts may render differently; exports preserve the text.
 - Arbitrary Markdown does not round-trip into specialized forms automatically. Raw editing preserves text as Custom Markdown.
 - Health is heuristic, not an exhaustive HTML validator, accessibility audit, or network link checker.
-- Local and GitHub Markdown import is limited to 2 MB. The tested editing target is 100 KB; there is no editor virtualization.
+- Local and GitHub Markdown import is limited to 2 MB. The baseline editing target is 100 KB, with additional 250 KB smoke coverage; there is no editor virtualization.
 - No OAuth, GitHub writes, accounts, AI generation, backend, cloud sync, collaboration, full banner designer, or direct widget-service integration.
 
 ## Third-party tools

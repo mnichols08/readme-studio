@@ -1,3 +1,4 @@
+import { visitTokens } from "./visit-tokens.js";
 import { marked } from "marked";
 import { analyze } from "./compatibility.js";
 import { detectSections } from "./sections.js";
@@ -5,7 +6,7 @@ export function importSummary(markdown) {
   const result = analyze(markdown);
   let details = 0,
     htmlLinks = 0;
-  marked.walkTokens(marked.lexer(markdown), (t) => {
+  visitTokens(marked.lexer(markdown), (t) => {
     if (t.type === "html") {
       const source = t.raw.replace(/<!--[\s\S]*?-->/g, "");
       details += (source.match(/<details\b/gi) || []).length;

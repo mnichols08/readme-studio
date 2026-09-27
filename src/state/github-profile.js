@@ -1,3 +1,4 @@
+import { networkMessage, rateLimitMessage } from "./network-errors.js";
 const count = (value) =>
   Number.isSafeInteger(value) && value >= 0 ? value : null;
 const string = (value) => (typeof value === "string" ? value.trim() : "");
@@ -48,16 +49,14 @@ async function json(path, fetcher, signal) {
     });
   } catch (error) {
     if (signal.aborted) throw error;
-    throw new Error(
-      "Could not reach GitHub. Check your connection and try again.",
-    );
+    throw new Error(networkMessage());
   }
   if (!response.ok)
     throw new Error(
       response.status === 404
         ? "GitHub profile not found. Check the username."
         : [403, 429].includes(response.status)
-          ? "GitHub rate limit reached. Try again later."
+          ? rateLimitMessage(response)
           : `GitHub request failed (${response.status}).`,
     );
   let data;

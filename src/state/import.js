@@ -1,3 +1,4 @@
+import { networkMessage, rateLimitMessage } from "./network-errors.js";
 import { githubUsername } from "./github-profile.js";
 export const IMPORT_LIMIT = 2_000_000;
 export function githubRepository(input) {
@@ -82,9 +83,7 @@ export async function importGithub(input, fetcher = fetch, cancellation) {
       });
     } catch (error) {
       if (controller.signal.aborted) throw error;
-      throw new Error(
-        "Could not reach GitHub. Check your connection and try again.",
-      );
+      throw new Error(networkMessage());
     }
     if (!response.ok)
       throw new Error(
@@ -93,7 +92,7 @@ export async function importGithub(input, fetcher = fetch, cancellation) {
             ? "Repository not found or not public."
             : "Repository exists, but no public README was found."
           : [403, 429].includes(response.status)
-            ? "GitHub rate limit reached. Try again later or import a file."
+            ? rateLimitMessage(response)
             : `GitHub API error (${response.status}).`,
       );
     const source = await boundedText(response, raw ? IMPORT_LIMIT : 3_000_000);

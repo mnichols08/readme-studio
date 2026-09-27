@@ -1,32 +1,75 @@
 import { analyze } from "../markdown/compatibility.js";
 import { html } from "../markdown/serialize.js";
-import { documentSegments } from "../markdown/source-context.js";
-import { isRelativeUrl, validSourceContext } from "../markdown/resolve-urls.js";
-import { duplicateWarnings } from "../markdown/merge.js";
-import { contextResolver } from "../state/import-plan.js";
 export class ReadmeHealth extends HTMLElement {
+  disconnectedCallback() {
+    this.worker?.terminate();
+    this.worker = null;
+  }
   set draft(draft) {
-    this.value = draft.markdown;
-    const warnings = duplicateWarnings(draft.markdown, contextResolver(draft));
-    for (const segment of documentSegments(draft)) {
-      if (validSourceContext(segment.sourceContext)) continue;
-      const a = analyze(segment.source);
-      if (a.images.some((i) => isRelativeUrl(i.url)))
-        warnings.push(
-          "Relative image cannot be previewed from this local or mixed-source import.",
+    this.pending = structuredClone(draft);
+    if (!this.querySelector("h2"))
+      this.innerHTML =
+        '<h2 tabindex="-1">README Health</h2><p role="status">Analyzing README…</p>';
+    if (!this.worker) {
+      try {
+        this.worker = new Worker(
+          new URL("../markdown/health.worker.js", import.meta.url),
+          { type: "module" },
         );
-      if (a.links.some((i) => isRelativeUrl(i.url)))
-        warnings.push("Relative repository link has no known source.");
+        this.worker.onmessage = ({ data }) => {
+          this.busy = false;
+          if (this.pending) {
+            this.run();
+            return;
+          }
+          if (data.error) {
+            this.failure();
+            return;
+          }
+          this.display(data.result.analysis);
+          const warnings = data.result.warnings;
+          if (navigator.onLine === false)
+            warnings.push(
+              "Remote preview media may be unavailable offline. Local editing and export still work.",
+            );
+          if (warnings.length)
+            this.insertAdjacentHTML(
+              "beforeend",
+              `<section class="health-group"><h3>Import suggestions</h3>${warnings.map((w) => `<p class="issue">${html(w)}</p>`).join("")}</section>`,
+            );
+        };
+        this.worker.onerror = () => {
+          this.busy = false;
+          this.worker?.terminate();
+          this.worker = null;
+          this.failure();
+        };
+      } catch {
+        this.failure();
+        return;
+      }
     }
-    if (warnings.length)
-      this.insertAdjacentHTML(
-        "beforeend",
-        `<section class="health-group"><h3>Import suggestions</h3>${[...new Set(warnings)].map((w) => `<p class="issue">${html(w)}</p>`).join("")}</section>`,
-      );
+    if (!this.busy) this.run();
+  }
+  run() {
+    this.busy = true;
+    this.worker.postMessage(this.pending);
+    this.pending = null;
+  }
+  failure() {
+    this.innerHTML =
+      '<h2>README Health</h2><p role="status">Health analysis is unavailable. Your Markdown is preserved and export still works.</p>';
   }
   set value(markdown) {
-    const a = analyze(markdown);
-    this.innerHTML = `<h2>README Health</h2><p class="hint">Suggestions, not a score. Your content stays yours.</p><div class="stats"><span><b>${a.words}</b> words</span><span><b>${a.images.length}</b> images</span><span><b>${a.codeBlocks}</b> code blocks</span><span><b>${(a.bytes / 1024).toFixed(1)}</b> KB</span></div>${[
+    try {
+      this.display(analyze(markdown));
+    } catch {
+      this.failure();
+    }
+  }
+  display(a) {
+    const focused = this.contains(document.activeElement);
+    this.innerHTML = `<h2 tabindex="-1">README Health</h2><p class="hint">Suggestions, not a score. Your content stays yours.</p><div class="stats"><span><b>${a.words}</b> words</span><span><b>${a.images.length}</b> images</span><span><b>${a.codeBlocks}</b> code blocks</span><span><b>${(a.bytes / 1024).toFixed(1)}</b> KB</span></div>${[
       "Accessibility",
       "Compatibility",
       "Layout",
@@ -46,6 +89,7 @@ export class ReadmeHealth extends HTMLElement {
           }</section>`,
       )
       .join("")}`;
+    if (focused) this.querySelector("h2").focus({ preventScroll: true });
   }
 }
 customElements.define("readme-health", ReadmeHealth);

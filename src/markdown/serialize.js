@@ -1,3 +1,5 @@
+import { safeUrl } from "./url-safety.js";
+export { safeUrl } from "./url-safety.js";
 export const html = (value = "") =>
   String(value).replace(
     /[&<>"']/g,
@@ -10,11 +12,8 @@ export const text = (value = "") =>
   String(value)
     .replace(/[\\`*_[\]<>#]/g, "\\$&")
     .replace(/\r?\n/g, " ");
-export function safeUrl(value = "") {
-  return /^(https?:\/\/|mailto:)/i.test(value.trim()) ? value.trim() : "";
-}
-const destination = (value) =>
-  safeUrl(value).replace(/[()\s]/g, (c) => encodeURIComponent(c));
+const destination = (value, image = false) =>
+  safeUrl(value, { image }).replace(/[()\s]/g, (c) => encodeURIComponent(c));
 export function badgeUrl(s = {}, dark = false) {
   const segment = (v) =>
     encodeURIComponent(
@@ -41,7 +40,7 @@ export function picture(s) {
     .filter((k) => /^\d+$/.test(String(s[k])))
     .map((k) => ` ${k}="${s[k]}"`)
     .join("");
-  let result = `<picture>\n  <source media="(prefers-color-scheme: dark)" srcset="${html(safeUrl(s.dark))}">\n  <img src="${html(safeUrl(s.light))}" alt="${html(s.alt)}"${size}>\n</picture>`;
+  let result = `<picture>\n  <source media="(prefers-color-scheme: dark)" srcset="${html(safeUrl(s.dark, { image: true }))}">\n  <img src="${html(safeUrl(s.light, { image: true }))}" alt="${html(s.alt)}"${size}>\n</picture>`;
   if (safeUrl(s.link))
     result = `<a href="${html(safeUrl(s.link))}">\n${result}\n</a>`;
   return s.align === "center" ? `<p align="center">\n${result}\n</p>` : result;
@@ -54,14 +53,14 @@ export function badge(s) {
       alt: s.alt || s.label || s.name,
       link: s.link,
     });
-  const img = `![${text(s.alt || s.label || s.name)}](${safeUrl(s.lightUrl) || badgeUrl(s)})`;
+  const img = `![${text(s.alt || s.label || s.name)}](${destination(s.lightUrl, true) || badgeUrl(s)})`;
   return safeUrl(s.link) ? `[${img}](${destination(s.link)})` : img;
 }
 export function widget(s) {
-  const img = `<img src="${html(safeUrl(s.image))}" alt="${html(s.alt)}">`;
+  const img = `<img src="${html(safeUrl(s.image, { image: true }))}" alt="${html(s.alt)}">`;
   if (s.align === "center")
     return `<p align="center">${safeUrl(s.link) ? `<a href="${html(safeUrl(s.link))}">${img}</a>` : img}</p>`;
-  const md = `![${text(s.alt)}](${destination(s.image)})`;
+  const md = `![${text(s.alt)}](${destination(s.image, true)})`;
   return safeUrl(s.link) ? `[${md}](${destination(s.link)})` : md;
 }
 export function social(s) {
@@ -90,7 +89,7 @@ export function project(s) {
     ...(s.links || []).map((i) => [i.name, i.url]),
   ].filter(([, u]) => safeUrl(u));
   if (s.layout === "card")
-    return `<table><tr><td>\n<h3>${html(title)}</h3>\n<p>${html(s.subtitle)}</p>\n<p>${html(s.description)}</p>\n${safeUrl(s.image) ? `<img src="${html(safeUrl(s.image))}" alt="${html(s.name)} screenshot" width="480">` : ""}\n<ul>${(
+    return `<table><tr><td>\n<h3>${html(title)}</h3>\n<p>${html(s.subtitle)}</p>\n<p>${html(s.description)}</p>\n${safeUrl(s.image, { image: true }) ? `<img src="${html(safeUrl(s.image, { image: true }))}" alt="${html(s.name)} screenshot" width="480">` : ""}\n<ul>${(
       s.highlights || ""
     )
       .split("\n")
@@ -105,8 +104,8 @@ export function project(s) {
     head +
     [
       s.description,
-      safeUrl(s.image)
-        ? `![${text(s.name)} screenshot](${destination(s.image)})`
+      safeUrl(s.image, { image: true })
+        ? `![${text(s.name)} screenshot](${destination(s.image, true)})`
         : "",
       (s.highlights || "")
         .split("\n")

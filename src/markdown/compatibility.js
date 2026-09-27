@@ -1,3 +1,4 @@
+import { visitTokens } from "./visit-tokens.js";
 import { marked } from "marked";
 export const compatibilityRules = [
   ["script", /<script\b/i, "Script tags cannot run on GitHub."],
@@ -29,14 +30,17 @@ export function analyze(markdown) {
   const images = [];
   const links = [];
   let codeBlocks = 0;
+  let separators = 0;
   const tokens = marked.lexer(markdown);
   let source = "";
-  marked.walkTokens(tokens, (t) => {
+  visitTokens(tokens, (t) => {
     if (t.type === "heading") headings.push({ level: t.depth, text: t.text });
     if (t.type === "image") images.push({ alt: t.text, url: t.href });
     if (t.type === "link") links.push({ text: t.text, url: t.href });
     if (t.type === "code") codeBlocks++;
-    if (t.type === "html") source += t.text + "\n";
+    if (t.type === "html")
+      source += t.text.replace(/<!--[\s\S]*?(?:-->|$)/g, "") + "\n";
+    if (t.type === "hr") separators++;
     if (t.type === "table" && t.header.length > 6)
       issues.push({
         category: "Layout",
@@ -80,12 +84,14 @@ export function analyze(markdown) {
       "Content density",
       "Clutter suggestions: consider reducing 30+ badges.",
     );
-  if ((markdown.match(/^\s*(---+|\*\*\*+)\s*$/gm) || []).length > 6)
+  if (separators > 6)
     add("Content density", "Clutter suggestions: reduce repeated separators.");
   if (
-    markdown
+    source
       .split("\n")
-      .some((l) => (l.match(/img\.shields\.io/g) || []).length > 8)
+      .some((l) => (l.match(/img\.shields\.io/g) || []).length > 8) ||
+    (images.filter((i) => /shields\.io/i.test(i.url)).length > 8 &&
+      headings.length === 0)
   )
     add("Layout", "A long badge row may overflow on small screens.");
   const widgets = images.filter((i) =>
@@ -96,7 +102,7 @@ export function analyze(markdown) {
       "Content density",
       "Clutter suggestions: consider fewer dynamic widgets.",
     );
-  if (widgets.some((w, i) => widgets.findIndex((v) => v.url === w.url) !== i))
+  if (new Set(widgets.map((w) => w.url)).size < widgets.length)
     add(
       "Content density",
       "Clutter suggestions: remove repeated widget images.",

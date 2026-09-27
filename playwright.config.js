@@ -7,6 +7,10 @@ if (!Number.isInteger(port) || port < 1024 || port > 65535)
 const baseURL = `http://127.0.0.1:${port}`;
 export default defineConfig({
   testDir: "./tests/browser",
+  projects: ["chromium", "firefox", "webkit"].map((name) => ({
+    name,
+    use: { browserName: name },
+  })),
   fullyParallel: true,
   workers: 2,
   use: {
