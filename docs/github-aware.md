@@ -5,3 +5,11 @@ Use **Repositories** to browse public metadata already loaded by GitHub Autofill
 Choose projects, compact/detailed/table/badge lists, links, a saved custom component, or technology suggestions. Confirm technologies and badge types, provide a workflow file for workflow badges, and review source plus sanitized rendering before applying. Previewing remote badges contacts their provider. Homepages are repository metadata, not proof of a working live demo. Languages/topics suggest technologies, never proficiency or roles. Project generation reuses Project Studio and its field ownership model.
 
 Generated repository sections store normalized source snapshots and generation settings in Studio state. README export contains only Markdown/HTML. Existing Custom Markdown is untouched. Applying output is undoable and autosaved. Cached context and generation work offline; new public lookups require a connection. No token, private data, polling, manifest scanning or GitHub write is used. GitHub API errors remain explicit.
+
+## Profile Intelligence
+
+The Profile Intelligence dialog works locally from loaded metadata and current README structure. It suggests missing sections, possible projects to feature, known technology categories and archived status review. Each opportunity explains its source; there is no numeric score or generated prose. Candidate reasons describe stars, recent updates, topics and an unverified repository homepage, never “best projects.” Repository primary languages do not measure proficiency.
+
+Open a relevant builder or review/select public profile links before adding them. Only the email returned publicly by GitHub is offered. Plain company text is not turned into an invented website; an explicit GitHub `@organization` may become a link. Run Autofill again for profiles loaded before this version to obtain the normalized profile snapshot.
+
+Dismissals belong to the current draft and survive backup/reload. They persist until the relevant suggestion context changes (not merely a new star count or timestamp). Reset dismissals explicitly to review them again. README Health retains technical, compatibility and accessibility checks; Profile Intelligence does not repeat its widget clutter or alt-text warnings.

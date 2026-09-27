@@ -98,3 +98,45 @@ test("repository picker fits mobile and cached context stays usable offline", as
     page.getByRole("button", { name: "Repositories", exact: true }),
   ).toBeFocused();
 });
+
+test("profile opportunities dismiss per draft and public links require review", async ({
+  page,
+}) => {
+  await start(page);
+  await page.locator("app-shell").evaluate((e) => {
+    e.store.raw("# Ada");
+    e.store.draft.metadata.githubProfile = {
+      snapshot: { website: "https://example.com", email: "public@example.com" },
+    };
+  });
+  await page
+    .getByRole("button", { name: "Profile Intelligence", exact: true })
+    .click();
+  await page
+    .getByRole("button", {
+      name: "Dismiss Consider an About section",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Consider an About section" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Review public links" }).click();
+  await expect(page.getByLabel("Contact Markdown")).toHaveValue(
+    /public@example.com/,
+  );
+  await page.getByRole("button", { name: "Add selected links" }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue(/mailto:public@example.com/);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue("# Ada");
+  await page
+    .getByRole("button", { name: "Profile Intelligence", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Consider an About section" }),
+  ).toHaveCount(0);
+});

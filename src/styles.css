@@ -1979,3 +1979,16 @@ repository-authoring [data-preview] {
   overflow: auto;
   max-height: 25rem;
 }
+
+profile-suggestions article {
+  border-bottom: 1px solid var(--border);
+  padding: 1rem 0;
+  overflow-wrap: anywhere;
+}
+profile-suggestions [hidden] {
+  display: none !important;
+}
+profile-suggestions textarea {
+  width: 100%;
+  min-height: 8rem;
+}
