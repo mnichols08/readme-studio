@@ -9,7 +9,7 @@ import { documentSegments } from "./source-context.js";
 import { isRelativeUrl, validSourceContext } from "./resolve-urls.js";
 import { duplicateWarnings } from "./merge.js";
 import { contextResolver } from "../state/import-plan.js";
-export function analyzeDraft(draft) {
+export function analyzeDraft(draft, core) {
   const analysis = analyze(draft.markdown),
     warnings = duplicateWarnings(draft.markdown, contextResolver(draft));
   analysis.issues.push(...componentHealth(draft.blocks || []));
@@ -51,6 +51,6 @@ export function analyzeDraft(draft) {
         "Relative repository link has no known source; its destination cannot be opened in preview.",
       );
   }
-  analysis.detail = analyzeDocument(draft.markdown);
+  analysis.detail = analyzeDocument(draft.markdown, { core });
   return { analysis, warnings: [...new Set(warnings)] };
 }

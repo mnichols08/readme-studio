@@ -2,14 +2,13 @@ import { parseSource, attributes } from "./source.js";
 import { safeUrl } from "../markdown/url-safety.js";
 import { badgeIdentity } from "../badges/duplicates.js";
 import { widgetIdentity } from "../widgets/health.js";
-export function documentStats(markdown) {
-  return {
-    lines: markdown.split(/\r\n|\r|\n/).length,
-    words: markdown.trim() ? markdown.trim().split(/\s+/u).length : 0,
-    characters: markdown.length,
-    bytes: new TextEncoder().encode(markdown).length,
-  };
-}
+import {
+  documentStats,
+  wordCount,
+  coreHeadings,
+  jsCore,
+} from "./js-fallback.js";
+export { documentStats } from "./js-fallback.js";
 export function linkKind(url) {
   if (url.startsWith("#")) return "anchor";
   if (/^mailto:/i.test(url)) return "mailto";
@@ -22,11 +21,11 @@ export function linkKind(url) {
     return "absolute";
   }
 }
-export function analyzeDocument(markdown) {
+export function analyzeDocument(markdown, { core = jsCore } = {}) {
   const parsed = parseSource(markdown),
     result = {
       version: 1,
-      stats: documentStats(markdown),
+      stats: null,
       headings: [],
       links: [],
       images: [],
@@ -165,10 +164,13 @@ export function analyzeDocument(markdown) {
     }
   }
   result.headings.sort((a, b) => a.sourceRange.start - b.sourceRange.start);
+  const coreResult = core.analyze(markdown, coreHeadings(result.headings));
+  result.stats = coreResult.stats;
+  result.engine = core.engine;
   const seenHeadings = new Set();
-  let previous = 0,
-    h1 = 0;
-  for (const heading of result.headings) {
+  let h1 = 0;
+  const skips = new Map(coreResult.headingSkips.map((s) => [s.index, s]));
+  for (const [index, heading] of result.headings.entries()) {
     const { title, level, sourceRange } = heading;
     if (level === 1 && ++h1 > 1)
       issue(
@@ -179,11 +181,11 @@ export function analyzeDocument(markdown) {
         sourceRange,
         "info",
       );
-    if (previous && level > previous + 1)
+    if (skips.has(index))
       issue(
         "heading-skip",
         "Structure",
-        `Heading level jumps from H${previous} to H${level}`,
+        `Heading level jumps from H${skips.get(index).previous} to H${level}`,
         "A consistent hierarchy helps readers navigate the document.",
         sourceRange,
         "warning",
@@ -228,7 +230,6 @@ export function analyzeDocument(markdown) {
         "info",
       );
     seenHeadings.add(key);
-    previous = level;
   }
   const seenLinks = new Set();
   for (const link of result.links) {
@@ -489,14 +490,14 @@ export function analyzeDocument(markdown) {
     ...result.headings,
   ];
   result.sections = starts.map((h, i) => {
-    const end = starts[i + 1]?.sourceRange.start ?? markdown.length,
+    const end = coreResult.sections[i].end,
       body = markdown.slice(h.sourceRange.end, end);
     return {
       title: h.title,
       level: h.level,
       sourceRange: { ...h.sourceRange, end },
       length: end - h.sourceRange.start,
-      words: documentStats(body).words,
+      words: wordCount(body),
       badgeCount: 0,
       imageCount: 0,
       linkCount: 0,

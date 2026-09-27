@@ -52,3 +52,38 @@ test("repeated analysis preserves the focused issue control", async ({
     page.getByRole("textbox", { name: "Markdown editor", exact: true }),
   ).toBeFocused();
 });
+
+test("Health falls back when the optional WASM asset fails", async ({
+  page,
+}) => {
+  await page.route("**/*.wasm", (route) => route.abort());
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Explore the sample profile" })
+    .click();
+  const editor = page.getByRole("textbox", {
+    name: "Markdown editor",
+    exact: true,
+  });
+  await editor.fill("# Fallback\n\n### Heading");
+  await page.getByRole("button", { name: "Health", exact: true }).click();
+  await expect(page.locator("readme-health")).toHaveAttribute(
+    "data-engine",
+    "JavaScript",
+  );
+  await expect(page.locator("readme-health")).toContainText(
+    "Heading level jumps",
+  );
+  await expect(editor).toHaveValue("# Fallback\n\n### Heading");
+});
+test("Health loads the optional local WASM core", async ({ page }) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Explore the sample profile" })
+    .click();
+  await page.getByRole("button", { name: "Health", exact: true }).click();
+  await expect(page.locator("readme-health")).toHaveAttribute(
+    "data-engine",
+    "WASM",
+  );
+});

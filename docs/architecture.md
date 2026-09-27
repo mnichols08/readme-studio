@@ -159,3 +159,7 @@ Catalog results render in batches of forty and never load card images. Component
 ## Structural analysis
 
 `analysis/source.js` maps normalized parser offsets back to original UTF-16 source and caches one token tree per worker. `analysis/analyze.js` emits bounded, explainable findings and section inventories. Health rejects stale source jumps. Preview sanitization and exported source remain independent.
+
+### Optional analysis core
+
+The Health worker lazily initializes `analysis/wasm-loader.js`. Runtime statistics cross the WASM boundary; Marked parsing, section boundaries and rule diagnostics stay in JavaScript to avoid large JSON transfers. The standalone Rust structural API shares fixture parity tests. Initialization is bounded, failures use JavaScript, and consumers need no Rust toolchain. See [the Rust core guide](rust-core.md).

@@ -30,3 +30,27 @@ jobs:
         with:
           name: browser-test-results
           path: test-results/
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: rustup toolchain install 1.93.0 --profile minimal --component rustfmt --target wasm32-unknown-unknown
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/wasm-pack
+            rust/readme-core/target
+          key: rust-${{ runner.os }}-1.93-wasm-pack-0.15-${{ hashFiles('rust/readme-core/Cargo.lock') }}
+      - run: cargo fmt --manifest-path rust/readme-core/Cargo.toml --check
+      - run: npm run test:rust
+      - run: command -v wasm-pack || cargo install wasm-pack --version 0.15.0 --locked
+      - run: npm ci
+      - run: npm run build:wasm
+      - run: npm run test:wasm
+      - run: npm run build
