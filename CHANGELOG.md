@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- Added local SVG Banner Builder with eight restrained styles, deterministic seeds, dimension presets, editable content, and theme palette defaults with independent overrides.
+- Generate light/dark asset pairs, preview desktop/mobile widths, download SVGs, copy source or README picture markup, and insert markup without uploading anything.
+- Bounded dimensions/text, escaped XML, required alt text, safe filenames, clipboard fallback, and draft-specific banner settings keep output portable and recoverable.
+
 ## 0.4.0
 
 - Added draft-specific visual themes, nine built-in palettes, custom palette/default editing, light/dark samples, and advisory contrast guidance.
