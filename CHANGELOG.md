@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.3
+
+- Added a consolidated Refresh Center with source inventory, fetch ages, selected/all refresh, per-source change review and partial-failure reporting.
+- Preserve manual profile/project fields and edited repository sections; retain detached source records for explicit append-only recreation.
+- Apply accepted changes in one undo/autosave step, reject stale reviews, include ownership in backups, and invalidate network Health cache after refresh.
+- Hardened optional metadata handling and lazy full-source diff rendering; GitHub requests omit credentials/referrers.
+
 ## 0.6.2
 
 - Added explicit, grouped repository/link/image/badge/widget scans with bounded concurrency, cancellation and temporary cache.

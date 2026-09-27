@@ -68,6 +68,14 @@ export class RepositoryAuthoring extends HTMLElement {
     this.list();
   }
   list() {
+    const language = this.querySelector('[data-filter="language"]'),
+      selectedLanguage = language.value;
+    language.innerHTML =
+      '<option value="">All languages</option>' +
+      [...new Set(this.repos.map((r) => r.language).filter(Boolean))]
+        .map((l) => `<option>${h(l)}</option>`)
+        .join("");
+    language.value = selectedLanguage;
     const filters = Object.fromEntries(
       [...this.querySelectorAll("[data-filter]")].map((i) => [
         i.dataset.filter,

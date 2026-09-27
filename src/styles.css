@@ -1998,3 +1998,18 @@ repository-health article {
   padding: 0.75rem 0;
   overflow-wrap: anywhere;
 }
+
+refresh-center article {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+refresh-center pre {
+  max-height: 15rem;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+refresh-center textarea {
+  width: 100%;
+  min-height: 10rem;
+}

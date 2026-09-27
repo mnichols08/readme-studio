@@ -147,3 +147,11 @@ Pack JSON is a transport, not an execution format. Raw Markdown/HTML source is p
 The customizer reuses Widget Hub and badge row forms with independent working copies. Hidden management controls leave keyboard flow; badge editor completion returns focus to an available row action. Configured preset files preserve fallback Markdown or configured field defaults for older readers. Unknown future preset metadata downgrades to custom source, while known invalid settings fail validation. No generic HTML reverse engineering is attempted.
 
 Catalog results render in batches of forty and never load card images. Component previews remain explicit except for the existing bounded badge row composer preview. Syntax highlighting is emitted as a separate statically imported bundle chunk, preserving availability after initial app load while avoiding a monolithic main chunk. No new dependency or runtime backend was added.
+
+## GitHub-aware authoring and refresh
+
+`github/repository-context.js` normalizes public metadata and adapts to the existing project import and badge provider boundaries. Repository authoring produces reviewed, escaped ordinary markup with source snapshots only in Studio state. `github/suggestions.js` is deterministic and local; context fingerprints scope per-draft dismissals without scores or inferred claims.
+
+`github/health.js` extracts tokenized links/images (including HTML picture variants) per import source segment. Explicit scans use four workers, a target cap, request timeouts, bounded body inspection and cancellable fetches. `health-cache.js` holds five-minute results only in memory. Ambiguous browser-policy failures remain unverified; no scanning is coupled to editing.
+
+`generated/registry.js` derives a source inventory from existing ownership records. `github/refresh.js` separates explicit fetching, pure preview/application and normalized snapshots. Profile path/link and project-field ownership preserve manual values; repository sections use exact generated-source ownership. Raw editing archives bounded detached source records. Recreating appends only after review. Refresh Center rejects stale draft snapshots, applies one Store checkpoint, and invalidates Health cache. Full-source diff DOM is lazy; no remote content is inserted into the UI as trusted HTML.

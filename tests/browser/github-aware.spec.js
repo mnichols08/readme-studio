@@ -184,3 +184,115 @@ test("link scan is explicit, reports partial failures and never changes export s
     "[site](https://health.example/ok)\n![image](https://health.example/missing)",
   );
 });
+
+async function seedGenerated(page) {
+  await page.locator("app-shell").evaluate(async (e) => {
+    const { authorRepositories, repositoryContext } =
+      await import("/src/github/repository-context.js");
+    const b = authorRepositories(
+      [
+        repositoryContext({
+          name: "one",
+          full_name: "ada/one",
+          description: "Old source",
+          homepage: "https://old.example",
+          topics: [],
+        }),
+      ],
+      { action: "projects" },
+    );
+    b.settings.items[0].description = "My manual description";
+    e.store.blocks([b]);
+  });
+}
+test("refresh reviews remote changes, preserves manual fields, applies once and undoes", async ({
+  page,
+}) => {
+  await start(page);
+  await seedGenerated(page);
+  const editor = page.getByRole("textbox", {
+      name: "Markdown editor",
+      exact: true,
+    }),
+    before = await editor.inputValue();
+  await page
+    .getByRole("button", { name: "Refresh GitHub data", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Refresh selected", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Review refresh changes" }),
+  ).toBeVisible();
+  await expect(page.locator("refresh-center")).toContainText(
+    "Manual project.description preserved",
+  );
+  await expect(editor).toHaveValue(before);
+  await page.getByRole("button", { name: "Apply reviewed refresh" }).click();
+  await expect(editor).toHaveValue(/My manual description/);
+  await expect(editor).toHaveValue(/https:\/\/example.com/);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(editor).toHaveValue(before);
+});
+test("raw detachment is explicit, recreation appends and offline refresh fails gracefully", async ({
+  page,
+}) => {
+  await start(page);
+  await seedGenerated(page);
+  const editor = page.getByRole("textbox", {
+    name: "Markdown editor",
+    exact: true,
+  });
+  await editor.fill("MY MANUAL README");
+  await page
+    .getByRole("button", { name: "Refresh GitHub data", exact: true })
+    .click();
+  await expect(page.locator("refresh-center")).toContainText(
+    "no longer refreshable",
+  );
+  await page
+    .getByLabel(
+      "Recreate generated version (append, preserve current Markdown)",
+    )
+    .check();
+  await page
+    .getByRole("button", { name: "Refresh selected", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Review refresh changes" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Apply reviewed refresh" }).click();
+  await expect(editor).toHaveValue(/^MY MANUAL README/);
+  await expect(editor).toHaveValue(/Recreated project/);
+  await page
+    .getByRole("button", { name: "Refresh GitHub data", exact: true })
+    .click();
+  await page.context().setOffline(true);
+  await page
+    .getByRole("button", { name: "Refresh selected", exact: true })
+    .click();
+  await expect(page.locator("refresh-center [role=status]")).toContainText(
+    "unavailable offline",
+  );
+});
+test("stale refresh review cannot overwrite newer draft changes", async ({
+  page,
+}) => {
+  await start(page);
+  await seedGenerated(page);
+  await page
+    .getByRole("button", { name: "Refresh GitHub data", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Refresh selected", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Review refresh changes" }),
+  ).toBeVisible();
+  await page.locator("app-shell").evaluate((e) => e.store.raw("NEWER EDIT"));
+  await page.getByRole("button", { name: "Apply reviewed refresh" }).click();
+  await expect(page.locator(".toast")).toContainText("Draft changed");
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue("NEWER EDIT");
+});

@@ -66,8 +66,12 @@ export function repositoryAPI(r) {
 }
 export function contextRepositories(draft) {
   const all = [
-    ...(draft.metadata?.githubProfile?.repositories || []),
-    ...(draft.metadata?.repositoryContext || []),
+    ...(Array.isArray(draft.metadata?.githubProfile?.repositories)
+      ? draft.metadata.githubProfile.repositories
+      : []),
+    ...(Array.isArray(draft.metadata?.repositoryContext)
+      ? draft.metadata.repositoryContext
+      : []),
   ];
   return [
     ...new Map(

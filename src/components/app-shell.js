@@ -1,3 +1,5 @@
+import "./refresh-center.js";
+import { invalidateHealth } from "../github/health-cache.js";
 import "./repository-health.js";
 import "./profile-suggestions.js";
 import { dismissSuggestion } from "../github/suggestions.js";
@@ -107,7 +109,7 @@ export class AppShell extends HTMLElement {
     });
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="repository-health">Check links</button><button data-action="intelligence">Profile Intelligence</button><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="refresh-github">Refresh GitHub data</button><button data-action="repository-health">Check links</button><button data-action="intelligence">Profile Intelligence</button><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
@@ -138,6 +140,9 @@ export class AppShell extends HTMLElement {
     this.dialog.addEventListener("close", () => {
       if (this.dialog.open) return; // Ignore a queued close event from the previous dialog content.
       this.querySelector("import-dialog")?.cancel();
+      this.querySelector("refresh-center")?.cancel();
+      this.querySelector("repository-health")?.controller?.abort();
+      this.querySelector("repository-authoring")?.controller?.abort();
       const target = this.afterDialogFocus || this.dialogTrigger;
       this.afterDialogFocus = null;
       if (target?.isConnected && target.getClientRects().length) target.focus();
@@ -188,6 +193,22 @@ export class AppShell extends HTMLElement {
     });
     this.addEventListener("undo", () => this.store.undo());
     this.addEventListener("redo", () => this.store.redo());
+    this.addEventListener("refresh-apply", (e) => {
+      if (e.detail.snapshot !== JSON.stringify(this.store.draft)) {
+        this.notify(
+          "Draft changed. Reopen Refresh GitHub data before applying.",
+        );
+        return;
+      }
+      const result = e.detail.result;
+      this.store.blocks(result.blocks, result.metadata);
+      invalidateHealth();
+      this.closeDialog();
+      this.focusDocument();
+      this.notify(
+        `Refresh applied. ${result.skipped.length} manually edited values or sections preserved. Undo restores the previous draft.`,
+      );
+    });
     this.addEventListener("suggestion-dismiss", (e) =>
       this.updateSuggestions(
         dismissSuggestion(this.store.draft.metadata, e.detail),
@@ -841,6 +862,11 @@ export class AppShell extends HTMLElement {
     this.querySelector("profile-suggestions h1")?.focus();
     this.notify("Suggestion preferences updated for this draft.");
   }
+  openRefresh() {
+    this.modal("<refresh-center></refresh-center>");
+    this.dialog.classList.add("import-modal");
+    this.querySelector("refresh-center").configure(this.store.draft);
+  }
   openRepositoryHealth() {
     this.modal("<repository-health></repository-health>");
     this.dialog.classList.add("import-modal");
@@ -1489,6 +1515,7 @@ export class AppShell extends HTMLElement {
   }
   action(action) {
     if (action === "snippet-packs") this.openSnippetPacks();
+    if (action === "refresh-github") this.openRefresh();
     if (action === "repository-health") this.openRepositoryHealth();
     if (action === "intelligence") this.openIntelligence();
     if (action === "repositories") this.openRepositories();

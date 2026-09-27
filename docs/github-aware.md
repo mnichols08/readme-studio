@@ -23,3 +23,7 @@ GitHub repository URLs use public metadata to show archived status, homepage/def
 Other hosts use HEAD, with a GET fallback for 405/501. GET bodies are cancelled rather than downloading large assets. A bounded 64 KB SVG inspection on that fallback can flag possible provider-error text, advisory only. Exposed image content type/size headers can reveal mismatches or files over 5 MB; absent headers and HEAD success cannot prove a valid rendered image. Remote previews themselves may already contact image hosts independently of the explicit checker.
 
 Results distinguish reachable, redirected, not found, timeout, rate limited, blocked by CORS/HEAD policy, and unknown. Browser policy and network errors cannot reliably be separated, so these are not labelled broken. See [MDN Fetch response restrictions](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch) and [GitHub repository endpoints](https://docs.github.com/en/rest/repos/repos). Redirects are reported when exposed by the browser. No scan changes source or blocks export.
+
+## Refreshing
+
+Use [Refresh GitHub data](refreshing.md) to review later metadata changes. Refresh source ownership is separate from README import history. Manual fields and raw edits remain yours; no refresh occurs in the background.

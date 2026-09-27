@@ -46,6 +46,8 @@ async function json(path, fetcher, signal) {
   try {
     response = await fetcher(`https://api.github.com${path}`, {
       headers: { Accept: "application/vnd.github+json" },
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
       signal,
     });
   } catch (error) {

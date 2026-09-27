@@ -77,6 +77,8 @@ export async function fetchProject(
     const response = await fetcher(`https://api.github.com/repos/${name}`, {
       signal: controller.signal,
       headers: { Accept: "application/vnd.github+json" },
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
     });
     if (!response.ok)
       throw new Error(
