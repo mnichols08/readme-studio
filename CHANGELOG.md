@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.3
+
+- Added reusable theme libraries, banner presets and visual bundles with rename/duplicate/delete, validated JSON import/export, theme packs, and visual packs.
+- Added a local light/dark gallery and reviewed preset application that preserves explicit overrides by default. Visual presets contain configuration only, never README prose or banner text.
+- Included visual libraries in workspace backup/restore, collision handling, and damaged-storage recovery; failed saves leave saved data intact.
+- Cached local banner samples, avoided generating SVG when only picture markup is needed, and hardened ownership records and unsafe/incomplete preset validation.
+- App light/dark changes now switch the README preview and picture variants too, while preserving the separate preview toggle and source Markdown.
+
 ## 0.4.2
 
 - Added per-section heading/divider styles, editable accent glyphs, theme inheritance/reset, and centered compact image/badge content.

@@ -206,3 +206,201 @@ test("callout, code, details and columns are available through the builder", asy
   await expect(source).toHaveValue(/console.log/);
   await expect(source).toHaveValue(/Left column/);
 });
+
+test("app color toggle synchronizes preview and picture sources without changing Markdown", async ({
+  page,
+}) => {
+  await start(page);
+  const editor = page.getByRole("textbox", {
+    name: "Markdown editor",
+    exact: true,
+  });
+  const source =
+    '<picture><source media="(prefers-color-scheme: dark)" srcset="https://example.com/dark.svg"><img src="https://example.com/light.svg" alt="Theme"></picture>';
+  await editor.fill(source);
+  const appToggle = page.getByRole("button", {
+    name: "Toggle color theme",
+    exact: true,
+  });
+  const previewToggle = page.getByRole("button", {
+    name: "Toggle preview color theme",
+    exact: true,
+  });
+  await previewToggle.click();
+  await appToggle.click();
+  await expect(page.locator(".preview-paper")).toHaveAttribute(
+    "data-theme",
+    "dark",
+  );
+  await expect(page.locator("github-preview source")).toHaveAttribute(
+    "media",
+    "all",
+  );
+  await appToggle.click();
+  await expect(page.locator(".preview-paper")).toHaveAttribute(
+    "data-theme",
+    "light",
+  );
+  await expect(page.locator("github-preview source")).toHaveAttribute(
+    "media",
+    "not all",
+  );
+  await appToggle.click();
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator(".preview-paper")).toHaveAttribute(
+    "data-theme",
+    "dark",
+  );
+  await expect(page.locator("github-preview source")).toHaveAttribute(
+    "media",
+    "all",
+  );
+  await expect(editor).toHaveValue(source);
+  await previewToggle.click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator(".preview-paper")).toHaveAttribute(
+    "data-theme",
+    "light",
+  );
+  await expect(editor).toHaveValue(source);
+});
+
+test("saved visual themes can be managed, imported and backed up without touching source", async ({
+  page,
+}) => {
+  await start(page);
+  const editor = page.getByRole("textbox", {
+    name: "Markdown editor",
+    exact: true,
+  });
+  const source = await editor.inputValue();
+  await page
+    .getByRole("button", { name: "Visual presets", exact: true })
+    .click();
+  await page.getByLabel("Preset name", { exact: true }).fill("My palette");
+  await page
+    .getByRole("button", { name: "Save current theme", exact: true })
+    .click();
+  const select = page.getByLabel("Saved preset", { exact: true });
+  await select.selectOption({ label: "themes: My palette" });
+  await page
+    .getByRole("button", { name: "Duplicate preset", exact: true })
+    .click();
+  await expect(select.locator("option")).toHaveCount(3);
+  await select.selectOption({ label: "themes: My palette (2)" });
+  await page.getByLabel("Preset name", { exact: true }).fill("Renamed");
+  await page
+    .getByRole("button", { name: "Rename preset", exact: true })
+    .click();
+  await select.selectOption({ label: "themes: Renamed" });
+  const download = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Export preset", exact: true })
+    .click();
+  const file = await download;
+  const exported = await readFile(await file.path(), "utf8");
+  expect(JSON.parse(exported).type).toBe("readme-studio-theme");
+  await page
+    .getByText("Import themes and visual presets", { exact: true })
+    .click();
+  await page.getByLabel("Visual preset JSON", { exact: true }).fill(exported);
+  await page
+    .getByRole("button", { name: "Review import", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Append reviewed presets", exact: true })
+    .click();
+  await expect(select.locator("option")).toHaveCount(4);
+  await select.selectOption({ label: "themes: Renamed (2)" });
+  page.once("dialog", (d) => d.accept());
+  await page
+    .getByRole("button", { name: "Delete preset", exact: true })
+    .click();
+  await expect(select.locator("option")).toHaveCount(3);
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(editor).toHaveValue(source);
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Visual presets", exact: true })
+    .click();
+  await expect(select.locator("option")).toHaveCount(3);
+  const library = await page
+    .locator("app-shell")
+    .evaluate((el) => el.data.visualLibrary);
+  expect(library.themes.map((t) => t.name)).toEqual(["My palette", "Renamed"]);
+});
+
+test("visual gallery is keyboard usable at mobile width and applies reviewed presets offline", async ({
+  page,
+  context,
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await start(page);
+  await context.setOffline(true);
+  await page
+    .getByRole("button", { name: "Visual presets", exact: true })
+    .click();
+  const review = page.getByRole("button", {
+    name: "Review Workshop theme",
+    exact: true,
+  });
+  await review.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "Apply Workshop", exact: true }),
+  ).toBeFocused();
+  await expect(
+    page.getByLabel("Preset apply mode", { exact: true }),
+  ).toHaveValue("derived");
+  expect(
+    await page
+      .getByRole("dialog")
+      .evaluate((el) => el.scrollWidth <= el.clientWidth),
+  ).toBe(true);
+  await page
+    .getByRole("button", { name: "Apply reviewed preset", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  expect(
+    await page
+      .locator("app-shell")
+      .evaluate((el) => el.store.draft.metadata.visualTheme.id),
+  ).toBe("workshop");
+  await page
+    .getByRole("button", { name: "Visual presets", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Save visual bundle", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Saved preset", { exact: true }).locator("option"),
+  ).toHaveCount(2);
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "Visual presets", exact: true }),
+  ).toBeFocused();
+});
+
+test("visual library save failure is visible and leaves the saved library intact", async ({
+  page,
+}) => {
+  await start(page);
+  await page
+    .getByRole("button", { name: "Visual presets", exact: true })
+    .click();
+  await page.evaluate(() => {
+    Storage.prototype.setItem = () => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    };
+  });
+  await page
+    .getByRole("button", { name: "Save current theme", exact: true })
+    .click();
+  await expect(page.locator(".visual-library-status")).toContainText(
+    /save|storage|quota/i,
+  );
+  await expect(
+    page.getByLabel("Saved preset", { exact: true }).locator("option"),
+  ).toHaveCount(1);
+});

@@ -1,5 +1,3 @@
-import { themePalette } from "../banners/banner-model.js";
-import { derive } from "../themes/theme-resolver.js";
 import { themeBlocks } from "../themes/theme-resolver.js";
 import { createBlock, serializeBlocks } from "../markdown/serialize.js";
 import { uniformContext } from "../markdown/source-context.js";
@@ -65,13 +63,6 @@ export class Store extends EventTarget {
     if (metadata?.visualTheme) {
       try {
         blocks = themeBlocks(blocks, metadata.visualTheme);
-        if (metadata.bannerSettings?.palette) {
-          metadata = structuredClone(metadata);
-          derive(
-            metadata.bannerSettings.palette,
-            themePalette(metadata.visualTheme),
-          );
-        }
       } catch {
         /* Preserve source editing if imported visual metadata is unsupported. */
       }

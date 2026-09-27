@@ -29,7 +29,7 @@ export class ThemeStudio extends HTMLElement {
     return JSON.stringify(this.value) !== this.initial;
   }
   draw() {
-    this.innerHTML = `<h1>Visual Theme Studio</h1><p>Themes guide generated badges and section accents. They cannot recolor GitHub or change Custom Markdown.</p><label>Built-in theme<select data-theme-choice aria-label="Built-in theme">${builtInThemes.map((t) => `<option value="${t.id}" ${this.value.id === t.id ? "selected" : ""}>${t.name}</option>`).join("")}</select></label><label>Theme name<input data-theme-field="name" value="${html(this.value.name)}"></label><div class="visual-workbench"><fieldset><legend>Palette and defaults</legend><div class="visual-fields">${[...paletteKeys.map((k) => [`palette.${k}`, k, this.value.palette[k]]), ["badges.lightBackground", "Light badge background", this.value.badges.lightBackground], ["badges.darkBackground", "Dark badge background", this.value.badges.darkBackground]].map(([key, label, v]) => `<label>${label}<input data-theme-field="${key}" value="${v}" aria-label="${label} hex"><input type="color" data-theme-color="${key}" value="#${v}" aria-label="${label} color picker"></label>`).join("")}${select("badges.style", "Default badge style", styles, this.value.badges.style)}${select("badges.logoTreatment", "Logo treatment", ["white", "black", "accent"], this.value.badges.logoTreatment)}${select("headings.style", "Default heading style", headingStyles, this.value.headings.style)}<label>Heading decoration<input data-theme-field="headings.decoration" value="${html(this.value.headings.decoration)}"></label>${select("dividers.style", "Default divider style", dividerStyles, this.value.dividers.style)}</div><label class="check"><input type="checkbox" data-theme-pair ${this.value.pictures.preferThemeAware ? "checked" : ""}> Prefer light/dark variants</label></fieldset><aside><h2>Theme sample</h2><label>Sample mode<select data-theme-mode aria-label="Theme sample mode"><option>light</option><option>dark</option></select></label><div class="theme-sample markdown-body"></div><ul class="theme-advice"></ul></aside></div><label>Apply mode<select data-theme-apply-mode aria-label="Apply mode"><option value="derived">Theme-derived settings only</option><option value="reset">Reset to theme defaults</option></select></label><p class="hint">Existing explicit badge colors and manually customized visuals remain unchanged unless you reset. Content is always preserved.</p><button data-apply-theme class="primary">Apply visual theme</button><p class="theme-status" role="status"></p>`;
+    this.innerHTML = `<h1>Visual Theme Studio</h1><p>Themes guide generated badges and section accents. They cannot recolor GitHub or change Custom Markdown.</p><label>Built-in theme<select data-theme-choice aria-label="Built-in theme">${builtInThemes.map((t) => `<option value="${t.id}" ${this.value.id === t.id ? "selected" : ""}>${t.name}</option>`).join("")}</select></label><label>Theme name<input data-theme-field="name" value="${html(this.value.name)}"></label><div class="visual-workbench"><fieldset><legend>Palette and defaults</legend><div class="visual-fields">${[...paletteKeys.map((k) => [`palette.${k}`, k, this.value.palette[k]]), ["badges.lightBackground", "Light badge background", this.value.badges.lightBackground], ["badges.darkBackground", "Dark badge background", this.value.badges.darkBackground]].map(([key, label, v]) => `<label>${label}<input data-theme-field="${key}" value="${v}" aria-label="${label} hex"><input type="color" data-theme-color="${key}" value="#${v}" aria-label="${label} color picker"></label>`).join("")}${select("badges.style", "Default badge style", styles, this.value.badges.style)}${select("badges.logoTreatment", "Logo treatment", ["white", "black", "accent"], this.value.badges.logoTreatment)}${select("headings.style", "Default heading style", headingStyles, this.value.headings.style)}<label>Heading decoration<input data-theme-field="headings.decoration" value="${html(this.value.headings.decoration)}"></label>${select("dividers.style", "Default divider style", dividerStyles, this.value.dividers.style)}</div><label class="check"><input type="checkbox" data-theme-pair ${this.value.pictures.preferThemeAware ? "checked" : ""}> Prefer light/dark variants</label></fieldset><aside><h2>Theme sample</h2><label>Sample mode<select data-theme-mode aria-label="Theme sample mode"><option>light</option><option>dark</option></select></label><div class="theme-sample markdown-body"></div><ul class="theme-advice"></ul></aside></div><label>Apply mode<select data-theme-apply-mode aria-label="Apply mode"><option value="derived">Theme-derived settings only</option><option value="reset">Reset to theme defaults</option></select></label><p class="hint">Existing explicit badge colors and manually customized visuals remain unchanged unless you reset. Content is always preserved.</p><button data-save-reusable-theme>Save current theme to library</button><button data-apply-theme class="primary">Apply visual theme</button><p class="theme-status" role="status"></p>`;
     this.querySelector("[data-theme-choice]").onchange = (e) => {
       this.value = structuredClone(
         builtInThemes.find((t) => t.id === e.target.value),
@@ -59,6 +59,19 @@ export class ThemeStudio extends HTMLElement {
       this.preview();
     };
     this.querySelector("[data-theme-mode]").onchange = () => this.preview();
+    this.querySelector("[data-save-reusable-theme]").onclick = () => {
+      if (this.preview())
+        this.dispatchEvent(
+          new CustomEvent("save-reusable-visual", {
+            bubbles: true,
+            detail: {
+              kind: "themes",
+              name: this.value.name,
+              theme: normalizeTheme(this.value),
+            },
+          }),
+        );
+    };
     this.querySelector("[data-apply-theme]").onclick = () => {
       if (!this.preview()) return;
       const reset =
@@ -112,6 +125,10 @@ export class ThemeStudio extends HTMLElement {
           divider(t.dividers.style, t.headings.decoration),
         ].join("\n\n"),
       );
+      for (const input of this.querySelectorAll("[data-theme-color]")) {
+        const [group, key] = input.dataset.themeColor.split(".");
+        input.value = "#" + t[group][key];
+      }
       this.querySelector(".theme-advice").innerHTML = themeWarnings(t)
         .map((v) => `<li>${html(v)}</li>`)
         .join("");
