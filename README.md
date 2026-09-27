@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.3.3** · Native Web Components · Local drafts · Static hosting
+**Version 0.5.0** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -35,11 +35,13 @@ The Markdown editor preserves formatting and supports undo/redo and two-space Ta
 
 Builder-created documents retain editable block settings. **Editing raw Markdown turns the document into one Custom Markdown block**. This deliberately gives manual text priority: new builder sections append to the preserved text. Undo restores the previous block state. “Split into sections” explicitly divides raw content into Custom Markdown sections and preserves its exact text; it does not infer structured form fields.
 
+The app light/dark toggle also switches the README preview and its theme-aware picture sources. The preview toggle can then select a different preview mode independently. Neither changes Markdown.
+
 Drafts and theme/preview settings autosave to this browser’s localStorage. Use the menu beside the draft name to rename, duplicate, delete, or create drafts. Download a JSON draft backup to retain builder settings; Markdown export preserves only the portable document. Clearing browser storage removes drafts. Storage failures are reported without silently claiming a successful save.
 
 ## Backups and recovery
 
-Open **Manage drafts → Download all drafts backup** to export all drafts, workspace settings, schema version, and the backup creation date. Single-draft backups remain available separately. **Restore backup** validates the file and shows its draft count/version/date before applying. Merge is the default: imported drafts receive fresh IDs and colliding names receive numbered suffixes. Replacement requires explicit confirmation. Workspace restore accepts up to 500 drafts and a 50 MB file.
+Open **Manage drafts → Download all drafts backup** to export all drafts, badge collections, saved themes/banner presets/visual bundles, workspace settings, schema version, and the backup creation date. Single-draft backups remain available separately. **Restore backup** validates the file and shows its draft count/version/date before applying. Merge is the default: imported drafts receive fresh IDs and colliding names receive numbered suffixes. Replacement requires explicit confirmation. Workspace restore accepts up to 500 drafts and a 50 MB file.
 
 Unreadable JSON, unsupported future schemas, or partially damaged storage open a temporary workspace without overwriting the original. Recoverable drafts are retained when possible. The recovery notice offers **Download original recovery data** as well as a backup of the temporary workspace. Restore can replace the original data only after confirmation and a successful storage write. A failed save stays visible; export your work before closing the tab. Browser storage quotas and private browsing restrictions vary.
 
@@ -167,3 +169,13 @@ Open **Project Studio** from the header or an existing project builder. Describe
 Project Studio can review public repositories by owner/repository or from the public repository list cached by GitHub Autofill. Filter/select multiple repositories, choose fields, confirm duplicates, and apply to the working showcase before saving. Refresh changes only untouched imported fields; your role, highlights, and manual edits remain yours.
 
 Project Studio now includes seven presentation choices, public GitHub import with field review and safe refresh, project Health guidance, optional link checks, search and bulk controls, and portable project packs. See the [project guide](docs/projects.md). Collapsed project forms and screenshots are deferred for larger showcases. Project packs append reviewed copies; full workspace backups retain draft structure and project metadata.
+
+Visual Theme Studio coordinates generated badge colors and builder section accents with draft-specific palettes. It does not recolor GitHub or rewrite Custom Markdown. Save reusable themes, banner presets, and visual bundles; review before applying, or export/import versioned theme and visual packs. A local gallery shows named light/dark samples. See [themes and inheritance](docs/themes.md).
+
+[Banner Builder](docs/banners.md) generates deterministic local SVG light/dark assets. Download them, commit them to your repository, and insert the provided picture markup.
+
+[Section styling](docs/section-styling.md) adds per-section heading/divider overrides, callouts, collapsible details, code samples, and compact two-column helpers.
+
+## Reusable README components
+
+[Component Library](docs/components.md) provides searchable starters, categories, favorites, recently used items, exact-source custom snippets, preview/source inspection and explicit insertion positions. Reusable snippets persist locally and join workspace backups.

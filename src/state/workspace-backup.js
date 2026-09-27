@@ -1,4 +1,14 @@
 import {
+  validateComponents,
+  mergeComponents,
+  recoverComponents,
+} from "../components-library/storage.js";
+import {
+  validateVisualLibrary,
+  mergeVisualLibraries,
+  recoverVisualLibrary,
+} from "../themes/visual-library.js";
+import {
   validateCollections,
   recoverCollections,
 } from "../badges/collections.js";
@@ -55,6 +65,8 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     active: active || drafts[0].id,
     settings: workspaceSettings(data.settings),
     badgeCollections: validateCollections(data.badgeCollections),
+    visualLibrary: validateVisualLibrary(data.visualLibrary),
+    componentLibrary: validateComponents(data.componentLibrary),
     ...(typeof data.createdAt === "string"
       ? { createdAt: data.createdAt }
       : {}),
@@ -79,6 +91,14 @@ export function restoreWorkspace(current, backup, mode) {
   return {
     ...current,
     drafts,
+    componentLibrary: mergeComponents(
+      current.componentLibrary,
+      incoming.componentLibrary,
+    ),
+    visualLibrary: mergeVisualLibraries(
+      current.visualLibrary,
+      incoming.visualLibrary,
+    ),
     badgeCollections: validateCollections({
       version: 1,
       items: [
@@ -110,6 +130,8 @@ export function recoverWorkspace(raw) {
           ...data,
           drafts,
           badgeCollections: recoverCollections(data.badgeCollections),
+          visualLibrary: recoverVisualLibrary(data.visualLibrary),
+          componentLibrary: recoverComponents(data.componentLibrary),
         })
       : null;
   } catch {

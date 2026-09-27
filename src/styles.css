@@ -1769,3 +1769,130 @@ project-studio {
 .project-guidance li {
   overflow-wrap: anywhere;
 }
+
+.visual-workbench {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  min-width: 0;
+}
+.visual-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.theme-sample {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.visual-workbench > * {
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  .visual-workbench,
+  .visual-fields {
+    grid-template-columns: 1fr;
+  }
+}
+.app-header {
+  height: auto;
+  min-height: 80px;
+  flex-wrap: wrap;
+  padding-block: 10px;
+}
+.header-actions {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.banner-preview {
+  width: 100%;
+  min-width: 0;
+}
+.banner-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+banner-builder textarea {
+  max-width: 100%;
+}
+
+.section-style-preview {
+  width: 100%;
+  overflow: auto;
+}
+
+.theme-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: 1rem;
+}
+.theme-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+.theme-card-sample {
+  padding: 10px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.theme-card img {
+  width: 100%;
+  height: auto;
+}
+.local-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-block: 12px;
+}
+.local-badge-row span {
+  color: white;
+  font:
+    12px system-ui,
+    sans-serif;
+  border-radius: 3px;
+  padding: 4px 8px;
+}
+.visual-apply-review {
+  scroll-margin-block: 1rem;
+}
+
+.component-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 12px;
+}
+.component-results article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 0;
+}
+.component-results h2 {
+  font-size: 16px;
+}
+.component-detail {
+  margin-block: 24px;
+}
+.component-detail h2 {
+  scroll-margin-block: 12px;
+}
+.component-preview {
+  overflow: auto;
+  max-height: 420px;
+  padding: 12px;
+  border: 1px solid var(--line);
+}
+.component-preview img {
+  max-width: 100%;
+}
+component-library textarea,
+component-library input,
+component-library select {
+  max-width: 100%;
+}

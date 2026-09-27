@@ -1,3 +1,4 @@
+import { present } from "../styling/presentation.js";
 import { projectHealth, projectMatches } from "../projects/project-health.js";
 import {
   readProjectPack,
@@ -415,6 +416,7 @@ export class ProjectStudio extends HTMLElement {
     const target = this.querySelector(".project-badge-composer");
     target.innerHTML = "<badge-studio></badge-studio>";
     const studio = target.firstElementChild;
+    studio.activeTheme = this.activeTheme;
     studio.collectionMode = true;
     studio.insertLabel = "Attach badge to project";
     studio.draw();
@@ -444,7 +446,10 @@ export class ProjectStudio extends HTMLElement {
   }
   preview() {
     try {
-      const md = serializeShowcase(this.value);
+      const md = present(serializeShowcase(this.value), {
+        type: "projects",
+        settings: this.value,
+      });
       this.querySelector("[data-project-output]").value = md;
       const paused = new Set(
         this.value.items

@@ -1,3 +1,27 @@
+import "./component-library.js";
+import {
+  validateComponents,
+  usedComponent,
+} from "../components-library/storage.js";
+import { insertion } from "../components-library/insertion.js";
+import "./visual-preset-gallery.js";
+import {
+  validateVisualLibrary,
+  mergeVisualLibraries,
+  emptyLibrary,
+  applyVisualPreset,
+  bannerVisual,
+} from "../themes/visual-library.js";
+import "./section-style-editor.js";
+import "./banner-builder.js";
+import { newBanner, themePalette } from "../banners/banner-model.js";
+import "./theme-studio.js";
+import { baseTheme } from "../themes/theme-model.js";
+import {
+  themeBlocks,
+  badgeDefaults,
+  derive,
+} from "../themes/theme-resolver.js";
 import "./project-studio.js";
 import { repositorySuggestions } from "../badges/providers/index.js";
 import "./badge-collection-editor.js";
@@ -70,7 +94,7 @@ export class AppShell extends HTMLElement {
     });
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
@@ -86,7 +110,11 @@ export class AppShell extends HTMLElement {
     this.dialog.addEventListener("cancel", (e) => {
       if (
         this.querySelector("badge-collection-editor")?.isDirty() ||
-        this.querySelector("project-studio")?.isDirty()
+        this.querySelector("project-studio")?.isDirty() ||
+        this.querySelector("theme-studio")?.isDirty() ||
+        this.querySelector("banner-builder")?.isDirty() ||
+        this.querySelector("section-style-editor")?.isDirty() ||
+        this.querySelector("component-library")?.isDirty()
       ) {
         e.preventDefault();
         this.closeDialog();
@@ -176,6 +204,117 @@ export class AppShell extends HTMLElement {
     this.addEventListener("open-project-studio", () =>
       this.openProjects(this.selectedBlock),
     );
+    this.addEventListener("component-library-save", (e) =>
+      this.saveComponentLibrary(e.detail),
+    );
+    this.addEventListener("component-insert", (e) =>
+      this.insertComponent(e.detail),
+    );
+    this.addEventListener("visual-library-save", (e) =>
+      this.saveVisualLibrary(e.detail.library, e.detail.message),
+    );
+    this.addEventListener("save-reusable-visual", (e) => {
+      try {
+        const incoming = emptyLibrary();
+        incoming[e.detail.kind].push({
+          id: crypto.randomUUID(),
+          name: e.detail.name,
+          ...(e.detail.theme ? { theme: e.detail.theme } : {}),
+          ...(e.detail.banner ? { banner: bannerVisual(e.detail.banner) } : {}),
+        });
+        this.saveVisualLibrary(
+          mergeVisualLibraries(this.data.visualLibrary, incoming),
+          "Reusable preset saved locally.",
+        );
+      } catch (error) {
+        this.notify(error.message);
+      }
+    });
+    this.addEventListener("visual-preset-apply", (e) => {
+      if (this.presetSnapshot !== JSON.stringify(this.store.draft)) {
+        this.notify("Draft changed. Reopen Visual presets before applying.");
+        return;
+      }
+      try {
+        const next = applyVisualPreset(this.store.draft, e.detail.preset, {
+          reset: e.detail.reset,
+        });
+        this.store.blocks(next.blocks, next.metadata);
+        this.closeDialog();
+        this.notify(
+          "Visual preset applied. README content is preserved; Undo is available.",
+        );
+      } catch (error) {
+        e.target.status(error.message);
+      }
+    });
+    this.addEventListener("visual-download", (e) =>
+      this.download(e.detail.content, e.detail.name, e.detail.type),
+    );
+    this.addEventListener("section-style-save", (e) => {
+      if (this.styleSnapshot !== JSON.stringify(this.store.draft)) {
+        this.notify("Draft changed. Reopen Section Styling before saving.");
+        return;
+      }
+      const blocks = structuredClone(this.store.draft.blocks),
+        b = blocks.find((b) => b.id === e.detail.id);
+      if (!b || b.type === "custom") return;
+      b.settings.presentation = e.detail.settings.presentation;
+      if (b.type === "divider") {
+        b.settings.dividerStyle = e.detail.settings.dividerStyle;
+        b.settings._theme ||= { derived: {}, overrides: [] };
+        if (
+          e.detail.settings.presentation._theme?.overrides?.includes("divider")
+        )
+          b.settings._theme.overrides.push("dividerStyle");
+        else
+          derive(
+            b.settings,
+            { dividerStyle: e.detail.settings.dividerStyle },
+            { reset: true },
+          );
+      }
+      this.store.blocks(blocks);
+      e.target.initial = JSON.stringify(e.target.value);
+      this.closeDialog();
+      this.notify("Section style saved. Undo is available.");
+    });
+    this.addEventListener("banner-save", (e) => {
+      if (this.bannerSnapshot !== JSON.stringify(this.store.draft)) {
+        this.notify("Draft changed. Reopen Banner Builder before saving.");
+        return;
+      }
+      const blocks = structuredClone(this.store.draft.blocks);
+      if (e.detail.markdown)
+        blocks.push(createBlock("custom", { markdown: e.detail.markdown }));
+      this.store.blocks(blocks, {
+        ...this.store.draft.metadata,
+        bannerSettings: e.detail.banner,
+      });
+      this.bannerSnapshot = JSON.stringify(this.store.draft);
+      e.target.initial = JSON.stringify(e.target.value);
+      if (e.detail.markdown) {
+        this.closeDialog();
+        this.focusDocument();
+        this.notify(
+          "Banner markup inserted. Commit the downloaded SVG files at the shown paths.",
+        );
+      } else e.target.status("Banner settings saved in this draft.");
+    });
+    this.addEventListener("theme-apply", (e) => {
+      if (this.visualSnapshot !== JSON.stringify(this.store.draft)) {
+        this.notify("Draft changed. Reopen Theme Studio before applying.");
+        return;
+      }
+      const { theme, reset } = e.detail;
+      const next = applyVisualPreset(this.store.draft, { theme }, { reset });
+      this.store.blocks(next.blocks, next.metadata);
+      e.target.initial = JSON.stringify(e.target.value);
+      this.closeDialog();
+      this.notify(
+        "Visual theme applied. Explicit overrides were preserved unless reset. Undo is available.",
+      );
+    });
     this.addEventListener("project-save", (e) => {
       const studio = e.target;
       if (this.projectSnapshot !== JSON.stringify(this.store.draft)) {
@@ -402,7 +541,11 @@ export class AppShell extends HTMLElement {
   closeDialog(target) {
     if (
       (this.querySelector("badge-collection-editor")?.isDirty() ||
-        this.querySelector("project-studio")?.isDirty()) &&
+        this.querySelector("project-studio")?.isDirty() ||
+        this.querySelector("theme-studio")?.isDirty() ||
+        this.querySelector("banner-builder")?.isDirty() ||
+        this.querySelector("section-style-editor")?.isDirty() ||
+        this.querySelector("component-library")?.isDirty()) &&
       !confirm(
         "Discard unsaved studio edits? Save or export your work to keep it.",
       )
@@ -445,6 +588,171 @@ export class AppShell extends HTMLElement {
       return false;
     }
   }
+  saveComponentLibrary({
+    library,
+    message = "Component library saved.",
+    savedSnippet = false,
+  }) {
+    try {
+      if (this.storageBlocked)
+        throw Error(
+          "Storage recovery is active. Export recovery data before restoring storage.",
+        );
+      const next = validateComponents(library);
+      saveDrafts({
+        ...this.data,
+        componentLibrary: next,
+        drafts: this.data.drafts.map((d) =>
+          d.id === this.store.draft.id ? this.store.draft : d,
+        ),
+      });
+      this.data.componentLibrary = next;
+      this.querySelector("component-library")?.accept(
+        next,
+        message,
+        savedSnippet,
+      );
+      this.notify(message);
+      return true;
+    } catch (e) {
+      this.querySelector("component-library")?.status(
+        "Could not save components: " + e.message,
+      );
+      this.notify("Could not save components: " + e.message);
+      return false;
+    }
+  }
+  openComponents() {
+    this.componentSnapshot = JSON.stringify(this.store.draft);
+    this.componentCursor = this.editor.input.selectionStart;
+    const selection = this.editor.value.slice(
+      this.editor.input.selectionStart,
+      this.editor.input.selectionEnd,
+    );
+    this.modal("<component-library></component-library>");
+    this.dialog.classList.add("import-modal");
+    this.querySelector("component-library").configure({
+      library: this.data.componentLibrary,
+      blocks: this.store.draft.blocks,
+      selectedBlock: this.selectedBlock,
+      selection,
+    });
+  }
+  insertComponent(detail) {
+    if (
+      this.querySelector("component-library")?.isDirty() &&
+      !confirm("Insert this component and discard the unsaved My Snippet form?")
+    )
+      return;
+    if (this.componentSnapshot !== JSON.stringify(this.store.draft)) {
+      this.notify(
+        "Draft changed. Reopen the component library before inserting.",
+      );
+      return;
+    }
+    try {
+      const result = insertion(this.store.draft, detail.markdown, {
+        ...detail,
+        cursor: this.componentCursor,
+      });
+      if (result.blocks) this.store.blocks(result.blocks);
+      else this.store.raw(result.markdown);
+      this.saveComponentLibrary({
+        library: usedComponent(this.data.componentLibrary, detail.component.id),
+        message: "Component inserted; recent usage saved.",
+      });
+      this.querySelector("component-library").dirty = false;
+      this.closeDialog();
+      this.focusDocument();
+    } catch (e) {
+      this.querySelector("component-library")?.status(e.message);
+    }
+  }
+  saveVisualLibrary(value, message) {
+    try {
+      if (this.storageBlocked)
+        throw Error(
+          "Storage recovery is active. Download recovery data or restore workspace storage before saving visual presets.",
+        );
+      const library = validateVisualLibrary(value),
+        plan = {
+          ...this.data,
+          visualLibrary: library,
+          drafts: this.data.drafts.map((d) =>
+            d.id === this.store.draft.id ? this.store.draft : d,
+          ),
+        };
+      saveDrafts(plan);
+      this.data.visualLibrary = library;
+      const gallery = this.querySelector("visual-preset-gallery");
+      if (gallery) {
+        gallery.value = library;
+        gallery.status(message);
+        gallery.querySelector("[data-visual-selected]").focus();
+      }
+      this.querySelector("theme-studio .theme-status")?.replaceChildren(
+        document.createTextNode(message),
+      );
+      this.querySelector("banner-builder")?.status(message);
+      this.notify(message);
+      return true;
+    } catch (e) {
+      const message = "Could not save visual presets: " + e.message;
+      this.querySelector("visual-preset-gallery")?.status(message);
+      this.notify(message);
+      return false;
+    }
+  }
+  openVisualPresets() {
+    this.presetSnapshot = JSON.stringify(this.store.draft);
+    this.modal("<visual-preset-gallery></visual-preset-gallery>");
+    this.dialog.classList.add("import-modal");
+    const gallery = this.querySelector("visual-preset-gallery");
+    gallery.draftTheme = this.store.draft.metadata.visualTheme || baseTheme;
+    gallery.draftBanner =
+      this.store.draft.metadata.bannerSettings || newBanner(gallery.draftTheme);
+    gallery.value = this.data.visualLibrary;
+  }
+  openSectionStyle() {
+    this.styleSnapshot = JSON.stringify(this.store.draft);
+    this.modal("<section-style-editor></section-style-editor>");
+    this.dialog.classList.add("import-modal");
+    this.querySelector("section-style-editor").configure(
+      this.store.draft.blocks,
+      this.store.draft.metadata.visualTheme || baseTheme,
+    );
+  }
+  openBanner() {
+    this.bannerSnapshot = JSON.stringify(this.store.draft);
+    this.modal("<banner-builder></banner-builder>");
+    this.dialog.classList.add("import-modal");
+    const builder = this.querySelector("banner-builder");
+    builder.activeTheme = this.store.draft.metadata.visualTheme || baseTheme;
+    try {
+      builder.settings =
+        this.store.draft.metadata.bannerSettings ||
+        newBanner(builder.activeTheme);
+    } catch {
+      builder.settings = newBanner();
+      this.notify(
+        "Stored banner settings could not be read. Original Markdown remains available.",
+      );
+    }
+  }
+  openTheme() {
+    this.visualSnapshot = JSON.stringify(this.store.draft);
+    this.modal("<theme-studio></theme-studio>");
+    this.dialog.classList.add("import-modal");
+    try {
+      this.querySelector("theme-studio").theme =
+        this.store.draft.metadata.visualTheme || baseTheme;
+    } catch {
+      this.querySelector("theme-studio").theme = baseTheme;
+      this.notify(
+        "Stored theme could not be read. Choose a valid theme; original source is preserved.",
+      );
+    }
+  }
   openProjects(id) {
     const block =
       this.store.draft.blocks.find(
@@ -459,6 +767,7 @@ export class AppShell extends HTMLElement {
     studio.availableRepositories = structuredClone(
       this.store.draft.metadata.githubProfile?.repositories || [],
     );
+    studio.activeTheme = this.store.draft.metadata.visualTheme || baseTheme;
     studio.collections = structuredClone(this.data.badgeCollections.items);
     try {
       studio.settings = block?.settings || {
@@ -523,6 +832,11 @@ export class AppShell extends HTMLElement {
     this.modal("<badge-studio></badge-studio>");
     this.dialog.classList.add("import-modal");
     const studio = this.querySelector("badge-studio");
+    studio.activeTheme = this.store.draft.metadata.visualTheme || baseTheme;
+    if (this.store.draft.metadata.visualTheme)
+      studio.badge = derive(studio.value, badgeDefaults(studio.activeTheme), {
+        reset: true,
+      });
     studio.blocks = structuredClone(this.store.draft.blocks);
     studio.selectedBlock = selectedBlock;
     studio.suggestions = repositorySuggestions(this.store.draft);
@@ -582,11 +896,11 @@ export class AppShell extends HTMLElement {
       )
         .map(
           ([type, name], i) =>
-            `<button data-block-type="${type}"><span class="library-icon">${["H", "≡", "⌘", "↗", "▣", "◈", "⌁", "✎", "@", "—", "&lt;/&gt;", "◇", "▦", "◐"][i]}</span><span>${name}</span><span>+</span></button>`,
+            `<button data-block-type="${type}"><span class="library-icon">${["H", "≡", "⌘", "↗", "▣", "◈", "⌁", "✎", "@", "—", "&lt;/&gt;", "◇", "▦", "◐", "!", "▸", "{}", "▥"][i]}</span><span>${name}</span><span>+</span></button>`,
         )
         .join(
           "",
-        )}</div><button class="wide" data-action="templates">Browse templates →</button><div class="coming-soon"><small>ON THE HORIZON</small><p>Banner builder <span>Coming soon</span></p></div>`;
+        )}</div><button class="wide" data-action="components">Browse Component Library</button><button class="wide" data-action="templates">Browse templates →</button><button class="wide" data-action="banner">Open Banner Builder</button>`;
       return;
     }
     const blocks = this.store.draft.blocks;
@@ -878,7 +1192,7 @@ export class AppShell extends HTMLElement {
         if (ticket !== generation || !input.isConnected) return;
         const snapshot = JSON.stringify(this.data);
         this.querySelector("#restore-status").textContent =
-          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.badgeCollections.items.length} badge collections`;
+          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.badgeCollections.items.length} badge collections · ${backup.visualLibrary.themes.length} themes · ${backup.visualLibrary.banners.length} banner presets · ${backup.visualLibrary.bundles.length} visual bundles`;
         this.querySelector("#restore-review").innerHTML =
           '<label>Restore mode<select id="restore-mode" aria-label="Restore mode"><option value="merge">Merge with local drafts</option><option value="replace">Replace local drafts</option></select></label><label class="check"><input id="restore-confirm" type="checkbox"> I confirm replacing local drafts, collections, or original recovery data</label><button id="apply-restore" class="primary">Restore backup</button>';
         this.querySelector("#restore-mode").focus();
@@ -920,6 +1234,11 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (action === "components") this.openComponents();
+    if (action === "visual-presets") this.openVisualPresets();
+    if (action === "section-style") this.openSectionStyle();
+    if (action === "banner") this.openBanner();
+    if (action === "visual-theme") this.openTheme();
     if (action === "projects") this.openProjects();
     if (action === "collections") this.openCollections();
     if (action === "badges") this.openBadges();
@@ -959,6 +1278,7 @@ export class AppShell extends HTMLElement {
       case "theme":
         this.data.settings.theme =
           this.data.settings.theme === "dark" ? "light" : "dark";
+        this.data.settings.previewTheme = this.data.settings.theme;
         this.applySettings();
         this.save();
         break;

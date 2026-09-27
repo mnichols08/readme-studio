@@ -109,3 +109,21 @@ Badge components use native controls and the app's dialog focus management. Comp
 `project-health.js` provides pure advisory analysis, reused by the existing worker and the studio. `project-links.js` is an explicit browser-only HEAD checker with bounded concurrency, timeout, cancellation, and unverified results for network restrictions. `project-pack.js` validates a portable version-1 schema, strips unrelated metadata, and resolves collisions on append. Working copies remain separate until Save showcase; the ordinary draft backup/history paths retain structured project content.
 
 Collapsed editors defer form creation. Preview HTML is prepared in an inert template and screenshot sources for collapsed entries are removed before insertion; this affects only the temporary preview DOM. Layout serializers retain all source URLs. No new runtime dependency was added for project features.
+
+## Visual Design Studio (v0.4.x)
+
+`themes/theme-model.js` validates normalized visual configuration without arbitrary CSS. `theme-resolver.js` tracks the prior derived values and explicit overrides, including intentional same-value overrides. Theme application modifies cloned builder-owned settings; Custom Markdown bypasses presentation entirely. `styling/` contains pure heading/divider/callout/details/code/table serializers and advisory Health checks. User-entered source remains authoritative and preview sanitization only touches temporary DOM.
+
+`banners/` validates bounded dimensions and strings, generates deterministic self-contained escaped SVG using a JavaScript PRNG, and serializes safe filenames and picture markup. SVG contains no scripts, foreignObject, remote fonts, remote images, or user markup. The builder displays SVG through blob-backed image elements, revokes URLs, debounces edits, and caches output. Gallery samples cache at most nine themes times two modes. Picture markup does not render SVG. Banner editor work is isolated from unrelated Markdown changes.
+
+`themes/visual-library.js` owns portable schema-1 themes, banner presets, bundles and packs. Normalization strips unrelated fields and explicitly rejects executable presentation payloads. Banner presets whitelist visual fields, excluding README/banner content and asset paths. Applying a reviewed preset is a draft history operation; saving reusable library entries is an independent workspace operation. Components use working copies, stale-draft guards, native modal focus behavior and selectable clipboard fallbacks.
+
+`workspace-backup.js` includes the optional versioned visual library; old workspaces normalize to an empty library without rewriting their source. Library mutations validate and write before changing persisted in-memory state. Invalid library data uses the existing storage recovery boundary and preserves original recovery bytes. Restore resolves IDs and names without silent overwrite. Saved libraries do not establish live references to drafts.
+
+Workspace app theme changes synchronize `previewTheme`, then apply preview colors and temporary picture media overrides. The separate preview control may override that mode afterward. Both preferences persist outside document undo and never mutate source.
+
+## Component Library (v0.5.0)
+
+`components-library/` owns versioned component normalization, explicit interpolation, immutable catalog copies, pure filtering/insertion and local preference storage. Templates are data, never executable functions. Custom snippets bypass interpolation and retain exact source. Metadata is bounded plain text; generated URL fields share the safe URL boundary. Raw template HTML is sanitized only in preview and remains ordinary source in exports.
+
+The component dialog renders at most forty search cards initially, loads no card images and renders a selected source only on request. Native controls retain keyboard operation; insertion captures a draft snapshot and cursor before opening, rejects stale drafts and offers append/before/after/cursor without replacing selected text. v0.5.0 insertion creates Custom Markdown blocks. Workspace validation/recovery includes the optional component library, preserving old workspaces and original damaged storage.

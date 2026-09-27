@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.5.0
+
+- Added a searchable Component Library with 34 editable starters, category filters, source inspection and sanitized previews.
+- Added explicit cursor/before/after/append insertion, local favorites/recents and exact-source custom snippet saving.
+- Included versioned reusable components in workspace backup/recovery with safe interpolation and collision handling.
+
+## 0.4.3
+
+- Added reusable theme libraries, banner presets and visual bundles with rename/duplicate/delete, validated JSON import/export, theme packs, and visual packs.
+- Added a local light/dark gallery and reviewed preset application that preserves explicit overrides by default. Visual presets contain configuration only, never README prose or banner text.
+- Included visual libraries in workspace backup/restore, collision handling, and damaged-storage recovery; failed saves leave saved data intact.
+- Cached local banner samples, avoided generating SVG when only picture markup is needed, and hardened ownership records and unsafe/incomplete preset validation.
+- App light/dark changes now switch the README preview and picture variants too, while preserving the separate preview toggle and source Markdown.
+
+## 0.4.2
+
+- Added per-section heading/divider styles, editable accent glyphs, theme inheritance/reset, and centered compact image/badge content.
+- Added readable callouts, collapsible details, safe fenced code samples, and escaped two-column helpers using ordinary GitHub Markdown/HTML.
+- Added advisory styling Health checks for centering/divider/prompt/glyph overuse, nested details, and large table layouts. Custom Markdown remains excluded from styling.
+
+## 0.4.1
+
+- Added local SVG Banner Builder with eight restrained styles, deterministic seeds, dimension presets, editable content, and theme palette defaults with independent overrides.
+- Generate light/dark asset pairs, preview desktop/mobile widths, download SVGs, copy source or README picture markup, and insert markup without uploading anything.
+- Bounded dimensions/text, escaped XML, required alt text, safe filenames, clipboard fallback, and draft-specific banner settings keep output portable and recoverable.
+
+## 0.4.0
+
+- Added draft-specific visual themes, nine built-in palettes, custom palette/default editing, light/dark samples, and advisory contrast guidance.
+- Theme-owned settings follow subsequent theme changes while explicit overrides remain intact. Reset is explicit and confirmed; Custom Markdown is never decorated.
+- Integrated badge defaults and builder/project heading/divider presentation with undo, draft persistence, and ordinary Markdown output.
+
 ## 0.3.3
 
 - Added advisory project Health checks for missing context, links, alt text, roles, repeated names/repositories/technology aliases, large stacks, archived status conflicts, and stale source activity.
