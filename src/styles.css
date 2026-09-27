@@ -1992,3 +1992,9 @@ profile-suggestions textarea {
   width: 100%;
   min-height: 8rem;
 }
+
+repository-health article {
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 0;
+  overflow-wrap: anywhere;
+}

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2
+
+- Added explicit, grouped repository/link/image/badge/widget scans with bounded concurrency, cancellation and temporary cache.
+- Distinguish redirects, missing resources, rate limits, timeouts and ambiguous browser-policy failures; inspect public repository changes and exposed image headers.
+- Resolve imported relative paths for validation without rewriting source. Export remains available regardless of scan results.
+
 ## 0.6.1
 
 - Added explainable Profile Intelligence, eligible project candidates and curated technology grouping.
