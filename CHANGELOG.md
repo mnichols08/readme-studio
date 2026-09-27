@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2
+
+Import Intelligence.
+
+- Review GitHub, local Markdown, and Studio backups before choosing new draft, confirmed replacement, append, or merge.
+- Preserve exact source while splitting H1/H2 sections, with preamble handling and advisory section kinds.
+- Resolve relative GitHub images, picture sources, repository links, and local anchors in preview only; show unresolved local images clearly.
+- Explicit section merge choices, likely matches, duplicate warnings, resulting Markdown review, and one-step undo/redo.
+- Re-import GitHub-backed drafts with SHA change detection, source provenance in backups, bounded 2 MB reads, cancellation, and actionable errors.
+- Add realistic fixtures and unit/browser coverage for source preservation, URL safety, merge decisions, ownership, keyboard use, limits, and performance.
+
 ## 0.1.1 — GitHub Autofill
 
 - GitHub profile autofill from a username or profile URL, with a review step and optional fields.

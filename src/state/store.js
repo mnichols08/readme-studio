@@ -1,4 +1,5 @@
 import { createBlock, serializeBlocks } from "../markdown/serialize.js";
+import { uniformContext } from "../markdown/source-context.js";
 export class Store extends EventTarget {
   constructor(draft) {
     super();
@@ -18,6 +19,7 @@ export class Store extends EventTarget {
   raw(markdown) {
     if (markdown === this.draft.markdown) return;
     this.checkpoint();
+    const sourceContext = uniformContext(this.draft);
     const current =
       this.draft.blocks.length === 1 && this.draft.blocks[0].type === "custom"
         ? this.draft.blocks[0]
@@ -25,8 +27,8 @@ export class Store extends EventTarget {
     this.draft.markdown = markdown;
     this.draft.blocks = [
       current
-        ? { ...current, settings: { markdown } }
-        : createBlock("custom", { markdown }),
+        ? { ...current, settings: { markdown }, sourceContext }
+        : { ...createBlock("custom", { markdown }), sourceContext },
     ];
     this.emit("raw");
   }

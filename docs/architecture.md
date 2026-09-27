@@ -22,7 +22,7 @@ Sanitization is a security boundary. `markdown/compatibility.js` is a separate a
 
 ## Block ownership
 
-A block is `{ id, type, settings, separator? }`. `serializeBlock` emits ordinary Markdown/HTML. `serializeBlocks` inserts a blank line by default. Explicitly split imported sections use a single newline separator to preserve the original source exactly. No ownership comments are added to exported content.
+A block is `{ id, type, settings, separator? }`. `serializeBlock` emits ordinary Markdown/HTML. `serializeBlocks` inserts a blank line by default. Explicitly split imported sections use an empty separator: every byte of spacing is already included in their exact source slices. No ownership comments are added to exported content.
 
 Builder operations replace only the block list and regenerate its document. Manual editor input changes the draft into one Custom Markdown block containing the exact source. Later builder operations append or edit this explicit representation. This prevents hidden stale forms from overwriting a manual edit. Undo checkpoints include both Markdown and blocks, so the ownership transition can be reversed.
 
@@ -34,7 +34,21 @@ The explicit section splitter recognizes H1/H2 boundaries outside backtick and t
 
 Malformed saved data is not overwritten automatically: the app opens a temporary working draft, reports the storage problem, and allows exports. Quota/unavailable-storage errors are visible. JSON backups preserve settings for individual blocks; exported README files intentionally have no application metadata. History is session-local.
 
-GitHub import fetches only the public GitHub README API endpoint, using the raw media type and a timeout. Imports create new drafts. There is no arbitrary HTML fetch/render API, token storage, or authenticated write path.
+GitHub import fetches repository metadata and the public README endpoint, with a 20-second timeout and bounded response reads. Base64 content is decoded as UTF-8 without discarding a BOM. Larger READMEs use the raw media type and recheck the SHA to reject a remote change during retrieval. Markdown is capped at 2 MB of UTF-8 bytes, not JavaScript characters. There is no arbitrary HTML fetch/render API, token storage, or authenticated write path.
+
+## Import pipeline
+
+`markdown/resolve-urls.js` is a pure URL resolver. `render(markdown, { sourceContext })` sanitizes first, then resolves safe image/srcset/link attributes in the preview DOM. GitHub context contains owner, repository, ref, README path, SHA, and fetch time. Images use raw GitHub URLs; files use GitHub blob URLs. Anchors stay local and the preview assigns heading IDs. Unsafe schemes and unresolvable local paths cannot become application-relative requests. The sanitizer allowlist is unchanged; image data URLs are rejected by the resolver.
+
+`markdown/sections.js` uses top-level Marked tokens and maps normalized lexer offsets back to the untouched source, including CRLF. It recognizes H1/H2/H3 and supports chosen boundary levels. Fences, comments, raw HTML, inline code, and nested blockquote/list content are not mistaken for structural boundaries. Genuinely parsed Markdown headings inside details can be boundaries. Each result has original start/end offsets, title, level, kind, body, and exact source. Classification is advisory metadata.
+
+`markdown/merge.js` indexes normalized headings, deterministic body hashes, conservative kind aliases, and image URLs. Hash matches are verified against content; normalization is comparison-only. Candidate lists are bounded, and similarity checks inspect a bounded prefix only for matching headings. Ambiguous matches and duplicates never select or delete anything. `assembleMerge` requires every imported decision, rejects conflicting replacements, and retains original slices. Only newly joined boundaries may gain blank lines. This is a section-selection tool, not a Git three-way merge.
+
+`state/import-plan.js` creates pure new/replace/append/merge plans. `import-dialog` loads a source, summarizes it, collects choices, and reviews the result before dispatching an apply event. A snapshot check rejects stale reviews. Current-draft operations call `Store.blocks` once with blocks and metadata, so undo restores both. New draft creation is separate. Requests cancel on input changes, source changes, close, or removal, and generation checks discard obsolete responses.
+
+Draft `metadata.importSource` supports re-import; an additive import history records other fetched sources. Blocks can override context with `sourceContext`, including explicit null for local content. Adjacent blocks with matching context render together, preserving reference definitions and HTML across splits. Cross-source groups render independently. Splits/merges derive context from the actual source ranges, ignoring separator-only whitespace. A raw edit that collapses mixed-source blocks marks the result mixed rather than assigning an incorrect repository. Preview then warns for ambiguous relative images. Context and classification are backup-only metadata, never inserted into exported Markdown.
+
+Plain Markdown imports have no inferred generated ownership. Valid Studio backups retain blocks and metadata for new/replace; append retains their blocks. Section split/merge produces user-owned Custom Markdown and does not invent autofill ownership. Existing detached-autofill section records remain conservative to avoid later duplicate generation. No storage schema migration is required; old v1 drafts with no context still work.
 
 ## GitHub profile autofill
 

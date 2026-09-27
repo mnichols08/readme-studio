@@ -1312,3 +1312,63 @@ readme-health h3 {
     display: none;
   }
 }
+/* Import review keeps source text separate from the sanitized live preview. */
+.modal.import-modal {
+  width: min(1080px, calc(100vw - 32px));
+  max-width: 1080px;
+}
+import-dialog {
+  display: block;
+}
+import-dialog nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+import-dialog label {
+  display: block;
+  margin: 12px 0;
+}
+import-dialog select {
+  max-width: 100%;
+}
+import-dialog [aria-pressed="true"] {
+  outline: 2px solid var(--accent, #7357df);
+}
+.source-review {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--surface, #f4f4f6);
+  color: var(--text, #252530);
+  font-size: 12px;
+}
+.merge-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.merge-columns > section {
+  min-width: 0;
+}
+.merge-section {
+  padding: 12px 0;
+  border-bottom: 1px solid #8885;
+}
+.merge-section p {
+  font-size: 12px;
+}
+.unresolved-image {
+  display: inline-block;
+  padding: 8px;
+  border: 1px dashed #888;
+  font-size: 13px;
+}
+@media (max-width: 680px) {
+  .merge-columns {
+    grid-template-columns: 1fr;
+  }
+}
