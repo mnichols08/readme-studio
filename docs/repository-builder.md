@@ -10,7 +10,21 @@ Choose **Improve README** on an audit result or queue item, or **Improve next** 
 
 Public repository name, description, homepage, primary language and topics appear in editable fields. Review them, correct them, or clear any optional value. A homepage is not a verified live demo, and language/topics are not claims about proficiency or completeness. Creating the draft confirms the displayed values. No additional metadata requests are made while editing the form.
 
-Select only useful sections and expand **Review generated Markdown** to inspect the full source before creation. Existing README source is kept verbatim in its own Custom Markdown block by default, followed by reviewed context and the selected sections. This does not merge or deduplicate headings: deselect already-covered sections. Uncheck the preserve option only to explicitly start a separate fresh local draft. **Open existing README unchanged** remains available, including a blank draft for a missing README. Cancel/Escape creates nothing.
+## Import and match sections
+
+Expand **Import existing README** to choose a UTF-8 file (up to 2 MB), paste Markdown, or use the current draft. File imports retain BOM, Unicode and line endings; pasted text uses browser textarea line endings. Invalid or oversized files leave the prior source intact. Imports are temporary until a new draft is created.
+
+The builder identifies top-level Markdown and HTML headings, including common aliases. Fenced examples, quoted headings, HTML comments and pre/code examples do not count as sections. Matching headings are deselected by default. Related headings are reported as partial evidence; empty and badge-only sections need manual review. Unknown/non-English structures may require manual matching. These are project-type suggestions, not universal requirements or completeness scores.
+
+## Review a merge or replacement
+
+Keep preservation checked to retain the original source verbatim in a Custom Markdown block and append only selected suggestions. Reviewed repository context is optional and off by default for existing READMEs. Deselect every suggestion for an unchanged result. Existing sections are never automatically rewritten.
+
+Choose **Review changes** to inspect both full source panes and the unified diff, then check **I reviewed the diff and approve this exact result**. Approval is tied to the source, output and reviewed settings; editing them invalidates it. This review is required for imported READMEs even when preservation is unchecked to create a replacement. The result is always a new local draft, never a remote write.
+
+**Open existing README unchanged** bypasses templates and keeps exact source. Cancel/Escape creates nothing. The review heading receives keyboard focus; standard dialog focus return and dismissal remain available.
+
+Expand **Responsive rendered preview** for sanitized GitHub-style rendering, light/dark modes and 320px/768px maximum widths. Remote images contact their hosts only when the rendered preview is opened. Preview sanitization never rewrites exported Markdown.
 
 ## Complete the documentation
 

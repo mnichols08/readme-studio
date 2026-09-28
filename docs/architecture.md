@@ -231,3 +231,11 @@ See [repository audit hardening](audit-hardening.md) for conservative placeholde
 ## Project-specific documentation
 
 `documentation/project-types.js` centralizes specialized section descriptors, recommended section IDs and fresh-template structures. `documentation/sections.js` reuses the pure serializer with typed row columns, literal code languages and safe link/image output. `builder-form` uses these row descriptors with the existing keyboard controls and 200-row cap. The Library reads `metadata.documentationProjectType`, falling back to `metadata.repositoryReadme.templateId`; changing recommendations checkpoints metadata only and leaves Markdown unchanged. Registry URLs are user-entered and are not fetched. Screenshot previews use the existing sanitizer/remote-image boundary. Existing section types and prior templates are not migrated or rewritten.
+
+## Repository template hardening
+
+`documentation/template-merge.js` matches top-level Markdown/HTML headings against explicit aliases and related topics. It reports source lines and content evidence without changing source or claiming completeness. Code/comment examples are excluded; missing suggestions alone are selected by default. Matching runs when the import/template changes, not on every metadata keystroke.
+
+UTF-8 file imports are byte-bounded and preserve BOM/line endings. Async imports use a sequence token so late reads cannot replace a newer import or reopen a closed dialog. Local imports clear prior GitHub source context. The builder retains the original as a separate Custom Markdown block and makes context insertion optional.
+
+Changed existing-source plans require a snapshot containing original source, generated source, draft name and metadata. The diff uses the shared safe text/value rendering; any settings change invalidates approval. Both the form and app-shell apply handler verify approval. Unchanged-source opening remains separate. Preview is lazy, sanitized and independent from exported source; width/theme controls do not change the approved plan.

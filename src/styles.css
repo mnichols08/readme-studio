@@ -2321,3 +2321,30 @@ repository-readme-builder button {
     min-height: 44px;
   }
 }
+
+repository-readme-builder [hidden] {
+  display: none !important;
+}
+repository-readme-builder .builder-preview-scroll {
+  max-height: 500px;
+  overflow: auto;
+  min-width: 0;
+}
+repository-readme-builder .preview-paper {
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 16px;
+  box-sizing: border-box;
+}
+repository-readme-builder [data-review-panel] {
+  min-width: 0;
+}
+repository-readme-builder [data-diff] {
+  max-height: 350px;
+  overflow: auto;
+}
+repository-readme-builder .hint,
+repository-readme-builder [data-guidance] {
+  overflow-wrap: anywhere;
+}
