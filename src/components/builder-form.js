@@ -1,3 +1,9 @@
+import {
+  documentationSections,
+  documentationDefaults,
+  environmentFields,
+  emptyEnvironmentRow,
+} from "../documentation/sections.js";
 import { calloutStyles } from "../styling/blocks.js";
 import { explicitOverride } from "../themes/theme-resolver.js";
 import { html, serializeBlock } from "../markdown/serialize.js";
@@ -79,8 +85,15 @@ export const blockTypes = {
   details: "Collapsible Details",
   code: "Code Sample",
   columns: "Two Columns",
+  ...Object.fromEntries(
+    Object.entries(documentationSections).map(([type, definition]) => [
+      type,
+      definition.name,
+    ]),
+  ),
 };
 export function defaults(type) {
+  if (documentationSections[type]) return documentationDefaults(type);
   if (type === "callout") return { style: "note", title: "", body: "" };
   if (type === "details")
     return { summary: "More details", body: "", open: false };
@@ -130,7 +143,7 @@ export class BuilderForm extends HTMLElement {
         const path = prefix + f.key;
         const value = object[f.key] ?? "";
         const attrs = `data-path="${path}" aria-label="${html(f.label)}"`;
-        return `<label>${html(f.label)}${f.type === "textarea" ? `<textarea ${attrs} rows="4">${html(value)}</textarea>` : f.type === "select" ? `<select ${attrs}>${f.options.map((o) => `<option ${o === value ? "selected" : ""}>${html(o)}</option>`).join("")}</select>` : `<input ${attrs} value="${html(value)}">`}</label>`;
+        return `<label>${html(f.label)}${f.type === "textarea" ? `<textarea ${attrs} rows="4">${html(value)}</textarea>` : f.type === "checkbox" ? `<input type="checkbox" ${attrs} ${value ? "checked" : ""}>` : f.type === "select" ? `<select ${attrs}>${f.options.map((o) => `<option ${o === value ? "selected" : ""}>${html(o)}</option>`).join("")}</select>` : `<input ${attrs} value="${html(value)}">`}</label>`;
       })
       .join("");
   }
@@ -138,14 +151,37 @@ export class BuilderForm extends HTMLElement {
     return this.value.settings.items
       .map(
         (item, i) =>
-          `<fieldset><legend>Entry ${i + 1}</legend>${this.fields(fields, item, `items.${i}.`)}${this.value.type === "projects" ? `<label>Custom links (Label | URL, one per line)<textarea data-links="${i}">${html((item.links || []).map((l) => `${l.name} | ${l.url}`).join("\n"))}</textarea></label>` : ""}<div class="row-actions"><button type="button" data-row="up" data-index="${i}" ${i === 0 ? "disabled" : ""} aria-label="Move entry ${i + 1} up">↑</button><button type="button" data-row="down" data-index="${i}" ${i === this.value.settings.items.length - 1 ? "disabled" : ""} aria-label="Move entry ${i + 1} down">↓</button><button type="button" data-row="duplicate" data-index="${i}">Duplicate entry</button><button type="button" data-row="remove" data-index="${i}">Remove entry</button></div></fieldset>`,
+          `<fieldset><legend>Entry ${i + 1}</legend>${this.fields(fields, item, `items.${i}.`)}${this.value.type === "projects" ? `<label>Custom links (Label | URL, one per line)<textarea data-links="${i}">${html((item.links || []).map((l) => `${l.name} | ${l.url}`).join("\n"))}</textarea></label>` : ""}<div class="row-actions"><button type="button" data-row="up" data-index="${i}" ${i === 0 ? "disabled" : ""} aria-label="Move entry ${i + 1} up">↑</button><button type="button" data-row="down" data-index="${i}" ${i === this.value.settings.items.length - 1 ? "disabled" : ""} aria-label="Move entry ${i + 1} down">↓</button><button type="button" data-row="duplicate" data-index="${i}" ${this.value.type === "doc-environment" && this.value.settings.items.length >= 200 ? "disabled" : ""}>Duplicate entry</button><button type="button" data-row="remove" data-index="${i}">Remove entry</button></div></fieldset>`,
       )
       .join("");
   }
   draw() {
     const { type, settings: s } = this.value;
     let form = "";
-    if (type === "callout")
+    if (documentationSections[type]) {
+      const definition = documentationSections[type];
+      if (
+        s.version !== 1 ||
+        (definition.rows && (!Array.isArray(s.items) || s.items.length > 200))
+      )
+        throw Error("Unsupported documentation settings.");
+      form =
+        '<p class="hint">Document verified project facts. Text areas accept Markdown; command fields generate code fences. Leave unknown details blank.</p>' +
+        this.fields(
+          [
+            field("title", "Section heading"),
+            ...definition.fields.map((f) =>
+              field(f.key, f.label, f.kind === "text" ? "text" : "textarea"),
+            ),
+          ],
+          s,
+        );
+      if (definition.rows)
+        form +=
+          '<p class="hint">Never paste real secrets here. Use placeholders such as YOUR_API_TOKEN in .env.example; keep real .env credentials outside version control.</p>' +
+          this.rows(environmentFields) +
+          `<button type="button" data-add="environment" ${s.items.length >= 200 ? "disabled" : ""}>Add environment variable</button>`;
+    } else if (type === "callout")
       form = this.fields(
         [
           field("style", "Callout style", "select", calloutStyles),
@@ -395,7 +431,10 @@ export class BuilderForm extends HTMLElement {
       }
       if (b.dataset.add) {
         const kind = b.dataset.add;
-        if (kind === "technology") {
+        if (kind === "environment") {
+          if (s.items.length >= 200) return;
+          s.items.push(emptyEnvironmentRow());
+        } else if (kind === "technology") {
           const item = {};
           this.querySelectorAll("[data-custom]").forEach(
             (i) => (item[i.dataset.custom] = i.value),

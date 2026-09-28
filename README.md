@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.2.0 — Repository README Builder.** Start with one of 12 project-specific templates or improve an audited README with reviewed repository suggestions and preserved source. See the [repository builder guide](docs/repository-builder.md).
+**Version 1.2.1 — Documentation Section Builders.** Edit 18 repository documentation sections with structured fields, command blocks and environment-variable rows while exporting ordinary Markdown. See the [documentation sections guide](docs/documentation-sections.md).
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

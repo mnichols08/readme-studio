@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1
+
+- Eighteen structured repository documentation builders: Overview, Features, Installation, Quick Start, Usage, Configuration, Environment Variables, Commands, API, Examples, Architecture, Testing, Deployment, Troubleshooting, Contributing, Security, License and Roadmap.
+- Installation fields for package manager, command, prerequisites and notes; Testing fields for commands, test types and coverage notes.
+- Environment-variable rows with required flags, descriptions, example placeholders, keyboard reorder/duplicate/remove controls and explicit guidance against committing real secrets.
+- New repository templates use structured builders for supported sections. Existing source and older Custom Markdown templates are not converted or rewritten.
+- Ordinary Markdown serialization, safe command fences/table cells, portable settings, undo/redo and raw-edit source preservation.
+
 ## 1.2.0
 
 - First-class repository README builder with 12 templates: Web App, Library, CLI, API, npm Package, Rust Crate, Python Package, Game, Open Source, Tutorial, Documentation and Generic.
