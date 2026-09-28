@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.2
+
+- Stack DNA workspace summary groups selected repository evidence into meaningful technology categories using a versioned curated catalog.
+- Exact ecosystem/package mappings; no AI, substring guessing, skill claims or quality scores. Unmapped dependencies remain Unknown.
+- Core combines Language, Framework and Runtime; Data contains Database. All thirteen categories are filterable with keyboard-accessible source evidence.
+- Preserves package, dependency kind and repository associations across merged technology identities. GitHub primary-language metadata and explicit runtime engine declarations remain labeled evidence sources.
+- Bounded evidence details and summary rendering, deterministic ordering, mobile coverage and no additional network requests or dependencies.
+
 ## 1.3.1
 
 - Normalized direct dependency records from package.json, Cargo.toml, pyproject.toml, requirements.txt and go.mod: name, ecosystem, kind and repository association.

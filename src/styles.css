@@ -2367,3 +2367,28 @@ stack-results ul {
 stack-results li {
   margin-block: 6px;
 }
+
+stack-dna {
+  display: block;
+  min-width: 0;
+  margin-block: 16px;
+}
+stack-dna .dna-technologies {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+stack-dna .dna-technologies button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+stack-dna [data-dna-evidence] {
+  max-height: 400px;
+  overflow: auto;
+  padding: 8px;
+}
+stack-dna [hidden] {
+  display: none !important;
+}

@@ -253,3 +253,11 @@ The stack-results component renders escaped, paginated repository evidence. Resu
 The pure dependencies module normalizes name/ecosystem/kind/repository tuples and merges source evidence without collapsing different roles or repositories. Python/npm normalization differs from Rust/Go spelling preservation. Go indirect and unused/unresolved Cargo workspace declarations are excluded before result limits; same-file workspace references retain their consuming dependency kind.
 
 The version-2 session result envelope includes normalized dependencies. Cache keys canonicalize repository casing while retaining branch identity. Cached responses preserve the caller's repository label for audit selection identity. The UI renders normalized evidence; no new network request, package-manager execution, persistence schema or draft mutation is introduced.
+
+### Stack DNA (1.3.2)
+
+The versioned catalog in stack-intelligence/catalog.js maps exact normalized ecosystem/package identities to technology IDs and one primary category. The pure dna.js model merges associations and source evidence across currently selected result records. Stable ordering and bounded retained evidence avoid output dependence on request completion order. Unknown entries retain their names/ecosystems rather than falling into a guessed category.
+
+The version-3 session result envelope carries the existing GitHub primary-language field and explicit package.json engine signals. These provide labeled evidence without fetching language files, workflows or registry data. Engine values remain unexecuted data. No runtime inference is made from manifest presence alone.
+
+The stack-dna Web Component filters categories, groups Core/Data for display, and exposes bounded evidence with keyboard focus return. It reads existing result state and never changes drafts, skills or scan consent. Raw dependency evidence remains independently available.
