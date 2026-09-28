@@ -131,16 +131,33 @@ try {
         .filter({ hasText: "Audit complete: 1 of 1" })
         .waitFor();
       await page
-        .locator("repository-audit")
+        .locator("repository-audit [data-audit-results]")
         .getByText("Stub README for a CLI", { exact: true })
         .waitFor();
       await page
         .getByLabel("Project type for example/sample", { exact: true })
         .selectOption("web-app");
       await page
-        .locator("repository-audit")
+        .locator("repository-audit [data-audit-results]")
         .getByText("Stub README for a Web App", { exact: true })
         .waitFor();
+      await page
+        .locator("repository-audit")
+        .getByRole("button", { name: "README Attention Queue", exact: true })
+        .click();
+      await page
+        .locator("readme-attention-queue")
+        .getByText("Medium attention", { exact: true })
+        .waitFor();
+      await page
+        .locator("readme-attention-queue")
+        .getByRole("button", {
+          name: "Mark intentionally minimal",
+          exact: true,
+        })
+        .click();
+      if (await page.locator("readme-attention-queue [data-item]").count())
+        throw Error("Production queue did not suppress the marked README");
       await page
         .getByRole("button", { name: "Audit selected", exact: true })
         .focus();

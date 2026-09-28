@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.1.1 — Project-Type Intelligence.** Audit public repositories with explainable project-type suggestions, manual overrides and documentation expectations tailored to their purpose, without quality scores. See the [audit guide](docs/repository-auditing.md).
+**Version 1.1.2 — README Attention Queue.** Choose which repository README to improve next with explainable High/Medium/Low priorities, project-type filters and local dismissal controls. See the [attention queue guide](docs/readme-attention-queue.md).
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -22,7 +22,7 @@ Choose a template, import Markdown, open a Studio project, or start blank. Use t
 - Compose sections, badges and collections, project showcases, components and reusable snippets.
 - Coordinate themes, generate local light/dark SVG banners, and configure attributed external widget embeds.
 - Import public GitHub data, review refreshes, analyze compatibility and apply explicit, undoable refactors.
-- Audit selected public repositories for missing, stub, minimal, basic, detailed or documentation-heavy READMEs, with advisory expectations for 14 project types.
+- Audit selected public repositories with advisory expectations for 14 project types, then choose the next README from the attention queue.
 - Save portable `.readme-studio.json` projects or export Markdown, packs and full workspace backups.
 - Optionally publish reviewed README, asset and workflow changes through a separately configured GitHub App service.
 
