@@ -1,3 +1,4 @@
+import { portableData } from "./portable-data.js";
 import {
   validateComponents,
   mergeComponents,
@@ -92,7 +93,11 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
   };
 }
 export function createBackup(data) {
-  return { ...data, version: 1, createdAt: new Date().toISOString() };
+  return {
+    ...portableData(data),
+    version: 1,
+    createdAt: new Date().toISOString(),
+  };
 }
 export function restoreWorkspace(current, backup, mode) {
   const incoming = validateWorkspace(backup);

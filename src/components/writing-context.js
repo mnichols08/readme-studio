@@ -11,7 +11,7 @@ export class WritingContext extends HTMLElement {
     this.draft = draft;
     this.ranges = ranges.filter((r) => r.id.startsWith("section:"));
     this.repositories = repositoryChoices(draft, auditSession.repositories);
-    this.innerHTML = `<fieldset><legend>Optional trusted context — nothing selected by default</legend>
+    this.innerHTML = `<fieldset><legend>Optional reviewed context — nothing selected by default</legend>
       <p>Use only facts you trust. No new GitHub fetch occurs. Loaded data may be outdated; inspect and edit it before selecting. Project type and metadata below describe this draft independently of the repository choice. Style guidance is not factual evidence.</p>
       <label>Context repository<select data-context-repo><option value="">Choose an already loaded repository</option>${this.repositories.map((r, i) => `<option value="${i}">${h(r.name)}</option>`).join("")}</select></label>
       <label>Context section<select data-context-section>${this.ranges.map((r, i) => `<option value="${i}">${h(r.label)}</option>`).join("")}</select></label>
