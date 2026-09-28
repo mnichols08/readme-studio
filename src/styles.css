@@ -5,6 +5,67 @@
   color: var(--text);
   font-size: 12px;
 }
+.workspace-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.workspace-tools details {
+  flex: 1 1 170px;
+  min-width: 0;
+}
+.workspace-tools summary {
+  cursor: pointer;
+  padding: 8px;
+  font-weight: 600;
+}
+.workspace-tools details > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.workspace-tools button {
+  padding: 6px 8px;
+}
+.dialog-context {
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+[data-search-results] {
+  max-height: 50dvh;
+  overflow: auto;
+}
+[data-search-results] small {
+  color: var(--muted);
+}
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+markdown-editor textarea {
+  font-size: var(--editor-font, 13px) !important;
+}
+@media (max-width: 780px) {
+  .workspace-tools {
+    max-height: 180px;
+    overflow: auto;
+    flex-wrap: nowrap;
+  }
+  .workspace-tools details {
+    flex: 0 0 160px;
+  }
+  .workspace-tools button,
+  .workspace-tools summary {
+    min-height: 44px;
+  }
+}
 .profile-choice input {
   width: auto;
   margin: 0;
@@ -2067,4 +2128,13 @@ workflow-builder {
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+app-shell > .workspace {
+  height: max(420px, calc(100dvh - 310px));
 }

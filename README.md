@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.8.3** · Native Web Components · Local drafts · Static hosting
+**Version 0.9.0** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -28,6 +28,10 @@ Open the local URL printed by Vite. No credentials, Rust toolchain, backend, or 
 - Light/dark `<picture>` markup with alt text, dimensions, links, and alignment.
 
 Choose Minimal, Developer Showcase, Open Source, Student, or Terminal on first launch, import a public GitHub README, or start blank. The sample uses fictional placeholder content. Developer Showcase follows the structural patterns described for [the reference profile](https://github.com/mnichols08/mnichols08), without copying its personal text.
+
+## Workspace navigation
+
+Create, Design, Review, GitHub and Save group the tools into collapsible task areas. Use Ctrl/Cmd+K to search commands, sections, projects, collections, snippets and widgets. Settings and a bounded local activity log live under Save. Pane and disclosure choices persist. See the [workspace guide](docs/workspace.md) and [documentation index](docs/index.md).
 
 ## Editing and drafts
 

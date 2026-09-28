@@ -60,6 +60,7 @@ try {
     )
       throw new Error("Production WASM asset failed to load");
     await page
+      .getByRole("navigation", { name: "Workspace tools" })
       .getByRole("button", { name: "Safe refactors", exact: true })
       .click();
     await page.getByLabel(/Normalize heading hierarchy/).check();

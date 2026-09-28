@@ -1,3 +1,4 @@
+import { sourceDiffMarkup, fillSourceDiff } from "./source-diff.js";
 import {
   generatedAssets,
   rewriteOwnedBanner,
@@ -192,20 +193,27 @@ export class PublishDialog extends HTMLElement {
         this.kind === "workflow" ? "workflowsWritable" : "writable"
       ];
     this.querySelector("[data-review]").innerHTML =
-      `<h2>Review ${b.sha ? "updated file" : "New file"}</h2><p>${html(b.repository)} · branch ${html(b.branch)} · ${html(b.path)}</p><p>SHA baseline: <code>${html(b.sha || "New file (does not exist)")}</code></p><p>${diff.added} added / ${diff.removed} removed lines in changed region. Sections: ${html(diff.sections.join(", ") || "body content")}.</p><div class="publish-sources"><label>Remote ${this.kind === "workflow" ? "YAML" : "Markdown"}<textarea data-before rows="8" readonly></textarea></label><label>Prepared ${this.kind === "workflow" ? "YAML" : "Markdown"}<textarea data-after rows="8" readonly></textarea></label></div><details open><summary>Unified source diff</summary><pre data-diff tabindex="0" aria-label="Publishing diff"></pre></details><label>Commit message<input data-message value="Update README with README Studio" maxlength="500"></label><label class="check"><input type="checkbox" data-confirm> I reviewed this diff and confirm ${b.sha ? "updating" : "creating"} this exact repository, branch, path and every listed asset write.</label><button data-commit ${!writable || (b.content === this.source && !this.assetRows?.some((r) => r.status !== "unchanged")) ? "disabled" : ""}>Confirm and publish README</button><div data-result></div><section data-stale></section><details><summary>Publish on a new branch instead</summary><p>Create a branch from ${html(b.branch)} at commit ${html(b.commitSha || "unknown")}. This creates only a branch; committing still needs a fresh review.</p><label>New branch name<input data-new-branch value="readme-studio/update-${new Date().toISOString().slice(0, 10)}"></label><label class="check"><input type="checkbox" data-confirm-branch> I confirm creating this branch in ${html(b.repository)}.</label><button data-create-branch ${!writable ? "disabled" : ""}>Create branch for review</button></details>`;
+      `<h2>Review ${b.sha ? "updated file" : "New file"}</h2><p>${html(b.repository)} · branch ${html(b.branch)} · ${html(b.path)}</p><p>SHA baseline: <code>${html(b.sha || "New file (does not exist)")}</code></p><p>${diff.added} added / ${diff.removed} removed lines in changed region. Sections: ${html(diff.sections.join(", ") || "body content")}.</p>${sourceDiffMarkup({ beforeLabel: `Remote ${this.kind === "workflow" ? "YAML" : "Markdown"}`, afterLabel: `Prepared ${this.kind === "workflow" ? "YAML" : "Markdown"}`, label: "Publishing diff" })}<label>Commit message<input data-message value="Update README with README Studio" maxlength="500"></label><label class="check"><input type="checkbox" data-confirm> I reviewed this diff and confirm ${b.sha ? "updating" : "creating"} this exact repository, branch, path and every listed asset write.</label><button data-commit ${!writable || (b.content === this.source && !this.assetRows?.some((r) => r.status !== "unchanged")) ? "disabled" : ""}>Confirm and publish README</button><div data-result></div><section data-stale></section><details><summary>Publish on a new branch instead</summary><p>Create a branch from ${html(b.branch)} at commit ${html(b.commitSha || "unknown")}. This creates only a branch; committing still needs a fresh review.</p><label>New branch name<input data-new-branch value="readme-studio/update-${new Date().toISOString().slice(0, 10)}"></label><label class="check"><input type="checkbox" data-confirm-branch> I confirm creating this branch in ${html(b.repository)}.</label><button data-create-branch ${!writable ? "disabled" : ""}>Create branch for review</button></details>`;
     if (this.assetRows?.length) {
       const area = document.createElement("section");
-      area.innerHTML = `<h2>Asset publish plan</h2><p>Separate commits, not an atomic transaction. README is written last. ${this.rewriteApplied ? "Owned banner paths updated in prepared source." : "No banner source rewrite applied."}</p>${this.assetRows.map((r, i) => `<details><summary>${html(r.path)} — ${r.status} — ${r.bytes} bytes</summary><p>Baseline SHA: ${html(r.baseline.sha || "New file")}. ${html(r.warning)} ${this.source.includes(r.path.split("/").at(-1)) ? "" : "Warning: asset appears unreferenced by this README."}</p><pre data-asset-diff="${i}"></pre></details>`).join("")}<div data-asset-results role="status"></div>`;
+      area.innerHTML = `<h2>Asset publish plan</h2><p>Separate commits, not an atomic transaction. README is written last. ${this.rewriteApplied ? "Owned banner paths updated in prepared source." : "No banner source rewrite applied."}</p>${this.assetRows.map((r, i) => `<details><summary>${html(r.path)} — ${r.status} — ${r.bytes} bytes</summary><p>Baseline SHA: ${html(r.baseline.sha || "New file")}. ${html(r.warning)} ${this.source.includes(r.path.split("/").at(-1)) ? "" : "Warning: asset appears unreferenced by this README."}</p><div data-asset-diff="${i}"></div></details>`).join("")}<div data-asset-results role="status"></div>`;
       this.querySelector("[data-review]").prepend(area);
-      this.assetRows.forEach(
-        (r, i) =>
-          (area.querySelector(`[data-asset-diff="${i}"]`).textContent =
-            publishDiff(r.baseline.content, r.content).text),
-      );
+      this.assetRows.forEach((r, i) => {
+        const panel = area.querySelector(`[data-asset-diff="${i}"]`);
+        panel.innerHTML = sourceDiffMarkup({
+          beforeLabel: `Current ${r.path}`,
+          afterLabel: `Generated ${r.path}`,
+          label: `Asset diff ${r.path}`,
+        });
+        fillSourceDiff(panel, r.baseline.content, r.content);
+      });
     }
-    this.querySelector("[data-before]").value = b.content;
-    this.querySelector("[data-after]").value = this.source;
-    this.querySelector("[data-diff]").textContent = diff.text;
+    fillSourceDiff(
+      this.querySelector("[data-review] > .source-diff"),
+      b.content,
+      this.source,
+      diff.text,
+    );
     if (this.kind === "workflow") {
       this.querySelector("[data-commit]").textContent =
         "Confirm and publish workflow";

@@ -13,8 +13,26 @@ import {
   recoverCollections,
 } from "../badges/collections.js";
 import { validateDraft } from "./drafts.js";
+import { validateActivity } from "../workspace/commands.js";
 export const BACKUP_LIMIT = 50_000_000;
 export const workspaceSettings = (s = {}) => ({
+  pane: ["build", "markdown", "preview", "health"].includes(s?.pane)
+    ? s.pane
+    : "build",
+  collapsed: s?.collapsed === true,
+  editorFont: ["13", "15", "18"].includes(String(s?.editorFont))
+    ? String(s.editorFont)
+    : "13",
+  reduceMotion: s?.reduceMotion === true,
+  closedGroups: Array.isArray(s?.closedGroups)
+    ? [
+        ...new Set(
+          s.closedGroups.filter((g) =>
+            ["Create", "Design", "Review", "GitHub", "Save"].includes(g),
+          ),
+        ),
+      ]
+    : [],
   theme: s?.theme === "dark" ? "dark" : "light",
   preview: ["1012", "760", "640", "375"].includes(String(s?.preview))
     ? String(s.preview)
@@ -64,6 +82,7 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     drafts,
     active: active || drafts[0].id,
     settings: workspaceSettings(data.settings),
+    activity: validateActivity(data.activity),
     badgeCollections: validateCollections(data.badgeCollections),
     visualLibrary: validateVisualLibrary(data.visualLibrary),
     componentLibrary: validateComponents(data.componentLibrary),

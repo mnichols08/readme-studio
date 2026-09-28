@@ -1,3 +1,4 @@
+import { sourceDiffMarkup, fillSourceDiff } from "./source-diff.js";
 import { html } from "../markdown/serialize.js";
 export class RefactorDialog extends HTMLElement {
   configure(draft) {
@@ -28,7 +29,7 @@ export class RefactorDialog extends HTMLElement {
     this.worker = null;
   }
   draw() {
-    this.innerHTML = `<h1>Safe refactors</h1><p>Choose deterministic source changes, then review Before, After and Diff. Nothing changes until you apply.</p><p class="issue">Applying converts this draft to Custom Markdown so stale builder settings cannot overwrite your changes. Undo restores the original source and ownership.</p><div data-choices><p role="status">Finding conservative matches…</p></div><label>Badge row output<select data-badge-mode><option value="spacing">Normalize spacing</option><option value="paragraph">Plain HTML row</option><option value="center">Centered HTML row</option></select></label><div class="row-actions"><button data-review disabled>Review selected refactors</button><button data-cancel>Cancel</button></div><p data-status role="status"></p><section data-review-panel hidden><h2>Review source changes</h2><label>Before<textarea data-before aria-label="Before refactor" rows="7" readonly></textarea></label><label>After<textarea data-after aria-label="After refactor" rows="7" readonly></textarea></label><h3>Diff</h3><pre data-diff tabindex="0" aria-label="Refactor diff"></pre><button data-apply class="primary" disabled>Apply reviewed refactors</button></section>`;
+    this.innerHTML = `<h1>Safe refactors</h1><p>Choose deterministic source changes, then review Before, After and Diff. Nothing changes until you apply.</p><p class="issue">Applying converts this draft to Custom Markdown so stale builder settings cannot overwrite your changes. Undo restores the original source and ownership.</p><div data-choices><p role="status">Finding conservative matches…</p></div><label>Badge row output<select data-badge-mode><option value="spacing">Normalize spacing</option><option value="paragraph">Plain HTML row</option><option value="center">Centered HTML row</option></select></label><div class="row-actions"><button data-review disabled>Review selected refactors</button><button data-cancel>Cancel</button></div><p data-status role="status"></p><section data-review-panel hidden><h2>Review source changes</h2>${sourceDiffMarkup({ beforeLabel: "Before refactor", afterLabel: "After refactor", label: "Refactor diff" })}<button data-apply class="primary" disabled>Apply reviewed refactors</button></section>`;
     this.querySelector("[data-badge-mode]").onchange = () => {
       this.invalidate();
       this.request();

@@ -179,3 +179,9 @@ The Health worker lazily initializes `analysis/wasm-loader.js`. Runtime statisti
 Generated asset publishing uses pure plans in `publishing/assets.js`. The browser reviews each file and the optional owned banner rewrite; the server independently regenerates requested SVGs from normalized settings. Each remote write has a SHA precondition. Files are sequential, README last, with explicit partial-result reporting. Banner ownership is exact-source metadata and detaches on raw edits.
 
 Workflow generation is a pure structured model and central quoted YAML serializer (`workflows/`). Generated sources carry no Studio runtime. The server re-generates YAML before accepting workflow writes and separately gates Workflows permission; scripts/commands execute only after users commit/run them on GitHub. Local settings do not hold secret values.
+
+## Workspace navigation (0.9.0)
+
+`workspace/commands.js` defines task groups, bounded search and the activity allowlist. `workspace/ui.js` wires those definitions to existing AppShell actions; it never performs a GitHub write or source transformation. Shortcuts invoke the same actions and unsaved-dialog guards as visible controls. Preferences pass through `workspaceSettings`; pending operation state is not persisted. Activity stores only known command identifiers and numeric timestamps, capped at 50 entries.
+
+`components/source-diff.js` supplies shared read-only source panes and a textual diff for publishing, assets, workflows, refactors, import/merge and refresh. It assigns source using DOM `value`/`textContent`, preserving the preview/export boundary. Approval, stale snapshots and conflict choices remain owned by the calling flow. Linear changed-region diffs avoid quadratic sequence-comparison memory; their line counts describe the changed region, not a minimal patch.

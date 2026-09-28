@@ -1,4 +1,5 @@
 import { bindDialogDismissal } from "./dialog-dismissal.js";
+import { installWorkspace } from "../workspace/ui.js";
 import "./workflow-builder.js";
 import "./publish-dialog.js";
 import "./refactor-dialog.js";
@@ -103,6 +104,7 @@ export class AppShell extends HTMLElement {
     this.data.badgeCollections ||= { version: 1, items: [] };
     this.draw();
     this.load(this.data.active);
+    this.mobile(this.data.settings.pane || "build", false);
     window.addEventListener("pagehide", () => this.save());
     if (!saved) this.welcome();
     if (this.storageError) this.storageNotice(this.storageError);
@@ -112,6 +114,11 @@ export class AppShell extends HTMLElement {
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") this.save();
     });
+  }
+  disconnectedCallback() {
+    document.removeEventListener("keydown", this.onWorkspaceKeydown);
+    window.removeEventListener("error", this.onRuntimeError);
+    window.removeEventListener("unhandledrejection", this.onRuntimeError);
   }
   draw() {
     this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="workflows">Workflows</button><button data-action="publish-github">Publish to GitHub</button><button data-action="refresh-github">Refresh GitHub data</button><button data-action="repository-health">Check links</button><button data-action="intelligence">Profile Intelligence</button><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
@@ -126,6 +133,7 @@ export class AppShell extends HTMLElement {
     this.preview = this.querySelector("github-preview");
     this.content = this.querySelector(".builder-content");
     this.dialog = this.querySelector("dialog");
+    installWorkspace(this);
     this.querySelector(".close-dialog").onclick = () => this.closeDialog();
     bindDialogDismissal(this.dialog, () => this.closeDialog());
     this.dialog.addEventListener("close", () => {
@@ -591,7 +599,27 @@ export class AppShell extends HTMLElement {
       this.applySettings();
       this.save();
     };
-    this.addEventListener("keydown", (e) => {
+    this.onWorkspaceKeydown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        this.openCommandPalette();
+        return;
+      }
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        ["p", "e"].includes(e.key.toLowerCase())
+      ) {
+        e.preventDefault();
+        if (this.dialog.open) {
+          this.closeDialog();
+          if (this.dialog.open) return;
+        }
+        this.action(
+          e.key.toLowerCase() === "p" ? "publish-github" : "download",
+        );
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         this.save();
@@ -602,7 +630,8 @@ export class AppShell extends HTMLElement {
           ["build", "markdown", "preview", "health"][Number(e.key) - 1],
         );
       }
-    });
+    };
+    document.addEventListener("keydown", this.onWorkspaceKeydown);
     this.querySelector('[data-pane="build"]').setAttribute(
       "aria-pressed",
       "true",
@@ -610,6 +639,18 @@ export class AppShell extends HTMLElement {
     this.applySettings();
   }
   applySettings() {
+    this.querySelector(".workspace").classList.toggle(
+      "collapsed",
+      !!this.data.settings.collapsed,
+    );
+    this.editor.style.setProperty(
+      "--editor-font",
+      `${this.data.settings.editorFont || 13}px`,
+    );
+    document.documentElement.classList.toggle(
+      "reduce-motion",
+      !!this.data.settings.reduceMotion,
+    );
     document.documentElement.dataset.theme = this.data.settings.theme;
     this.querySelector("#preview-size").value = this.data.settings.preview;
     this.querySelector(".preview-paper").style.maxWidth =
@@ -669,7 +710,7 @@ export class AppShell extends HTMLElement {
   focusDocument() {
     const target = this.editor.getClientRects().length
       ? this.editor.input
-      : this.querySelector('.header-actions [data-action="import"]');
+      : this.querySelector('[data-action="command-palette"]');
     this.afterDialogFocus = target;
     target.focus();
   }
@@ -1309,7 +1350,8 @@ export class AppShell extends HTMLElement {
           : "Section moved.",
     );
   }
-  mobile(pane) {
+  mobile(pane, focus = true) {
+    this.data.settings.pane = pane;
     this.querySelector(".workspace").dataset.mobile = pane;
     this.querySelectorAll("[data-pane]").forEach(
       (b) => (
@@ -1319,6 +1361,8 @@ export class AppShell extends HTMLElement {
     );
     if (pane === "health") this.showTab("health");
     if (pane === "build" && this.tab === "health") this.showTab("sections");
+    if (focus) this.save();
+    if (!focus) return;
     if (pane === "markdown") this.editor.input.focus();
     else {
       const heading = this.querySelector(
@@ -1358,9 +1402,12 @@ export class AppShell extends HTMLElement {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     this.notify(`${name} download started`);
   }
-  notify(message) {
+  notify(message, kind = "info") {
     const el = this.querySelector(".toast");
     el.textContent = message;
+    el.dataset.kind = ["success", "info", "warning", "error"].includes(kind)
+      ? kind
+      : "info";
     el.hidden = false;
     clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => (el.hidden = true), 6500);
@@ -1370,6 +1417,12 @@ export class AppShell extends HTMLElement {
     this.afterDialogFocus = null;
     this.dialog.classList.remove("import-modal");
     this.querySelector(".dialog-content").innerHTML = content;
+    const context = document.createElement("p");
+    context.className = "dialog-context";
+    context.textContent = this.store?.draft.name
+      ? `Workspace / ${this.store.draft.name}`
+      : "Workspace";
+    this.querySelector(".dialog-content").prepend(context);
     if (!this.dialog.open) this.dialog.showModal();
     requestAnimationFrame(() => {
       if (!this.dialog.open) return;
@@ -1574,6 +1627,7 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (this.workspaceAction?.(action)) return;
     if (action === "workflows")
       this.modal("<workflow-builder></workflow-builder>");
     if (action === "publish-github") {
@@ -1669,10 +1723,14 @@ export class AppShell extends HTMLElement {
         break;
       }
       case "collapse":
+        this.data.settings.collapsed = true;
         this.querySelector(".workspace").classList.add("collapsed");
+        this.save();
         break;
       case "expand":
+        this.data.settings.collapsed = false;
         this.querySelector(".workspace").classList.remove("collapsed");
+        this.save();
         break;
       case "reimport":
         this.importDialog(true);
