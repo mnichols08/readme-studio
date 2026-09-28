@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.2.3 — Repository README Builder Hardening.** Import existing source, review matched sections and project-type suggestions, inspect a responsive preview, and approve an exact diff before merging or replacing content. See the [repository builder guide](docs/repository-builder.md).
+**Version 1.3.0 — Stack Intelligence.** Opt in to read Node, Rust, Python and Go manifests in selected public repositories. See dependency declarations and source evidence under “Detected in selected repositories,” without skill claims or repository code execution. See the [Stack Intelligence guide](docs/stack-intelligence.md).
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
