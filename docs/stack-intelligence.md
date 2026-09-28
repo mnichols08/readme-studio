@@ -46,3 +46,7 @@ The normalized cache is bounded to 128 repositories / approximately 2 MB. Result
 ## Development
 
 Pure adapters live in src/stack-intelligence/manifests.js, the bounded declaration reader in toml.js, and GitHub orchestration/cache in client.js. Tests use static manifest strings and mocked HTTP responses; none execute scanned repository code.
+
+## Stack DNA (1.3.2)
+
+[Stack DNA](stack-dna.md) adds a curated technology summary above repository dependency results. Exact ecosystem/package mappings produce categories; unknown packages remain explicit. Existing primary-language metadata and explicit package.json engine declarations provide labeled language/runtime evidence without additional requests. Categories are separate from dependency kinds and developer proficiency.

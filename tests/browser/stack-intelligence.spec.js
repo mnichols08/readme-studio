@@ -314,3 +314,116 @@ test("direct dependency results normalize all ecosystems and preserve kinds and 
   );
   expect(reads).toBe(6);
 });
+
+test("Stack DNA groups selected repositories, filters categories and exposes keyboard evidence at 320px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  let calls = 0;
+  await page.route("https://api.github.com/**", async (route) => {
+    calls++;
+    const url = route.request().url();
+    if (url.includes("/users/"))
+      return route.fulfill({
+        json: [
+          {
+            name: "web",
+            full_name: "example/web",
+            default_branch: "main",
+            language: "TypeScript",
+          },
+          {
+            name: "native",
+            full_name: "example/native",
+            default_branch: "main",
+            language: "Rust",
+          },
+        ],
+      });
+    const native = url.includes("/native/");
+    const path = native ? "Cargo.toml" : "package.json";
+    if (url.includes(path))
+      return route.fulfill({
+        json: content(
+          path,
+          native
+            ? '[dependencies]\nwasm-bindgen="1"'
+            : JSON.stringify({
+                engines: { node: ">=22" },
+                dependencies: {
+                  react: "1",
+                  pg: "1",
+                  mongoose: "1",
+                  unknown_tool: "1",
+                },
+                devDependencies: {
+                  vitest: "1",
+                  "@playwright/test": "1",
+                  "@testing-library/react": "1",
+                  vite: "1",
+                },
+              }),
+        ),
+      });
+    return route.fulfill({ json: [{ type: "file", path }] });
+  });
+  await open(page);
+  await page.getByLabel("GitHub username", { exact: true }).fill("example");
+  await page
+    .getByRole("button", { name: "Load repositories", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Select all filtered repositories" })
+    .click();
+  await page
+    .getByLabel("Allow read-only manifest analysis for this session")
+    .check();
+  await page
+    .getByRole("button", { name: "Analyze selected manifests" })
+    .click();
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "complete",
+  );
+  const dna = page.locator("stack-dna");
+  await expect(dna.locator('[data-dna-group="Core"]')).toContainText("React");
+  await expect(dna.locator('[data-dna-group="Core"]')).toContainText("Node.js");
+  await expect(dna.locator('[data-dna-group="Core"]')).toContainText("Rust");
+  await expect(dna.locator('[data-dna-group="Data"]')).toContainText(
+    "PostgreSQL",
+  );
+  await expect(dna.locator('[data-dna-group="Data"]')).toContainText("MongoDB");
+  await expect(dna.locator('[data-dna-group="Build"]')).toContainText("Vite");
+  await expect(dna).not.toContainText("GitHub Actions");
+  expect(calls).toBe(5);
+  await page.getByLabel("Stack DNA category").selectOption("Testing");
+  await expect(dna.locator("[data-dna-group]")).toHaveCount(1);
+  await expect(dna).toContainText("RTL");
+  const vitest = dna.getByRole("button", { name: "Vitest", exact: true });
+  await vitest.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    dna.getByRole("heading", { name: "Vitest evidence" }),
+  ).toBeFocused();
+  await expect(dna.locator("[data-dna-evidence]")).toContainText("example/web");
+  await expect(dna.locator("[data-dna-evidence]")).toContainText("development");
+  await expect(dna.locator("[data-dna-evidence]")).toContainText(
+    "package.json",
+  );
+  await dna.getByRole("button", { name: "Close technology evidence" }).click();
+  await expect(vitest).toBeFocused();
+  await page.getByLabel("Stack DNA category").selectOption("Unknown");
+  await expect(dna).toContainText("unknown_tool (node)");
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(320);
+  await page
+    .getByRole("checkbox", { name: "Select example/native", exact: true })
+    .uncheck();
+  await expect(
+    dna.getByRole("button", { name: "Rust", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    dna.getByRole("button", { name: "React", exact: true }),
+  ).toHaveCount(1);
+  expect(calls).toBe(5);
+});

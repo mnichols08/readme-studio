@@ -32,6 +32,7 @@ export function analyzeManifest(path, source) {
   )
     throw Error("Manifest exceeds the 256 KB analysis limit.");
   source = source.replace(/^\ufeff/, "").replace(/\r\n?/g, "\n");
+  const signals = [];
   const entries = [],
     notes = [],
     seen = new Set();
@@ -73,6 +74,18 @@ export function analyzeManifest(path, source) {
   if (path === "package.json") {
     const data = JSON.parse(source);
     if (!object(data)) throw Error("package.json must contain an object.");
+    for (const [engine, id] of [
+      ["node", "nodejs"],
+      ["bun", "bun"],
+      ["deno", "deno"],
+    ]) {
+      if (
+        object(data.engines) &&
+        typeof data.engines[engine] === "string" &&
+        data.engines[engine].trim()
+      )
+        signals.push({ id, evidence: "engines." + engine });
+    }
     for (const [field, role] of [
       ["dependencies", "runtime"],
       ["devDependencies", "development"],
@@ -275,5 +288,12 @@ export function analyzeManifest(path, source) {
     });
     if (block) throw Error("Unterminated go.mod block.");
   }
-  return { version: 1, path, ecosystem: descriptor.ecosystem, entries, notes };
+  return {
+    version: 1,
+    path,
+    ecosystem: descriptor.ecosystem,
+    entries,
+    notes,
+    signals,
+  };
 }
