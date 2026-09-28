@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1
+
+- Re-fetch remote SHAs in browser and server before writes; stale changes stop for explicit review.
+- Conservative three-way section merging with local/remote/combine/manual conflict decisions and a fresh final diff.
+- Explicit branch creation, PR preparation links, previous-version links, local source recovery checkpoints and bounded token-free history.
+
 ## 0.8.0
 
 - Optional GitHub App connection through a same-origin Node session boundary; credentials never enter browser draft storage or exports.

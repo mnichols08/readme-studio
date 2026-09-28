@@ -35,3 +35,13 @@ Publishing supports UTF-8 README text up to 750 KB, relative README paths withou
 `npm test` includes server tests in Node with mocked OAuth and Contents responses: cookie flags, CSRF/Origin rejection, permission enforcement, token redaction, read/create/update, exact Unicode source and disconnect. `tests/browser/publishing.spec.js` covers explicit confirmation, unchanged local source, new files, denied writes and mobile download fallback in all three engines. Manual deployment verification with a real app is still required before offering publishing publicly; automated tests do not prove an operator's proxy/configuration is secure.
 
 The API contract follows [GitHub Contents documentation](https://docs.github.com/en/rest/repos/contents). Check upstream permission changes when enabling new write types.
+
+## Concurrent changes and recovery (0.8.1)
+
+The browser and server re-fetch the remote blob SHA before a commit. A changed SHA stops publishing. Review the latest remote changes, merge, reload the baseline for an explicitly reviewed local replacement, or cancel. GitHub's SHA precondition also guards the race between the final read and write.
+
+Three-way merge compares the loaded remote BASE, prepared LOCAL and latest REMOTE. Independent changes in uniquely identified, unchanged section structures merge automatically. Rename/reorder/duplicate-heading and structural changes fall back to an explicit whole-document conflict. Each conflict offers local, remote, combine (local then remote), or manual text. A new diff and unchecked confirmation follow every merge. This changes only prepared publishing source, never the local draft.
+
+A source checkpoint is saved locally before a write; inability to save stops publishing. Download it or restore it as a **new Custom Markdown draft** under Local publishing history and recovery. This recovery preserves source, not builder ownership. The latest checkpoint and at most 50 metadata-only commit records live in a separate versioned browser key. Existing malformed history is never overwritten. History save failure after a successful remote commit is reported as a local failure, not a failed remote write.
+
+Target branch remains explicit. Optional Create branch requires its own confirmation and unchanged source commit SHA, then requires loading and reviewing the README on that new branch. After committing, a GitHub compare link helps prepare a PR; Studio does not create or merge it. Branch protection is never bypassed. Previous/new commit links provide recovery context without implementing destructive rollback.

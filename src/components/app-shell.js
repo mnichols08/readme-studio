@@ -185,6 +185,16 @@ export class AppShell extends HTMLElement {
       if (b.dataset.blockAction)
         this.blockAction(b.dataset.blockAction, b.dataset.id);
     };
+    this.addEventListener("publish-restore", (e) => {
+      this.addDraft(
+        "Pre-publish recovery",
+        [createBlock("custom", { markdown: e.detail.source })],
+        {},
+      );
+      this.closeDialog();
+      this.focusDocument();
+      this.notify("Checkpoint restored as a new draft.");
+    });
     this.addEventListener("publish-download", (e) =>
       this.download(e.detail.content, e.detail.name),
     );

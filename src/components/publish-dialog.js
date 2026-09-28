@@ -1,3 +1,9 @@
+import { mergeThreeWay, resolveMerge } from "../publishing/conflicts.js";
+import {
+  readPublishingHistory,
+  savePublishCheckpoint,
+  recordPublish,
+} from "../publishing/history.js";
 import { PublishingClient } from "../github/publishing-client.js";
 import { html } from "../markdown/serialize.js";
 import { target, writeInput } from "../publishing/validation.js";
@@ -5,7 +11,7 @@ import { publishDiff } from "../publishing/diff.js";
 export class PublishDialog extends HTMLElement {
   connectedCallback() {
     this.client = new PublishingClient();
-    this.innerHTML = `<h1>Publish to GitHub</h1><p>Optional publishing. Your local draft stays unchanged. Every write requires a source review and confirmation.</p><p role="status" data-status>Checking connection…</p><section data-auth></section><section data-target></section><section data-review></section><button data-download>Download README fallback</button>`;
+    this.innerHTML = `<h1>Publish to GitHub</h1><p>Optional publishing. Your local draft stays unchanged. Every write requires a source review and confirmation.</p><p role="status" data-status>Checking connection…</p><section data-auth></section><section data-target></section><section data-review></section><section data-history></section><button data-download>Download README fallback</button>`;
     this.querySelector("[data-download]").onclick = () =>
       this.emit("publish-download", {
         content: this.source,
@@ -16,6 +22,8 @@ export class PublishDialog extends HTMLElement {
   configure(draft) {
     this.source = draft.markdown;
     this.draftId = draft.id;
+    this.originalSource = draft.markdown;
+    this.historyView();
   }
   emit(name, detail) {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
@@ -30,6 +38,7 @@ export class PublishDialog extends HTMLElement {
     try {
       await fn();
     } catch (e) {
+      if (e.remote && this.baseline) this.stale(e.remote);
       this.status(e.message);
     } finally {
       this.busy = false;
@@ -135,12 +144,14 @@ export class PublishDialog extends HTMLElement {
         (r) => r.repository === b.repository,
       )?.writable;
     this.querySelector("[data-review]").innerHTML =
-      `<h2>Review ${b.sha ? "updated file" : "New file"}</h2><p>${html(b.repository)} · branch ${html(b.branch)} · ${html(b.path)}</p><p>SHA baseline: <code>${html(b.sha || "New file (does not exist)")}</code></p><p>${diff.added} added / ${diff.removed} removed lines in changed region. Sections: ${html(diff.sections.join(", ") || "body content")}.</p><div class="publish-sources"><label>Remote Markdown<textarea data-before rows="8" readonly></textarea></label><label>Prepared Markdown<textarea data-after rows="8" readonly></textarea></label></div><details open><summary>Unified source diff</summary><pre data-diff tabindex="0" aria-label="Publishing diff"></pre></details><label>Commit message<input data-message value="Update README with README Studio" maxlength="500"></label><label class="check"><input type="checkbox" data-confirm> I reviewed this diff and confirm ${b.sha ? "updating" : "creating"} this exact repository, branch and path.</label><button data-commit ${!writable || b.content === this.source ? "disabled" : ""}>Confirm and publish README</button><div data-result></div>`;
+      `<h2>Review ${b.sha ? "updated file" : "New file"}</h2><p>${html(b.repository)} · branch ${html(b.branch)} · ${html(b.path)}</p><p>SHA baseline: <code>${html(b.sha || "New file (does not exist)")}</code></p><p>${diff.added} added / ${diff.removed} removed lines in changed region. Sections: ${html(diff.sections.join(", ") || "body content")}.</p><div class="publish-sources"><label>Remote Markdown<textarea data-before rows="8" readonly></textarea></label><label>Prepared Markdown<textarea data-after rows="8" readonly></textarea></label></div><details open><summary>Unified source diff</summary><pre data-diff tabindex="0" aria-label="Publishing diff"></pre></details><label>Commit message<input data-message value="Update README with README Studio" maxlength="500"></label><label class="check"><input type="checkbox" data-confirm> I reviewed this diff and confirm ${b.sha ? "updating" : "creating"} this exact repository, branch and path.</label><button data-commit ${!writable || b.content === this.source ? "disabled" : ""}>Confirm and publish README</button><div data-result></div><section data-stale></section><details><summary>Publish on a new branch instead</summary><p>Create a branch from ${html(b.branch)} at commit ${html(b.commitSha || "unknown")}. This creates only a branch; committing still needs a fresh review.</p><label>New branch name<input data-new-branch value="readme-studio/update-${new Date().toISOString().slice(0, 10)}"></label><label class="check"><input type="checkbox" data-confirm-branch> I confirm creating this branch in ${html(b.repository)}.</label><button data-create-branch ${!writable ? "disabled" : ""}>Create branch for review</button></details>`;
     this.querySelector("[data-before]").value = b.content;
     this.querySelector("[data-after]").value = this.source;
     this.querySelector("[data-diff]").textContent = diff.text;
     this.querySelector("[data-commit]").onclick = () =>
       this.run(() => this.commit());
+    this.querySelector("[data-create-branch]").onclick = () =>
+      this.run(() => this.createBranch());
     if (!writable)
       this.status(
         "Read-only repository. Publishing is disabled; download remains available.",
@@ -155,6 +166,13 @@ export class PublishDialog extends HTMLElement {
     });
     if (JSON.stringify(this.target()) !== JSON.stringify(target(this.baseline)))
       throw new Error("Target changed. Reload and review.");
+    const latest = await this.client.request("read", this.target());
+    if (latest.sha !== this.baseline.sha) {
+      this.stale(latest);
+      return;
+    }
+    savePublishCheckpoint(this.draftId, this.originalSource);
+    this.historyView();
     this.status("Publishing reviewed README…");
     const result = await this.client.request("commit", input);
     const repo = `https://github.com/${result.repository}`,
@@ -163,7 +181,131 @@ export class PublishDialog extends HTMLElement {
       `<p>Published commit <a href="${repo}/commit/${html(result.commitSha)}" target="_blank" rel="noopener noreferrer">${html(result.commitSha)}</a>. <a href="${repo}" target="_blank" rel="noopener noreferrer">Repository</a> · <a href="${html(file)}" target="_blank" rel="noopener noreferrer">README</a></p>`;
     this.querySelector("[data-commit]").disabled = true;
     this.querySelector("[data-confirm]").checked = false;
-    this.status("README published. Your local draft is unchanged.");
+    const previous = result.previousCommitSha || this.baseline.commitSha;
+    if (previous) {
+      const link = document.createElement("a");
+      link.href = `${repo}/blob/${previous}/${result.path.split("/").map(encodeURIComponent).join("/")}`;
+      link.textContent = "View previous version on GitHub";
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      this.querySelector("[data-result]").append(link);
+    }
+    if (this.branchBase) {
+      const link = document.createElement("a");
+      link.href = `${repo}/compare/${encodeURIComponent(this.branchBase)}...${encodeURIComponent(result.branch)}?expand=1`;
+      link.textContent = "Prepare pull request on GitHub";
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      this.querySelector("[data-result]").append(link);
+    }
+    try {
+      recordPublish(result, previous);
+      this.historyView();
+      this.status("README published. Your local draft is unchanged.");
+    } catch (e) {
+      this.status(
+        `README published (${result.commitSha}), but local history could not be saved. ${e.message}`,
+      );
+    }
+  }
+  historyView() {
+    const area = this.querySelector("[data-history]");
+    if (!area) return;
+    try {
+      const history = readPublishingHistory();
+      area.innerHTML = `<details><summary>Local publishing history and recovery</summary>${history.checkpoint ? "<button data-recovery>Download pre-publish checkpoint</button><button data-restore>Restore checkpoint as a new draft</button>" : ""}<ol>${history.entries.map((e) => `<li>${html(e.repository)} · ${html(e.branch)} · ${html(e.path)} · ${html(e.commitSha)} · ${html(new Date(e.timestamp).toISOString())}</li>`).join("")}</ol></details>`;
+      area
+        .querySelector("[data-recovery]")
+        ?.addEventListener("click", () =>
+          this.emit("publish-download", {
+            content: history.checkpoint.source,
+            name: "README-pre-publish.md",
+          }),
+        );
+      area
+        .querySelector("[data-restore]")
+        ?.addEventListener("click", () =>
+          this.emit("publish-restore", { source: history.checkpoint.source }),
+        );
+    } catch (e) {
+      area.textContent = e.message;
+    }
+  }
+  stale(remote) {
+    this.latest = remote;
+    this.querySelector("[data-commit]").disabled = true;
+    this.querySelector("[data-confirm]").checked = false;
+    const area = this.querySelector("[data-stale]");
+    area.innerHTML = `<h2 tabindex="-1">Remote README changed since you loaded it</h2><details open><summary>View remote changes</summary><pre data-remote-diff></pre><label>Latest remote Markdown<textarea data-latest readonly rows="6"></textarea></label></details><button data-merge>Merge local and remote</button><button data-reload>Reload remote baseline and review local replacement</button><button data-cancel>Cancel publishing review</button><section data-conflicts></section>`;
+    area.querySelector("[data-latest]").value = remote.content;
+    area.querySelector("[data-remote-diff]").textContent = publishDiff(
+      this.baseline.content,
+      remote.content,
+    ).text;
+    area.querySelector("[data-merge]").onclick = () => this.mergeView();
+    area.querySelector("[data-reload]").onclick = () => {
+      this.baseline = remote;
+      this.review();
+      this.status(
+        "Remote baseline reloaded. Review the replacement and confirm again.",
+      );
+    };
+    area.querySelector("[data-cancel]").onclick = () => this.invalidate();
+    area.querySelector("h2").focus();
+    this.status(
+      "Remote README changed. No write was made. Resolve or reload and review.",
+    );
+  }
+  mergeView() {
+    const parts = mergeThreeWay(
+      this.baseline.content,
+      this.source,
+      this.latest.content,
+    );
+    const area = this.querySelector("[data-conflicts]");
+    area.innerHTML = `<h3>Three-way merge</h3><p>Unchanged sections and non-overlapping section edits are combined. Resolve every conflicting section, then review the final source before any write.</p>${parts.map((p, i) => (p.conflict ? `<fieldset><legend>${html(p.title)}</legend><label>Local section ${i + 1}<textarea data-local="${i}" readonly></textarea></label><label>Remote section ${i + 1}<textarea data-remote="${i}" readonly></textarea></label><label>Resolution for ${html(p.title)}<select data-resolution="${i}"><option value="">Choose resolution</option><option value="local">Use local</option><option value="remote">Use remote</option><option value="combine">Combine local then remote</option><option value="manual">Edit manually</option></select></label><label>Manual resolution ${i + 1}<textarea data-manual="${i}" rows="5"></textarea></label></fieldset>` : "")).join("")}<button data-review-merge>Review merged README</button>`;
+    for (const [i, p] of parts.entries())
+      if (p.conflict) {
+        area.querySelector(`[data-local="${i}"]`).value = p.local;
+        area.querySelector(`[data-remote="${i}"]`).value = p.remote;
+        area.querySelector(`[data-manual="${i}"]`).value = p.local;
+      }
+    area.querySelector("[data-review-merge]").onclick = () =>
+      this.run(async () => {
+        const decisions = {};
+        for (const el of area.querySelectorAll("[data-resolution]"))
+          decisions[el.dataset.resolution] = {
+            choice: el.value,
+            content: area.querySelector(
+              `[data-manual="${el.dataset.resolution}"]`,
+            ).value,
+          };
+        this.source = resolveMerge(parts, decisions);
+        this.baseline = this.latest;
+        this.review();
+        this.status(
+          "Merged source prepared. Review and confirm again. Local draft is unchanged.",
+        );
+        this.querySelector("[data-after]").focus();
+      });
+  }
+  async createBranch() {
+    if (!this.querySelector("[data-confirm-branch]").checked)
+      throw new Error("Confirm branch creation first.");
+    const newBranch = this.querySelector("[data-new-branch]").value;
+    target({ ...this.baseline, branch: newBranch });
+    savePublishCheckpoint(this.draftId, this.originalSource);
+    const result = await this.client.request("branch", {
+      ...this.baseline,
+      newBranch,
+      confirmed: true,
+    });
+    this.branchBase = this.baseline.branch;
+    this.querySelector("[data-branch]").value = result.branch;
+    this.invalidate();
+    this.status(
+      `Branch ${result.branch} created. Load remote README on that branch and review before committing.`,
+    );
   }
 }
 customElements.define("publish-dialog", PublishDialog);

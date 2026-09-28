@@ -45,6 +45,8 @@ function harness({
         ],
       });
     if (url.includes("/branches/")) return Response.json({ commit: { sha } });
+    if (url.endsWith("/git/refs"))
+      return Response.json({ ref: "refs/heads/readme-studio/update" });
     if (options.method === "PUT")
       return Response.json(
         commitStatus === 200
@@ -201,6 +203,54 @@ it("leaves static deployments unconfigured and uses HTTPS only", async () => {
       await service(new Request(origin + "/api/publishing/session"))
     ).json(),
   ).toEqual({ configured: false, connected: false });
+});
+it("stops stale writes on the server before PUT and returns a reviewable remote baseline", async () => {
+  const h = harness();
+  await h.connect();
+  const result = await h.request("commit", {
+    repository: "octocat/octocat",
+    branch: "main",
+    path: "README.md",
+    sha: newSha,
+    content: "New",
+    message: "update",
+    confirmed: true,
+  });
+  expect(result.response.status).toBe(409);
+  expect(result.value.remote.content).toBe("# Old");
+  expect(h.upstream.mock.calls.some(([, o]) => o.method === "PUT")).toBe(false);
+});
+it("creates only explicitly confirmed branches at an unchanged source commit", async () => {
+  const h = harness();
+  await h.connect();
+  const input = {
+    repository: "octocat/octocat",
+    branch: "main",
+    path: "README.md",
+    commitSha: sha,
+    newBranch: "readme-studio/update",
+  };
+  expect((await h.request("branch", input)).response.status).toBe(400);
+  expect(
+    (
+      await h.request("branch", {
+        ...input,
+        confirmed: true,
+        commitSha: newSha,
+      })
+    ).response.status,
+  ).toBe(409);
+  expect(
+    (await h.request("branch", { ...input, confirmed: true })).value.branch,
+  ).toBe("readme-studio/update");
+  const write = h.upstream.mock.calls.filter(([url]) =>
+    url.endsWith("/git/refs"),
+  );
+  expect(write).toHaveLength(1);
+  expect(JSON.parse(write[0][1].body)).toEqual({
+    ref: "refs/heads/readme-studio/update",
+    sha,
+  });
 });
 it("redacts network failures and does not retry a write", async () => {
   const h = harness();
