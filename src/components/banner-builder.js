@@ -28,7 +28,7 @@ export class BannerBuilder extends HTMLElement {
   }
   draw() {
     this.releaseUrls();
-    this.innerHTML = `<h1>Banner Builder</h1><p>Local, self-contained SVG assets. Download the files and commit them to your profile repository. README Studio does not upload assets.</p><div class="visual-workbench"><fieldset><legend>Banner settings</legend><div class="visual-fields">${[
+    this.innerHTML = `<h1>Banner Builder</h1><p>Local, self-contained SVG assets. Download the files and commit them to your profile repository. Save settings, then use Publish to GitHub to review and publish generated SVG assets.</p><div class="visual-workbench"><fieldset><legend>Banner settings</legend><div class="visual-fields">${[
       ["name", "Name"],
       ["title", "Primary title"],
       ["subtitle", "Subtitle / tagline"],

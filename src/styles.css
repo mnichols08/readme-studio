@@ -2034,3 +2034,37 @@ refactor-dialog textarea {
 refactor-dialog fieldset {
   min-width: 0;
 }
+
+publish-dialog {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.publish-sources {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+publish-dialog pre {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .publish-sources {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+workflow-builder {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.workflow-yaml {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.8.3
+
+- Consistent Escape and click-outside modal dismissal with unsaved-edit protection and predictable focus return.
+
+- Guided, locally generated workflow YAML for Constellation, Snake, Metrics and user-maintained commands/actions, with source highlighting, attribution, schedules and permission explanations.
+- Secret-name placeholders, safe filenames/outputs, basic workflow health checks and corresponding README embeds.
+- Workflow publishing requires server opt-in, GitHub App Workflows permission, generated-source validation, diff review and SHA conflict protection.
+
+## 0.8.2
+
+- Reviewed generated SVG asset plans with per-file SHAs, source differences, size limits, and path validation.
+- Server regenerates banner SVGs before accepting writes; arbitrary SVG uploads and hidden/traversal paths are rejected.
+- Exact Studio-owned banner reference rewrites, light/dark pairs, preflight conflicts and precise partial-success reporting.
+
+## 0.8.1
+
+- Re-fetch remote SHAs in browser and server before writes; stale changes stop for explicit review.
+- Conservative three-way section merging with local/remote/combine/manual conflict decisions and a fresh final diff.
+- Explicit branch creation, PR preparation links, previous-version links, local source recovery checkpoints and bounded token-free history.
+
+## 0.8.0
+
+- Optional GitHub App connection through a same-origin Node session boundary; credentials never enter browser draft storage or exports.
+- Explicit repository/branch/README selection, remote baseline, source diff, editable commit message and confirmed create/update publishing.
+- Permission-aware picker, commit links, protected/network failure messages and preserved local download fallback.
+- Mocked auth/security and three-engine publishing coverage; deployment and authentication limits documented.
+
 ## 0.7.3
 
 - Added a worker-based Safe Refactor Assistant with mandatory Before/After/Diff review, explicit Apply/Cancel and stale-review rejection.
