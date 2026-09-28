@@ -239,3 +239,11 @@ See [repository audit hardening](audit-hardening.md) for conservative placeholde
 UTF-8 file imports are byte-bounded and preserve BOM/line endings. Async imports use a sequence token so late reads cannot replace a newer import or reopen a closed dialog. Local imports clear prior GitHub source context. The builder retains the original as a separate Custom Markdown block and makes context insertion optional.
 
 Changed existing-source plans require a snapshot containing original source, generated source, draft name and metadata. The diff uses the shared safe text/value rendering; any settings change invalidates approval. Both the form and app-shell apply handler verify approval. Unchanged-source opening remains separate. Preview is lazy, sanitized and independent from exported source; width/theme controls do not change the approved plan.
+
+## Stack Intelligence
+
+The stack-intelligence module exposes a fixed root manifest registry and pure adapters for Node, Rust, Python and Go declarations. The bounded TOML reader handles dependency syntax without evaluation; unsupported declarations fail locally. Dependencies retain role, manifest and line evidence. No skill model, source rewrite, registry resolution or executable configuration is involved.
+
+The client reads allowlisted regular files through the shared public GitHub client, reusing timeout/retry/cooldown behavior. Three workers read sequential manifests with cancellation. File bytes, entry counts, cache bytes/count and selected repository count are bounded. Normalized evidence is cached briefly; raw source is discarded. Partial failures remain distinguishable from no supported manifests. An explicit UI consent gate is required for each opened audit workspace.
+
+The stack-results component renders escaped, paginated repository evidence. Result state is separate from README classifications, project-type suggestions and draft storage. Closing the audit cancels work; changing accounts clears visible result state.

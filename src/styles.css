@@ -2348,3 +2348,22 @@ repository-readme-builder .hint,
 repository-readme-builder [data-guidance] {
   overflow-wrap: anywhere;
 }
+
+stack-results {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+stack-results details {
+  margin-block: 12px;
+}
+stack-results section {
+  border-top: 1px solid var(--border);
+  padding-block: 8px;
+}
+stack-results ul {
+  padding-inline-start: 24px;
+}
+stack-results li {
+  margin-block: 6px;
+}

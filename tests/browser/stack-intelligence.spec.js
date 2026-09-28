@@ -1,0 +1,232 @@
+import { test, expect } from "@playwright/test";
+async function open(page) {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Explore the sample profile" })
+    .click();
+  await page.getByRole("button", { name: "README audit", exact: true }).click();
+}
+function content(path, source) {
+  return {
+    type: "file",
+    path,
+    size: Buffer.byteLength(source),
+    encoding: "base64",
+    content: Buffer.from(source).toString("base64"),
+    sha: "a".repeat(40),
+  };
+}
+test("manifest analysis is opt-in, preserves drafts and labels repository evidence at 320px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  const calls = [];
+  await page.route("https://api.github.com/**", async (route) => {
+    const url = route.request().url();
+    calls.push(url);
+    if (url.includes("/users/"))
+      return route.fulfill({
+        json: [
+          {
+            name: "app",
+            full_name: "example/app",
+            default_branch: "main",
+            language: "JavaScript",
+          },
+        ],
+      });
+    if (url.includes("package.json"))
+      return route.fulfill({
+        json: content(
+          "package.json",
+          JSON.stringify({
+            dependencies: { react: "19" },
+            devDependencies: { vitest: "4" },
+            scripts: { postinstall: "window.stackExecuted=true" },
+          }),
+        ),
+      });
+    if (url.includes("Cargo.toml"))
+      return route.fulfill({
+        json: content("Cargo.toml", '[dependencies]\nserde = "1"'),
+      });
+    return route.fulfill({
+      json: [
+        { type: "file", path: "package.json" },
+        { type: "file", path: "Cargo.toml" },
+        { type: "file", path: "setup.py" },
+      ],
+    });
+  });
+  await open(page);
+  const before = await page.evaluate(
+    () => document.querySelector("app-shell").store.draft.markdown,
+  );
+  await page.getByLabel("GitHub username", { exact: true }).fill("example");
+  await page
+    .getByRole("button", { name: "Load repositories", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Select all filtered repositories" })
+    .click();
+  const analyze = page.getByRole("button", {
+    name: "Analyze selected manifests",
+  });
+  await expect(analyze).toBeDisabled();
+  expect(calls.every((url) => url.includes("/users/"))).toBe(true);
+  await page
+    .getByLabel("Allow read-only manifest analysis for this session")
+    .check();
+  await analyze.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "Manifest analysis complete",
+  );
+  await expect(analyze).toBeFocused();
+  await page.locator("stack-results summary").click();
+  await expect(page.locator("stack-results")).toContainText(
+    "Detected in selected repositories",
+  );
+  await expect(page.locator("stack-results")).toContainText("react");
+  await expect(page.locator("stack-results")).toContainText("development");
+  await expect(page.locator("stack-results")).toContainText("serde");
+  expect(calls).toHaveLength(4);
+  expect(await page.evaluate(() => window.stackExecuted)).toBeUndefined();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(320);
+  await analyze.click();
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "Manifest analysis complete",
+  );
+  expect(calls).toHaveLength(4);
+  expect(
+    await page.evaluate(
+      () => document.querySelector("app-shell").store.draft.markdown,
+    ),
+  ).toBe(before);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "README audit", exact: true }).click();
+  await expect(
+    page.getByLabel("Allow read-only manifest analysis for this session"),
+  ).not.toBeChecked();
+});
+test("partial manifest failures retain evidence, show rate limits, and permit explicit fresh retry", async ({
+  page,
+}) => {
+  let limited = true;
+  await page.route("https://api.github.com/**", async (route) => {
+    const url = route.request().url();
+    if (url.includes("/users/"))
+      return route.fulfill({
+        json: [
+          { name: "app", full_name: "example/app", default_branch: "main" },
+        ],
+      });
+    if (url.includes("package.json"))
+      return route.fulfill({
+        json: content("package.json", '{"dependencies":{"react":"1"}}'),
+      });
+    if (url.includes("pyproject.toml")) {
+      if (limited)
+        return route.fulfill({
+          status: 429,
+          headers: { "retry-after": "60" },
+          json: {},
+        });
+      return route.fulfill({
+        json: content("pyproject.toml", '[project]\ndependencies=["requests"]'),
+      });
+    }
+    return route.fulfill({
+      json: [
+        { type: "file", path: "package.json" },
+        { type: "file", path: "pyproject.toml" },
+      ],
+    });
+  });
+  await open(page);
+  await page.getByLabel("GitHub username", { exact: true }).fill("example");
+  await page
+    .getByRole("button", { name: "Load repositories", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Select all filtered repositories" })
+    .click();
+  await page
+    .getByLabel("Allow read-only manifest analysis for this session")
+    .check();
+  await page
+    .getByRole("button", { name: "Analyze selected manifests" })
+    .click();
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "paused",
+  );
+  await page.locator("stack-results summary").click();
+  await expect(page.locator("stack-results")).toContainText("Partial results");
+  await expect(page.locator("stack-results")).toContainText("react");
+  limited = false;
+  await page.evaluate(async () => {
+    const { auditClient } = await import("/src/repository-audit/github.js");
+    auditClient.cooldown = 0;
+  });
+  await page.getByLabel("Fetch fresh manifests").check();
+  await page
+    .getByRole("button", { name: "Analyze selected manifests" })
+    .click();
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "complete",
+  );
+  await page.locator("stack-results summary").click();
+  await expect(page.locator("stack-results")).toContainText("requests");
+});
+
+test("cancellation and offline failures do not become absence or execute pending work", async ({
+  page,
+}) => {
+  let pending;
+  let offline = false;
+  await page.route("https://api.github.com/**", async (route) => {
+    if (route.request().url().includes("/users/"))
+      return route.fulfill({
+        json: [
+          { name: "app", full_name: "example/app", default_branch: "main" },
+        ],
+      });
+    if (offline) return route.abort("internetdisconnected");
+    pending = route;
+  });
+  await open(page);
+  await page.getByLabel("GitHub username", { exact: true }).fill("example");
+  await page
+    .getByRole("button", { name: "Load repositories", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Select all filtered repositories" })
+    .click();
+  await page
+    .getByLabel("Allow read-only manifest analysis for this session")
+    .check();
+  await page
+    .getByRole("button", { name: "Analyze selected manifests" })
+    .click();
+  await expect.poll(() => !!pending).toBe(true);
+  await page.getByRole("button", { name: "Cancel audit", exact: true }).click();
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "cancelled",
+  );
+  await pending.fulfill({ json: [] }).catch(() => {});
+  await expect(page.locator("stack-results summary")).toHaveCount(0);
+  offline = true;
+  await page
+    .getByRole("button", { name: "Analyze selected manifests" })
+    .click();
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "complete",
+  );
+  await page.locator("stack-results summary").click();
+  await expect(page.locator("stack-results")).toContainText("Not assessed");
+  await expect(page.locator("stack-results")).not.toContainText(
+    "No supported root manifests found",
+  );
+});
