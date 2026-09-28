@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0
+
+- Repository README audit workspace with public owned-repository pagination to 1,000, explicit selection, and fork/archive filters.
+- Evidence-based missing/stub/minimal/basic/detailed/documentation-heavy classifications using the existing analyzer; no scores or developer rankings.
+- Three concurrent README fetches, bounded session cache, cancel/partial/rate-limit recovery and local Worker analysis with JavaScript fallback.
+- Root README verification, repository/source links, and exact-source improvement in a new local draft.
+- Classification, 100-repository browser, 1,000-repository pagination, keyboard/mobile and failure-handling coverage.
+
 ## 0.9.3
 
 - Feature freeze for 1.0: representative 0.1–0.9 migration and source-recovery regression fixtures.

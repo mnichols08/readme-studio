@@ -23,6 +23,7 @@ README Studio exports ordinary Markdown/HTML. Its preview is an approximation of
 - [External widgets](widgets.md)
 - [Portable snippet packs](snippet-packs.md)
 - [GitHub data](github-aware.md)
+- [Repository README auditing](repository-auditing.md)
 - [Refreshing generated content](refreshing.md)
 - [Analyzer](analyzer.md)
 - [GitHub compatibility](compatibility.md)

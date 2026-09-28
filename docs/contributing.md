@@ -31,3 +31,5 @@ Component tests cover versioned models, field interpolation, insertion, exact so
 GitHub-aware tests use synthetic public metadata and mocked network responses in `github-aware`, `profile-intelligence`, `repository-health`, and `generated-refresh` unit suites. `tests/browser/github-aware.spec.js` covers reviewed authoring, offline use, explicit scans, manual preservation, raw detachment and stale refresh protection. Do not use live GitHub availability as a test assertion.
 
 Release source-recovery fixtures are documented in [migration fixtures](../tests/fixtures/migrations/README.md). `release-migrations.test.js` also opens every synthetic example project and compares its canonical source with the paired README byte-for-byte.
+
+Repository-audit browser fixtures exercise 100 repositories and unit fixtures paginate 1,000. The production smoke checks its lazy module and Worker before the page is controlled by a service worker, then checks offline behavior separately: [Playwright request routing does not reliably intercept service-worker-handled requests](https://playwright.dev/docs/api/class-page#page-route). No test requires a live account or sends writes.
