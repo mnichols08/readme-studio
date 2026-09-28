@@ -62,6 +62,7 @@ export class GithubPreview extends HTMLElement {
   }
   anchors() {
     const seen = new Set();
+    const nextSuffix = new Map();
     this.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((h) => {
       const slug = h.textContent
         .trim()
@@ -69,8 +70,9 @@ export class GithubPreview extends HTMLElement {
         .replace(/[^\p{L}\p{N}\s_-]/gu, "")
         .replace(/\s/g, "-");
       let id = slug,
-        n = 0;
+        n = nextSuffix.get(slug) || 0;
       while (seen.has(id)) id = `${slug}-${++n}`;
+      nextSuffix.set(slug, n);
       h.id = id;
       seen.add(id);
     });

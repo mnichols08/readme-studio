@@ -24,6 +24,8 @@ README Studio exports ordinary Markdown/HTML. Its preview is an approximation of
 - [Asset publishing](assets.md)
 - [Workflow generation](workflows.md)
 - [Accessibility, recovery and performance checks](hardening.md)
+- [Offline authoring and updates](offline.md)
+- [Performance and browser baseline](performance.md)
 - [Architecture](architecture.md)
 - [Rust/WASM core and fallback](rust-core.md)
 - [Contributor checks](contributing.md)

@@ -279,7 +279,7 @@ test("large collection previews stay bounded and unsaved edits can be kept", asy
     version: 1,
     type: "badge-collection",
     name: "Large",
-    badges: Array.from({ length: 150 }, (_, i) => ({
+    badges: Array.from({ length: 200 }, (_, i) => ({
       label: `Tool ${i}`,
       alt: `Tool ${i}`,
       logo: "react",
@@ -291,7 +291,7 @@ test("large collection previews stay bounded and unsaved edits can be kept", asy
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify(data)),
   });
-  await expect(page.locator(".collection-badges li")).toHaveCount(150);
+  await expect(page.locator(".collection-badges li")).toHaveCount(200);
   expect(
     await page.locator(".collection-preview img").count(),
   ).toBeLessThanOrEqual(20);

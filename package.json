@@ -1,6 +1,6 @@
 {
   "name": "readme-studio",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -18,7 +18,9 @@
     "build:wasm": "node scripts/build-wasm.mjs",
     "test:rust": "cargo test --manifest-path rust/readme-core/Cargo.toml --locked",
     "test:wasm": "vitest run tests/wasm-core.test.js",
-    "serve:publishing": "node server/start.js"
+    "serve:publishing": "node server/start.js",
+    "report:bundle": "node scripts/bundle-report.mjs",
+    "test:performance": "vitest run tests/performance-smoke.test.js"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",
