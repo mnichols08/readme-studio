@@ -27,7 +27,14 @@ export class StackResults extends HTMLElement {
         const body = details.querySelector("[data-stack-body]");
         if (!details.open || body.childElementCount) return;
         const record = records[Number(details.dataset.stackRecord)];
-        body.innerHTML = `<p>Observed: ${h(new Date(record.checkedAt).toLocaleString())}; branch: ${h(record.ref || "unknown")}</p>${record.issues.map((issue) => `<p class="hint">Notice: ${h(issue)}</p>`).join("")}<h3>Direct dependencies</h3><p>${record.dependencies?.length || 0} normalized dependency records. The same name in different kinds remains separate.</p><ul data-dependencies>${(record.dependencies || []).map((entry) => `<li><strong>${h(entry.name)}</strong> — ${h(entry.ecosystem)} · ${h(entry.kind)} · ${h(entry.repository)}<ul>${entry.evidence.map((item) => `<li>${h(item.manifest)} — ${h(item.section)}${item.line ? ` (line ${item.line})` : ""}</li>`).join("")}</ul></li>`).join("")}</ul>${record.manifests.map((manifest) => `<section><h3>${h(manifest.ecosystem)} — ${h(manifest.path)}</h3><p>Manifest present.</p>${manifest.notes.map((note) => `<p class="hint">${h(note)}</p>`).join("")}</section>`).join("")}`;
+        body.innerHTML = `<button data-readme-suggestions ${record.status === "failed" ? "disabled" : ""}>Review README suggestions</button><p>Observed: ${h(new Date(record.checkedAt).toLocaleString())}; branch: ${h(record.ref || "unknown")}</p>${record.issues.map((issue) => `<p class="hint">Notice: ${h(issue)}</p>`).join("")}<h3>Direct dependencies</h3><p>${record.dependencies?.length || 0} normalized dependency records. The same name in different kinds remains separate.</p><ul data-dependencies>${(record.dependencies || []).map((entry) => `<li><strong>${h(entry.name)}</strong> — ${h(entry.ecosystem)} · ${h(entry.kind)} · ${h(entry.repository)}<ul>${entry.evidence.map((item) => `<li>${h(item.manifest)} — ${h(item.section)}${item.line ? ` (line ${item.line})` : ""}</li>`).join("")}</ul></li>`).join("")}</ul>${record.manifests.map((manifest) => `<section><h3>${h(manifest.ecosystem)} — ${h(manifest.path)}</h3><p>Manifest present.</p>${manifest.notes.map((note) => `<p class="hint">${h(note)}</p>`).join("")}</section>`).join("")}`;
+        body.querySelector("[data-readme-suggestions]").onclick = () =>
+          this.dispatchEvent(
+            new CustomEvent("stack-readme-review", {
+              bubbles: true,
+              detail: record,
+            }),
+          );
       };
     });
     for (const [selector, step] of [

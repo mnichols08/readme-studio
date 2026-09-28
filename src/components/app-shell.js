@@ -157,6 +157,37 @@ export class AppShell extends HTMLElement {
     this.addEventListener("attention-download", (e) =>
       this.download(e.detail.content, e.detail.name, e.detail.type),
     );
+    this.addEventListener("stack-readme-review", async (e) => {
+      const record = structuredClone(e.detail);
+      const audit = e.target.closest("repository-audit");
+      await import("./stack-readme-review.js");
+      if (!audit?.isConnected || !this.dialog.open) return;
+      this.modal("<stack-readme-review></stack-readme-review>");
+      const reviewer = this.querySelector("stack-readme-review");
+      reviewer.configure(record, this.store.draft);
+      reviewer.addEventListener("stack-readme-apply", (event) => {
+        if (
+          !reviewer.canApply() ||
+          event.detail.snapshot !== draftSnapshot(this.store.draft)
+        ) {
+          reviewer.invalidate();
+          reviewer.querySelector("[data-status]").textContent =
+            "The draft changed. Close and reopen suggestions to review the current draft.";
+          return;
+        }
+        const { blocks, markdown } = event.detail.plan;
+        this.store.checkpoint();
+        this.store.draft.blocks = blocks;
+        this.store.draft.markdown = markdown;
+        this.store.emit("blocks");
+        this.closeDialog();
+        this.mobile("markdown", false);
+        this.focusDocument();
+        this.notify(
+          "Reviewed suggestions appended. Use Undo to restore the previous draft.",
+        );
+      });
+    });
     this.addEventListener("audit-improve", (e) => {
       const { repo, readme } = e.detail;
       if (e.detail.builder) {
