@@ -1,4 +1,5 @@
 import { assetPath } from "./asset-path.js";
+import { workflowPath } from "../workflows/validate.js";
 export const MAX_SOURCE_BYTES = 750_000;
 export function target(value) {
   const { repository, branch, path } = value || {};
@@ -27,6 +28,7 @@ export function target(value) {
   )
     throw new Error("Choose a valid branch.");
   if (value.kind === "asset") assetPath(path);
+  else if (value.kind === "workflow") workflowPath(path);
   else if (
     typeof path !== "string" ||
     path.length > 240 ||
@@ -42,7 +44,7 @@ export function target(value) {
     repository,
     branch,
     path,
-    ...(value.kind === "asset" ? { kind: "asset" } : {}),
+    ...(["asset", "workflow"].includes(value.kind) ? { kind: value.kind } : {}),
   };
 }
 export function writeInput(value) {

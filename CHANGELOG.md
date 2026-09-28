@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.3
+
+- Consistent Escape and click-outside modal dismissal with unsaved-edit protection and predictable focus return.
+
+- Guided, locally generated workflow YAML for Constellation, Snake, Metrics and user-maintained commands/actions, with source highlighting, attribution, schedules and permission explanations.
+- Secret-name placeholders, safe filenames/outputs, basic workflow health checks and corresponding README embeds.
+- Workflow publishing requires server opt-in, GitHub App Workflows permission, generated-source validation, diff review and SHA conflict protection.
+
 ## 0.8.2
 
 - Reviewed generated SVG asset plans with per-file SHAs, source differences, size limits, and path validation.

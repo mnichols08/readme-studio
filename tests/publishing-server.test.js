@@ -1,3 +1,4 @@
+import { generateWorkflow } from "../src/workflows/model.js";
 // @vitest-environment node
 import { it, expect, vi } from "vitest";
 import { createPublishingService } from "../server/publishing.js";
@@ -8,6 +9,7 @@ function harness({
   permission = true,
   exists = true,
   commitStatus = 200,
+  workflows = false,
 } = {}) {
   let clock = 1000,
     cookie,
@@ -31,7 +33,13 @@ function harness({
     if (url.includes("/user/installations?"))
       return Response.json({
         installations: [
-          { id: 1, permissions: { contents: permission ? "write" : "read" } },
+          {
+            id: 1,
+            permissions: {
+              contents: permission ? "write" : "read",
+              workflows: workflows ? "write" : "read",
+            },
+          },
         ],
       });
     if (url.includes("/user/installations/1/repositories?"))
@@ -72,6 +80,7 @@ function harness({
   const service = createPublishingService({
     origin,
     clientId: "APP_ID",
+    allowWorkflows: workflows,
     fetchImpl: upstream,
     now: () => clock,
   });
@@ -281,4 +290,38 @@ it("redacts network failures and does not retry a write", async () => {
   expect(result.value.error).toContain("local draft is safe");
   expect(JSON.stringify(result.value)).not.toContain("PRIVATE_ACCESS");
   expect(h.upstream.mock.calls.some(([, o]) => o.method === "PUT")).toBe(false);
+});
+
+it("workflow write requires opt-in, app permission and exact generated YAML", async () => {
+  const config = {
+      provider: "snake",
+      publish: true,
+      repository: "octocat/octocat",
+    },
+    r = generateWorkflow(config);
+  const input = {
+    repository: "octocat/octocat",
+    branch: "main",
+    path: r.path,
+    kind: "workflow",
+    sha,
+    content: r.yaml,
+    workflow: config,
+    message: "Add workflow",
+    confirmed: true,
+  };
+  const denied = harness();
+  await denied.connect();
+  expect((await denied.request("commit", input)).response.status).toBe(403);
+  const allowed = harness({ workflows: true });
+  await allowed.connect();
+  expect(
+    (
+      await allowed.request("commit", {
+        ...input,
+        content: r.yaml + "injected: true",
+      })
+    ).response.status,
+  ).toBe(400);
+  expect((await allowed.request("commit", input)).value.commitSha).toBe(newSha);
 });

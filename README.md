@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.8.2** · Native Web Components · Local drafts · Static hosting
+**Version 0.8.3** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -211,3 +211,7 @@ Connect a GitHub App, select a repository/branch, load its README, review the so
 Publishing detects concurrent remote changes and offers section-aware merge with explicit conflict choices. A local pre-publish source checkpoint and bounded commit history support recovery. Optional branch creation has its own confirmation; protected branches are never bypassed.
 
 Generated light/dark banner SVGs can join a reviewed publish plan. Each path shows its status and source diff; partial failures identify completed files and stop subsequent writes. Only Studio-owned banner references can be rewritten. See [asset publishing](docs/assets.md).
+
+**Workflow Builder** generates attributed Constellation, Snake and basic Metrics workflows, plus explicit scheduled command/action scaffolds. Review YAML, copy/download it, or publish through a separate Workflows permission gate. Only secret names belong in Studio. See [workflow generation and setup](docs/workflows.md).
+
+Dialogs close with Escape or a click on the surrounding backdrop. Unsaved Studio forms keep their existing discard confirmation; dragging from inside a dialog does not dismiss it. Focus returns to the control that opened it.

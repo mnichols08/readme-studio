@@ -1,3 +1,4 @@
+import { generateWorkflow } from "../src/workflows/model.js";
 import { randomBytes } from "node:crypto";
 import { validateGeneratedAsset } from "../src/publishing/assets.js";
 import {
@@ -13,6 +14,7 @@ const encodedPath = (path) => path.split("/").map(encodeURIComponent).join("/");
 export function createPublishingService({
   origin,
   clientId,
+  allowWorkflows = false,
   fetchImpl = fetch,
   now = Date.now,
 } = {}) {
@@ -111,6 +113,12 @@ export function createPublishingService({
           repository: repo.full_name,
           branch: repo.default_branch,
           visibility: repo.private ? "private" : "public",
+          workflowsWritable:
+            allowWorkflows &&
+            installation.permissions?.workflows === "write" &&
+            installation.permissions?.contents === "write" &&
+            repo.permissions?.push === true &&
+            !repo.archived,
           writable:
             !repo.archived &&
             repo.permissions?.push === true &&
@@ -128,6 +136,11 @@ export function createPublishingService({
       throw fail(
         403,
         "This repository is not writable with your current GitHub App access. Download remains available.",
+      );
+    if (write && t.kind === "workflow" && !repo.workflowsWritable)
+      throw fail(
+        403,
+        "Workflow writes require server opt-in and GitHub App Workflows: write permission. Download YAML remains available.",
       );
     return t;
   }
@@ -155,7 +168,9 @@ export function createPublishingService({
       return {
         ...t,
         sha: file.sha,
-        content: Buffer.from(file.content, "base64").toString("utf8"),
+        content: new TextDecoder("utf-8", { fatal: true }).decode(
+          Buffer.from(file.content, "base64"),
+        ),
         commitSha: branch.commit.sha,
       };
     } catch (e) {
@@ -340,6 +355,14 @@ export function createPublishingService({
           try {
             input = writeInput(data);
             if (input.kind === "asset") validateGeneratedAsset(data);
+            if (
+              input.kind === "workflow" &&
+              (generateWorkflow(data.workflow).yaml !== input.content ||
+                generateWorkflow(data.workflow).path !== input.path)
+            )
+              throw new Error(
+                "Workflow source and path must match the reviewed generator settings.",
+              );
           } catch (e) {
             throw fail(400, e.message);
           }

@@ -6,6 +6,7 @@ const origin = process.env.PUBLISH_ORIGIN;
 const handle = createPublishingService({
   origin,
   clientId: process.env.GITHUB_APP_CLIENT_ID,
+  allowWorkflows: process.env.ALLOW_WORKFLOW_WRITES === "true",
 });
 const root = resolve("dist");
 const types = {
@@ -19,6 +20,11 @@ const types = {
   ".json": "application/json",
 };
 createServer(async (req, res) => {
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader(
+    "Content-Security-Policy",
+    "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+  );
   try {
     const url = new URL(req.url, origin);
     if (url.pathname.startsWith("/api/publishing/")) {

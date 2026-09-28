@@ -2056,3 +2056,15 @@ publish-dialog pre {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+workflow-builder {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.workflow-yaml {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

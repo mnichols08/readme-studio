@@ -21,7 +21,11 @@ export class PublishDialog extends HTMLElement {
     this.querySelector("[data-download]").onclick = () =>
       this.emit("publish-download", {
         content: this.source,
-        name: "README.md",
+        name:
+          this.kind === "workflow"
+            ? this.workflowPath.split("/").at(-1)
+            : "README.md",
+        type: this.kind === "workflow" ? "text/yaml" : "text/markdown",
       });
     this.run(() => this.session());
   }
@@ -31,6 +35,20 @@ export class PublishDialog extends HTMLElement {
     this.draftId = draft.id;
     this.originalSource = draft.markdown;
     this.historyView();
+  }
+  configureWorkflow(draft, result) {
+    this.configure(draft);
+    this.kind = "workflow";
+    this.workflow = result.config;
+    this.workflowPath = result.path;
+    this.source = result.yaml;
+    this.initialSource = result.yaml;
+    this.querySelector("h1").textContent = "Publish workflow to GitHub";
+    this.querySelector("[data-download]").textContent =
+      "Download YAML fallback";
+    const notice = document.createElement("p");
+    notice.textContent = `${result.permissionReason} Publishing requires server opt-in and GitHub App Workflows: write. A committed workflow can execute scheduled commands on GitHub. Review the complete YAML.`;
+    this.querySelector("h1").after(notice);
   }
   emit(name, detail) {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
@@ -104,7 +122,7 @@ export class PublishDialog extends HTMLElement {
     const { repositories } = await this.client.request("repositories", {});
     this.repositories = repositories;
     const area = this.querySelector("[data-target]");
-    area.innerHTML = `<h2>Choose target</h2><p>Suggested profile repository: ${html(this.auth.identity.login)}/${html(this.auth.identity.login)}. Confirm your own selection. If missing, <a href="https://github.com/new" target="_blank" rel="noopener noreferrer">create it on GitHub</a> and install the app for it.</p><label>Target repository<select data-repo><option value="">Select repository</option>${repositories.map((r) => `<option value="${html(r.repository)}">${html(r.repository)} · ${html(r.visibility)} · ${r.writable ? "write access" : "read only"} · default ${html(r.branch)}</option>`).join("")}</select></label><label>Target branch<input data-branch autocomplete="off"></label><label>README path<input data-path value="README.md" autocomplete="off"></label><fieldset data-assets-options ${this.draftSnapshot?.metadata?.bannerSettings ? "" : "hidden"}><legend>Generated banner assets</legend><label class="check"><input type="checkbox" data-include-assets> Include generated banner SVG files in this publishing plan</label><label>Asset directory<input data-asset-directory value="assets/readme"></label><label class="check"><input type="checkbox" data-rewrite-banner> Update only Studio-owned banner references in the prepared README</label></fieldset><button data-load>Load remote README</button>`;
+    area.innerHTML = `<h2>Choose target</h2><p>Suggested profile repository: ${html(this.auth.identity.login)}/${html(this.auth.identity.login)}. Confirm your own selection. If missing, <a href="https://github.com/new" target="_blank" rel="noopener noreferrer">create it on GitHub</a> and install the app for it.</p><label>Target repository<select data-repo><option value="">Select repository</option>${repositories.map((r) => `<option value="${html(r.repository)}">${html(r.repository)} · ${html(r.visibility)} · ${(this.kind === "workflow" ? r.workflowsWritable : r.writable) ? "write access" : "read only"} · default ${html(r.branch)}</option>`).join("")}</select></label><label>Target branch<input data-branch autocomplete="off"></label><label>${this.kind === "workflow" ? "Workflow path" : "README path"}<input data-path value="${html(this.workflowPath || "README.md")}" ${this.kind === "workflow" ? "readonly" : ""} autocomplete="off"></label><fieldset data-assets-options ${this.kind !== "workflow" && this.draftSnapshot?.metadata?.bannerSettings ? "" : "hidden"}><legend>Generated banner assets</legend><label class="check"><input type="checkbox" data-include-assets> Include generated banner SVG files in this publishing plan</label><label>Asset directory<input data-asset-directory value="assets/readme"></label><label class="check"><input type="checkbox" data-rewrite-banner> Update only Studio-owned banner references in the prepared README</label></fieldset><button data-load>Load remote ${this.kind === "workflow" ? "workflow" : "README"}</button>`;
     area.querySelector("[data-repo]").onchange = () => {
       area.querySelector("[data-branch]").value =
         repositories.find(
@@ -118,7 +136,7 @@ export class PublishDialog extends HTMLElement {
     area.querySelector("[data-load]").onclick = () =>
       this.run(async () => {
         this.baseline = await this.client.request("read", this.target());
-        this.source = this.originalSource;
+        this.source = this.initialSource || this.originalSource;
         this.assetRows = [];
         if (this.querySelector("[data-include-assets]").checked) {
           const directory = this.querySelector("[data-asset-directory]").value;
@@ -157,6 +175,7 @@ export class PublishDialog extends HTMLElement {
       repository: this.querySelector("[data-repo]").value,
       branch: this.querySelector("[data-branch]").value,
       path: this.querySelector("[data-path]").value,
+      ...(this.kind ? { kind: this.kind } : {}),
     });
   }
   invalidate() {
@@ -169,11 +188,11 @@ export class PublishDialog extends HTMLElement {
   review() {
     const b = this.baseline,
       diff = publishDiff(b.content, this.source),
-      writable = this.repositories.find(
-        (r) => r.repository === b.repository,
-      )?.writable;
+      writable = this.repositories.find((r) => r.repository === b.repository)?.[
+        this.kind === "workflow" ? "workflowsWritable" : "writable"
+      ];
     this.querySelector("[data-review]").innerHTML =
-      `<h2>Review ${b.sha ? "updated file" : "New file"}</h2><p>${html(b.repository)} · branch ${html(b.branch)} · ${html(b.path)}</p><p>SHA baseline: <code>${html(b.sha || "New file (does not exist)")}</code></p><p>${diff.added} added / ${diff.removed} removed lines in changed region. Sections: ${html(diff.sections.join(", ") || "body content")}.</p><div class="publish-sources"><label>Remote Markdown<textarea data-before rows="8" readonly></textarea></label><label>Prepared Markdown<textarea data-after rows="8" readonly></textarea></label></div><details open><summary>Unified source diff</summary><pre data-diff tabindex="0" aria-label="Publishing diff"></pre></details><label>Commit message<input data-message value="Update README with README Studio" maxlength="500"></label><label class="check"><input type="checkbox" data-confirm> I reviewed this diff and confirm ${b.sha ? "updating" : "creating"} this exact repository, branch, path and every listed asset write.</label><button data-commit ${!writable || (b.content === this.source && !this.assetRows?.some((r) => r.status !== "unchanged")) ? "disabled" : ""}>Confirm and publish README</button><div data-result></div><section data-stale></section><details><summary>Publish on a new branch instead</summary><p>Create a branch from ${html(b.branch)} at commit ${html(b.commitSha || "unknown")}. This creates only a branch; committing still needs a fresh review.</p><label>New branch name<input data-new-branch value="readme-studio/update-${new Date().toISOString().slice(0, 10)}"></label><label class="check"><input type="checkbox" data-confirm-branch> I confirm creating this branch in ${html(b.repository)}.</label><button data-create-branch ${!writable ? "disabled" : ""}>Create branch for review</button></details>`;
+      `<h2>Review ${b.sha ? "updated file" : "New file"}</h2><p>${html(b.repository)} · branch ${html(b.branch)} · ${html(b.path)}</p><p>SHA baseline: <code>${html(b.sha || "New file (does not exist)")}</code></p><p>${diff.added} added / ${diff.removed} removed lines in changed region. Sections: ${html(diff.sections.join(", ") || "body content")}.</p><div class="publish-sources"><label>Remote ${this.kind === "workflow" ? "YAML" : "Markdown"}<textarea data-before rows="8" readonly></textarea></label><label>Prepared ${this.kind === "workflow" ? "YAML" : "Markdown"}<textarea data-after rows="8" readonly></textarea></label></div><details open><summary>Unified source diff</summary><pre data-diff tabindex="0" aria-label="Publishing diff"></pre></details><label>Commit message<input data-message value="Update README with README Studio" maxlength="500"></label><label class="check"><input type="checkbox" data-confirm> I reviewed this diff and confirm ${b.sha ? "updating" : "creating"} this exact repository, branch, path and every listed asset write.</label><button data-commit ${!writable || (b.content === this.source && !this.assetRows?.some((r) => r.status !== "unchanged")) ? "disabled" : ""}>Confirm and publish README</button><div data-result></div><section data-stale></section><details><summary>Publish on a new branch instead</summary><p>Create a branch from ${html(b.branch)} at commit ${html(b.commitSha || "unknown")}. This creates only a branch; committing still needs a fresh review.</p><label>New branch name<input data-new-branch value="readme-studio/update-${new Date().toISOString().slice(0, 10)}"></label><label class="check"><input type="checkbox" data-confirm-branch> I confirm creating this branch in ${html(b.repository)}.</label><button data-create-branch ${!writable ? "disabled" : ""}>Create branch for review</button></details>`;
     if (this.assetRows?.length) {
       const area = document.createElement("section");
       area.innerHTML = `<h2>Asset publish plan</h2><p>Separate commits, not an atomic transaction. README is written last. ${this.rewriteApplied ? "Owned banner paths updated in prepared source." : "No banner source rewrite applied."}</p>${this.assetRows.map((r, i) => `<details><summary>${html(r.path)} — ${r.status} — ${r.bytes} bytes</summary><p>Baseline SHA: ${html(r.baseline.sha || "New file")}. ${html(r.warning)} ${this.source.includes(r.path.split("/").at(-1)) ? "" : "Warning: asset appears unreferenced by this README."}</p><pre data-asset-diff="${i}"></pre></details>`).join("")}<div data-asset-results role="status"></div>`;
@@ -187,6 +206,11 @@ export class PublishDialog extends HTMLElement {
     this.querySelector("[data-before]").value = b.content;
     this.querySelector("[data-after]").value = this.source;
     this.querySelector("[data-diff]").textContent = diff.text;
+    if (this.kind === "workflow") {
+      this.querySelector("[data-commit]").textContent =
+        "Confirm and publish workflow";
+      this.querySelector("[data-message]").value = "Update README workflow";
+    }
     this.querySelector("[data-commit]").onclick = () =>
       this.run(() => this.commit());
     this.querySelector("[data-create-branch]").onclick = () =>
@@ -205,6 +229,7 @@ export class PublishDialog extends HTMLElement {
     });
     if (JSON.stringify(this.target()) !== JSON.stringify(target(this.baseline)))
       throw new Error("Target changed. Reload and review.");
+    if (this.kind === "workflow") input.workflow = this.workflow;
     const latest = await this.client.request("read", this.target());
     if (latest.sha !== this.baseline.sha) {
       this.stale(latest);
@@ -277,7 +302,9 @@ export class PublishDialog extends HTMLElement {
     try {
       recordPublish(result, previous);
       this.historyView();
-      this.status("README published. Your local draft is unchanged.");
+      this.status(
+        `${this.kind === "workflow" ? "Workflow" : "README"} published. Your local draft is unchanged.`,
+      );
     } catch (e) {
       this.status(
         `README published (${result.commitSha}), but local history could not be saved. ${e.message}`,
@@ -317,6 +344,11 @@ export class PublishDialog extends HTMLElement {
       remote.content,
     ).text;
     area.querySelector("[data-merge]").onclick = () => this.mergeView();
+    if (this.kind === "workflow") {
+      area.querySelector("[data-merge]").hidden = true;
+      area.querySelector("[data-reload]").textContent =
+        "Reload workflow baseline and review generated replacement";
+    }
     area.querySelector("[data-reload]").onclick = () => {
       this.baseline = remote;
       this.review();
