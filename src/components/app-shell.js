@@ -1,3 +1,4 @@
+import "./publish-dialog.js";
 import "./refactor-dialog.js";
 import "./compatibility-lab.js";
 import "./refresh-center.js";
@@ -111,7 +112,7 @@ export class AppShell extends HTMLElement {
     });
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="refresh-github">Refresh GitHub data</button><button data-action="repository-health">Check links</button><button data-action="intelligence">Profile Intelligence</button><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="publish-github">Publish to GitHub</button><button data-action="refresh-github">Refresh GitHub data</button><button data-action="repository-health">Check links</button><button data-action="intelligence">Profile Intelligence</button><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
@@ -184,6 +185,9 @@ export class AppShell extends HTMLElement {
       if (b.dataset.blockAction)
         this.blockAction(b.dataset.blockAction, b.dataset.id);
     };
+    this.addEventListener("publish-download", (e) =>
+      this.download(e.detail.content, e.detail.name),
+    );
     this.addEventListener("refactor-cancel", () => this.closeDialog());
     this.addEventListener("refactor-apply", (e) => {
       if (
@@ -1549,6 +1553,10 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (action === "publish-github") {
+      this.modal("<publish-dialog></publish-dialog>");
+      this.querySelector("publish-dialog").configure(this.store.draft);
+    }
     if (action === "refactors") {
       this.modal("<refactor-dialog></refactor-dialog>");
       this.querySelector("refactor-dialog").configure(this.store.draft);

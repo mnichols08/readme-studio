@@ -171,3 +171,7 @@ The Health worker lazily initializes `analysis/wasm-loader.js`. Runtime statisti
 ### Source transformation boundary
 
 `refactors/registry.js` provides pure proposals, strict patch validation, overlap rejection and old/new offset mappings. `refactors/refactor.worker.js` prepares catalogs and combined reviews off the UI thread. `refactor-dialog` invalidates obsolete reviews, displays all source as text and only emits an Apply event after explicit review. AppShell verifies a full draft snapshot before calling `Store.raw` once. Whole-draft detachment is conservative and visible; undo restores all original metadata. No transformation runs as part of preview sanitization or autosave.
+
+## Optional publishing boundary (0.8.0)
+
+`server/publishing.js` owns ephemeral credentials and a fixed GitHub API operation allowlist. The optional Node server serves built static files and the same-origin boundary. `src/github/publishing-client.js` carries an in-memory CSRF nonce only; `publish-dialog` holds an immutable prepared source and independent remote baseline. Pure `publishing/validation.js` validates targets on both sides. Writes never flow through autosave, local backups, or generic public GitHub reads. See [deployment/security model](github-publishing.md).

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0
+
+- Optional GitHub App connection through a same-origin Node session boundary; credentials never enter browser draft storage or exports.
+- Explicit repository/branch/README selection, remote baseline, source diff, editable commit message and confirmed create/update publishing.
+- Permission-aware picker, commit links, protected/network failure messages and preserved local download fallback.
+- Mocked auth/security and three-engine publishing coverage; deployment and authentication limits documented.
+
 ## 0.7.3
 
 - Added a worker-based Safe Refactor Assistant with mandatory Before/After/Diff review, explicit Apply/Cancel and stale-review rejection.
