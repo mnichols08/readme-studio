@@ -167,3 +167,7 @@ The Health worker lazily initializes `analysis/wasm-loader.js`. Runtime statisti
 ### Compatibility boundary
 
 `compatibility/registry.js` provides support metadata; `compatibility/analyze.js` consumes the existing source-aware inventory and emits bounded explanations. The dedicated Lab reuses the Health worker and emits guarded source-navigation events. Rules are advisory, separate from DOM sanitization, and cannot change exported Markdown.
+
+### Source transformation boundary
+
+`refactors/registry.js` provides pure proposals, strict patch validation, overlap rejection and old/new offset mappings. `refactors/refactor.worker.js` prepares catalogs and combined reviews off the UI thread. `refactor-dialog` invalidates obsolete reviews, displays all source as text and only emits an Apply event after explicit review. AppShell verifies a full draft snapshot before calling `Store.raw` once. Whole-draft detachment is conservative and visible; undo restores all original metadata. No transformation runs as part of preview sanitization or autosave.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.3
+
+- Added a worker-based Safe Refactor Assistant with mandatory Before/After/Diff review, explicit Apply/Cancel and stale-review rejection.
+- Added conservative heading, alt, picture, badge-row, separator, empty-section, HTML and URL transformations with deterministic overlap rejection.
+- Preserved untouched source and query strings, added offset mappings, and integrated one-step undo with explicit Custom Markdown detachment.
+- Added malformed-source, large-plan, mobile, offline and cross-browser workflow tests and complete analyzer/compatibility/Rust/refactor guides.
+
 ## 0.7.2
 
 - Added a dedicated GitHub Compatibility Lab with support/safety filters, explanations, alternatives and source navigation.
