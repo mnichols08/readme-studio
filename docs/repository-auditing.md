@@ -4,7 +4,7 @@ Open **GitHub → README audit**, or search for it with Ctrl/Cmd+K. Enter a GitH
 
 Select repositories individually or select all currently filtered repositories, then choose **Audit selected**. Listing repositories does not fetch their READMEs. Results show the README state, primary language, push/update timestamps, archive/activity status and the evidence behind the classification. Results stay in repository-name order; there is no score, percentage, developer ranking or automatic rewrite.
 
-**Open README** and **Open repository** link to GitHub. **Improve README** opens exact fetched source in a new local Custom Markdown draft with repository context. A confirmed missing README opens a blank draft. Your current draft remains available and nothing is published. Use normal editing, Health, refactors and export afterwards.
+**Open README** and **Open repository** link to GitHub. **Improve README** opens the repository README builder with a suggested template and editable repository context. Existing source is preserved by default; a missing README can start from the selected template. Choose Open existing README unchanged to retain the earlier exact-source/blank-draft workflow. Your current draft remains available and nothing is published. Use normal editing, Health, refactors and export afterwards.
 
 ![Repository README audit with synthetic data](screenshots/repository-audit.png)
 
@@ -82,3 +82,5 @@ API references: [public user repositories](https://docs.github.com/en/rest/repos
 `tests/project-types.test.js` covers all type suggestions, ambiguous/fallback evidence, all profiles, short experiments, type-dependent classifications, empty/example headings, source preservation and invalid overrides. Browser coverage includes type selection before scanning, keyboard focus, 320px layout, fresh scan/session retention, automatic reset and account isolation. `tests/repository-audit.test.js` covers deterministic states, meaningful content, archive/fork handling, 1,000-repository pagination, bounded concurrency/cache, missing vs failure, root fallback, partial failures, rate limits, cancellation and malformed responses. `tests/browser/repository-audit.spec.js` covers the 100-repository workflow, session reuse, exact-source new drafts, 320px keyboard controls, cancellation and Worker fallback across Chromium, Firefox and WebKit. Network fixtures are synthetic; tests do not scan a real developer or publish anything.
 
 See [repository audit hardening](audit-hardening.md) for conservative placeholder/history findings, optional link checks, retry policy and large-account limits.
+
+In v1.2.0, Improve README / Improve next opens the [repository README builder](repository-builder.md) with an appropriate template and reviewed metadata. Open in Studio still preserves the exact original source.

@@ -19,13 +19,13 @@ import { activityStatus } from "../repository-audit/presentation.js";
 export class RepositoryAudit extends HTMLElement {
   connectedCallback() {
     this.state = auditSession;
-    this.innerHTML = `<h1>Repository README audit</h1><p>Find documentation that needs attention using evidence, not scores. Only public owned repositories are listed. README content is analyzed locally; nothing is published.</p><form data-load><label>GitHub username<input name="username" autocomplete="off" required maxlength="200" value="${h(this.state.username)}"></label><button type="submit">Load repositories</button></form><p class="hint">100 repositories per page, up to 1,000. Three concurrent README requests. GitHub's unauthenticated rate limit may stop larger scans. Use Check history and links on a result for optional extra requests to GitHub and linked hosts (up to 20 URLs). Results and a bounded source cache stay in this tab; cached requests expire after five minutes.</p><div class="audit-controls"><label><input type="checkbox" data-forks ${this.state.includeForks ? "checked" : ""}> Include forks</label><label><input type="checkbox" data-archived ${this.state.includeArchived ? "checked" : ""}> Include archived repositories</label><label><input type="checkbox" data-fresh> Fetch fresh README content</label><button data-more>Load next 100 repositories</button><button data-select>Select all filtered repositories</button><button data-clear>Clear selection</button><button data-scan>Audit selected</button><button data-cancel disabled>Cancel audit</button></div><p data-status role="status" aria-live="polite"></p><p data-count></p><div class="audit-pagination"><button data-audit-view="audit" aria-pressed="true">Audit results</button><button data-audit-view="queue" aria-pressed="false">README Attention Queue</button></div><section data-audit-results><h2 tabindex="-1">Repository audit results</h2><div class="audit-table-wrap"><table class="audit-table"><caption>Public repository documentation evidence</caption><thead><tr><th scope="col">Select / Repository</th><th scope="col">README state and evidence</th><th scope="col">Activity / Language</th><th scope="col">Actions</th></tr></thead><tbody></tbody></table></div><div class="audit-pagination"><button data-prev>Previous results</button><span data-page></span><button data-next>Next results</button></div></section><readme-attention-queue hidden></readme-attention-queue><p>Improve README opens a new local draft and preserves the exact fetched source. Missing READMEs start blank. Project types and English documentation signals are suggestions. Missing topics are commonly useful, never universally required; evidence is not a judgment of the project or its developer.</p>`;
+    this.innerHTML = `<h1>Repository README audit</h1><p>Find documentation that needs attention using evidence, not scores. Only public owned repositories are listed. README content is analyzed locally; nothing is published.</p><form data-load><label>GitHub username<input name="username" autocomplete="off" required maxlength="200" value="${h(this.state.username)}"></label><button type="submit">Load repositories</button></form><p class="hint">100 repositories per page, up to 1,000. Three concurrent README requests. GitHub's unauthenticated rate limit may stop larger scans. Use Check history and links on a result for optional extra requests to GitHub and linked hosts (up to 20 URLs). Results and a bounded source cache stay in this tab; cached requests expire after five minutes.</p><div class="audit-controls"><label><input type="checkbox" data-forks ${this.state.includeForks ? "checked" : ""}> Include forks</label><label><input type="checkbox" data-archived ${this.state.includeArchived ? "checked" : ""}> Include archived repositories</label><label><input type="checkbox" data-fresh> Fetch fresh README content</label><button data-more>Load next 100 repositories</button><button data-select>Select all filtered repositories</button><button data-clear>Clear selection</button><button data-scan>Audit selected</button><button data-cancel disabled>Cancel audit</button></div><p data-status role="status" aria-live="polite"></p><p data-count></p><div class="audit-pagination"><button data-audit-view="audit" aria-pressed="true">Audit results</button><button data-audit-view="queue" aria-pressed="false">README Attention Queue</button></div><section data-audit-results><h2 tabindex="-1">Repository audit results</h2><div class="audit-table-wrap"><table class="audit-table"><caption>Public repository documentation evidence</caption><thead><tr><th scope="col">Select / Repository</th><th scope="col">README state and evidence</th><th scope="col">Activity / Language</th><th scope="col">Actions</th></tr></thead><tbody></tbody></table></div><div class="audit-pagination"><button data-prev>Previous results</button><span data-page></span><button data-next>Next results</button></div></section><readme-attention-queue hidden></readme-attention-queue><p>Improve README opens a project-specific template with reviewed repository suggestions. Existing README source is preserved by default; missing READMEs can start from the template. Project types and English documentation signals are suggestions. Missing topics are commonly useful, never universally required; evidence is not a judgment of the project or its developer.</p>`;
     this.querySelectorAll("[data-audit-view]").forEach(
       (button) =>
         (button.onclick = () => this.showView(button.dataset.auditView, true)),
     );
     this.addEventListener("attention-open", (event) =>
-      this.improve(event.detail.repo),
+      this.improve(event.detail.repo, event.detail.builder),
     );
     this.showView(this.getAttribute("data-start-view") || "audit");
     this.querySelector("form").onsubmit = (e) => {
@@ -365,12 +365,16 @@ export class RepositoryAudit extends HTMLElement {
       }
     }
   }
-  async improve(repo) {
+  async improve(repo, builder = true) {
     if (this.busy) return;
     this.busy = true;
     this.controller = new AbortController();
     this.controls();
-    this.status("Opening exact README source in a new local draft…");
+    this.status(
+      builder
+        ? "Opening a repository template with README source and metadata suggestions…"
+        : "Opening exact README source in a new local draft…",
+    );
     try {
       const readme = await auditClient.readme(repo, {
         signal: this.controller.signal,
@@ -379,7 +383,15 @@ export class RepositoryAudit extends HTMLElement {
       this.dispatchEvent(
         new CustomEvent("audit-improve", {
           bubbles: true,
-          detail: { repo, readme },
+          detail: {
+            repo,
+            readme,
+            builder,
+            projectType:
+              this.state.typeOverrides.get(repo.full_name) ||
+              this.state.results.get(repo.full_name)?.result?.suggestion?.id ||
+              "generic",
+          },
         }),
       );
     } catch (error) {

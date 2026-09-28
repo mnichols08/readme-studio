@@ -155,6 +155,10 @@ export class AppShell extends HTMLElement {
     );
     this.addEventListener("audit-improve", (e) => {
       const { repo, readme } = e.detail;
+      if (e.detail.builder) {
+        this.repositoryReadme(e.detail);
+        return;
+      }
       if (this.data.drafts.length >= 500) {
         this.notify(
           "Draft limit reached. Export and remove an unused draft first.",
@@ -1338,7 +1342,7 @@ export class AppShell extends HTMLElement {
       return;
     }
     const blocks = this.store.draft.blocks;
-    this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button>${this.store.draft.metadata.importSource?.type === "github" ? '<button class="wide" data-action="reimport">Re-import current GitHub README</button>' : ""}<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(b.section?.title || (b.type === "component" ? "Edit visually: " + b.settings.name : blockTypes[b.type]) || "Section")}</strong><small>${html((b.section ? `Suggested ${b.section.kind} · Custom Markdown` : "") || b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small></span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p>' : ""}${this.store.draft.markdown ? '<button class="wide" data-action="split">Split into sections</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for your GitHub profile</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
+    this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button>${this.store.draft.metadata.importSource?.type === "github" ? '<button class="wide" data-action="reimport">Re-import current GitHub README</button>' : ""}<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(b.section?.title || (b.type === "component" ? "Edit visually: " + b.settings.name : blockTypes[b.type]) || "Section")}</strong><small>${html((b.section ? `Suggested ${b.section.kind} · Custom Markdown` : "") || b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small></span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p>' : ""}${this.store.draft.markdown ? '<button class="wide" data-action="split">Split into sections</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for GitHub READMEs</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
   }
   edit(block) {
     if (block.type === "component") {
@@ -1523,10 +1527,41 @@ export class AppShell extends HTMLElement {
     this.data.drafts.push(d);
     this.load(d.id);
   }
+  async repositoryReadme(context = {}) {
+    await import("./repository-readme-builder.js");
+    this.modal("<repository-readme-builder></repository-readme-builder>");
+    const builder = this.querySelector("repository-readme-builder");
+    builder.configure(context);
+    builder.addEventListener("repository-readme-original", () => {
+      this.dispatchEvent(
+        new CustomEvent("audit-improve", {
+          detail: { ...context, builder: false },
+        }),
+      );
+    });
+    builder.addEventListener("repository-readme-create", (event) => {
+      if (this.data.drafts.length >= 500) {
+        builder.status(
+          "Draft limit reached. Export and remove an unused draft first.",
+        );
+        return;
+      }
+      const { name, blocks, metadata } = event.detail;
+      this.addDraft(name, blocks, metadata);
+      this.closeDialog();
+      this.mobile("build", false);
+      this.notify(
+        "Repository README created as a new local draft. Edit the selected sections to replace writing prompts.",
+      );
+    });
+    builder.querySelector("select").focus();
+  }
   templates() {
     this.modal(
-      `<div class="eyebrow">A STARTING POINT, NOT A BOX</div><h1>Choose your structure.</h1><p>Each template opens as a new draft. Every section is editable.</p><div class="template-grid">${templateNames.map((name, i) => `<button data-template="${name}"><span class="template-art">${["# Hello, world.", "## Built to share.", "$ git contribute", "> Always learning.", "~/hello_world"][i]}</span><strong>${name}</strong><small>${["Simple, clear, and to the point.", "Projects, tools, writing, and you.", "Put your contributions first.", "Your learning journey, in public.", "For those who feel at home in a shell."][i]}</small></button>`).join("")}</div>`,
+      `<div class="eyebrow">A STARTING POINT, NOT A BOX</div><h1>Choose your structure.</h1><p>Each template opens as a new draft. Every section is editable.</p><h2>Repository READMEs</h2><p>Web App, Library, CLI, API, npm Package, Rust Crate, Python Package, Game, Open Source, Tutorial, Documentation and Generic.</p><button data-repository-template>Build a repository README</button><h2>Profile READMEs</h2><div class="template-grid">${templateNames.map((name, i) => `<button data-template="${name}"><span class="template-art">${["# Hello, world.", "## Built to share.", "$ git contribute", "> Always learning.", "~/hello_world"][i]}</span><strong>${name}</strong><small>${["Simple, clear, and to the point.", "Projects, tools, writing, and you.", "Put your contributions first.", "Your learning journey, in public.", "For those who feel at home in a shell."][i]}</small></button>`).join("")}</div>`,
     );
+    this.querySelector("[data-repository-template]").onclick = () =>
+      this.repositoryReadme();
     this.querySelectorAll("[data-template]").forEach(
       (b) =>
         (b.onclick = () => {
@@ -1781,6 +1816,9 @@ export class AppShell extends HTMLElement {
             : "dark";
         this.applySettings();
         this.save();
+        break;
+      case "repository-readme":
+        this.repositoryReadme();
         break;
       case "templates":
         this.templates();

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0
+
+- First-class repository README builder with 12 templates: Web App, Library, CLI, API, npm Package, Rust Crate, Python Package, Game, Open Source, Tutorial, Documentation and Generic.
+- Audit Improve README and queue Improve next preselect the reviewed project type and carry public name, description, homepage, language and topic suggestions.
+- Editable suggestions, selectable sections, generated-source preview and explicit new-draft creation; existing README source is preserved by default.
+- Unknown setup, usage, compatibility and license information stays as writing prompts, never invented facts. Open in Studio still opens exact original source.
+- Separate editable sections, portable reviewed metadata, safe URL/Markdown handling, mobile and cross-browser coverage.
+
 ## 1.1.3
 
 - Conservative TODO, project-name and combined framework-template signals, excluding code examples and comments.

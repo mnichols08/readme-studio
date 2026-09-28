@@ -40,7 +40,10 @@ export class ReadmeAttentionQueue extends HTMLElement {
       this.status("Queue filters reset.");
     };
     this.querySelector("[data-improve-next]").onclick = () =>
-      this.open(this.filtered.find((item) => !item.suppressed));
+      this.open(
+        this.filtered.find((item) => !item.suppressed),
+        true,
+      );
     this.querySelector("[data-previous]").onclick = () => {
       this.page--;
       this.draw();
@@ -111,10 +114,14 @@ export class ReadmeAttentionQueue extends HTMLElement {
       this.visible
         .map(
           (item, index) =>
-            `<li tabindex="-1" data-item="${index}"><h3>${h(item.repo.full_name)}</h3><strong>${h(item.priority[0].toUpperCase() + item.priority.slice(1))} attention</strong><ul>${item.reasons.map((reason) => `<li>${h(reason)}</li>`).join("")}</ul><p>${h(item.repo.language || "Language unspecified")} · ${h(item.assessment.type.name)}</p>${item.suppressed ? `<p>${h(item.suppressed)}</p>` : ""}<div class="attention-actions"><button data-open="${index}">Open in Studio</button>${item.suppressed ? `<button data-return="${index}">Return to queue</button>` : `<button data-ignore="${index}">Ignore for now</button><button data-minimal="${index}" ${!item.revision ? "disabled" : ""}>Mark intentionally minimal</button>`}</div>${!item.revision ? "<p>README revision unavailable. Refresh the audit before marking it intentionally minimal.</p>" : ""}</li>`,
+            `<li tabindex="-1" data-item="${index}"><h3>${h(item.repo.full_name)}</h3><strong>${h(item.priority[0].toUpperCase() + item.priority.slice(1))} attention</strong><ul>${item.reasons.map((reason) => `<li>${h(reason)}</li>`).join("")}</ul><p>${h(item.repo.language || "Language unspecified")} · ${h(item.assessment.type.name)}</p>${item.suppressed ? `<p>${h(item.suppressed)}</p>` : ""}<div class="attention-actions"><button data-improve="${index}">Improve README</button><button data-open="${index}">Open in Studio</button>${item.suppressed ? `<button data-return="${index}">Return to queue</button>` : `<button data-ignore="${index}">Ignore for now</button><button data-minimal="${index}" ${!item.revision ? "disabled" : ""}>Mark intentionally minimal</button>`}</div>${!item.revision ? "<p>README revision unavailable. Refresh the audit before marking it intentionally minimal.</p>" : ""}</li>`,
         )
         .join("") ||
       "<li>No matching attention items. Audit repositories above, adjust filters, or review deferred items.</li>";
+    this.querySelectorAll("[data-improve]").forEach((button) => {
+      button.onclick = () =>
+        this.open(this.visible[Number(button.dataset.improve)], true);
+    });
     this.querySelectorAll("[data-open]").forEach(
       (button) =>
         (button.onclick = () =>
@@ -209,12 +216,12 @@ export class ReadmeAttentionQueue extends HTMLElement {
       this.status(error.message);
     }
   }
-  open(item) {
+  open(item, builder = false) {
     if (this.busy || !item) return;
     this.dispatchEvent(
       new CustomEvent("attention-open", {
         bubbles: true,
-        detail: { repo: item.repo },
+        detail: { repo: item.repo, builder },
       }),
     );
   }

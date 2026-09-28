@@ -134,6 +134,9 @@ test("attention tiers, combined filters and next/source actions work at mobile w
     .getByRole("button", { name: "Improve next", exact: true })
     .focus();
   await page.keyboard.press("Enter");
+  await page
+    .getByRole("button", { name: "Open existing README unchanged" })
+    .click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
   expect(
     await page.evaluate(
