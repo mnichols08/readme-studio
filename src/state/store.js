@@ -70,6 +70,7 @@ export class Store extends EventTarget {
         : { ...createBlock("custom", { markdown }), sourceContext },
     ];
     for (const b of this.draft.blocks) {
+      delete b.sharedComponent;
       delete b.githubGenerated;
       delete b.profileAutofill;
       delete b.profileIdentity;

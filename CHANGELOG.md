@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.1
+
+- Add versioned shared Markdown definitions for contributing, testing, security, contact, badges and community links, with editable starting examples.
+- Preview exact insertion/update diffs for selected documents and require approval before applying. Saving or deleting a definition never changes README source.
+- Protect local edits, reject stale reviews, and keep independent document Undo/Redo for reviewed updates. Failed persistence prevents partial document application.
+- Include shared definitions and linked copies in workspace backup/recovery; merge collisions remap incoming references without overwriting local definitions.
+
 ## 1.5.0
 
 - Add searchable workspace documents grouped into Profile, Repositories and Local documents, with keyboard navigation and a grouped quick switcher.

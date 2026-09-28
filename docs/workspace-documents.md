@@ -27,3 +27,7 @@ Undo and Redo survive switches within this tab and cannot cross document IDs. Hi
 **Download all drafts backup** preserves all document sources, builder data, targets and workspace settings. Restore validates before applying and retains existing collision/recovery behavior. A Studio project carries one document and its target. Plain README export remains exact Markdown without Studio metadata. Malformed builder data can still recover source as Custom Markdown. Existing imported/published target metadata is recognized without rewriting older drafts; drafts without a valid target remain usable locally.
 
 If browser storage fails, source stays in memory and the existing recovery notice offers backup. Download it before closing the tab. No account or network connection is required for local editing, navigation, Health or export after the app loads.
+
+## Shared documentation
+
+[Shared components](shared-components.md) reuse common Markdown across these documents. Saving a definition never changes a README; selected insertions and updates are reviewed with per-document diffs and explicit approval.

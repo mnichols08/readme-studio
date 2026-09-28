@@ -1,4 +1,8 @@
 import {
+  validateShared,
+  checkSharedPlan,
+} from "../workspace/shared-components.js";
+import {
   documentTarget,
   documentGroup,
   documentGroups,
@@ -905,7 +909,8 @@ export class AppShell extends HTMLElement {
   }
   closeDialog(target) {
     if (
-      (this.querySelector("badge-collection-editor")?.isDirty() ||
+      (this.querySelector("shared-components")?.isDirty() ||
+        this.querySelector("badge-collection-editor")?.isDirty() ||
         this.querySelector("project-studio")?.isDirty() ||
         this.querySelector("theme-studio")?.isDirty() ||
         this.querySelector("banner-builder")?.isDirty() ||
@@ -939,6 +944,98 @@ export class AppShell extends HTMLElement {
           : "";
       })
       .join("");
+  }
+  async sharedComponents() {
+    await import("./shared-components.js");
+    this.modal("<shared-components></shared-components>");
+    const panel = this.querySelector("shared-components");
+    panel.configure(this.data);
+    panel.addEventListener("shared-library-save", ({ detail }) => {
+      try {
+        if (this.storageBlocked)
+          throw Error(
+            "Storage recovery is active. Back up and restore your workspace first.",
+          );
+        if (
+          JSON.stringify(validateShared(this.data.sharedComponents)) !==
+          JSON.stringify(panel.library)
+        )
+          throw Error(
+            "The shared library changed. Reopen this tool before saving.",
+          );
+        const library = validateShared(detail.library);
+        saveDrafts({ ...this.data, sharedComponents: library });
+        const id =
+          panel.querySelector("[data-component]").value ||
+          library.items.at(-1)?.id;
+        this.data.sharedComponents = library;
+        panel.configure(this.data);
+        panel.querySelector("[data-component]").value = library.items.some(
+          (item) => item.id === id,
+        )
+          ? id
+          : "";
+        panel.select();
+        panel.status(
+          "Shared definition saved. No README was changed. Preview linked updates to review changes.",
+        );
+      } catch (error) {
+        panel.status(`Could not save: ${error.message}`);
+      }
+    });
+    panel.addEventListener("shared-apply", ({ detail: plan }) => {
+      try {
+        if (!panel.canApply() || panel.plan !== plan)
+          throw Error("Review and approve the current preview first.");
+        checkSharedPlan(plan, this.data.drafts, this.data.sharedComponents);
+        if (this.storageBlocked)
+          throw Error(
+            "Storage recovery is active. Back up and restore your workspace first.",
+          );
+        const replacements = new Map(
+          plan.entries.map((entry) => [entry.id, entry]),
+        );
+        const drafts = this.data.drafts.map((draft) => {
+          const entry = replacements.get(draft.id);
+          return entry
+            ? {
+                ...draft,
+                blocks: entry.blocks,
+                markdown: entry.markdown,
+                updated: Date.now(),
+              }
+            : draft;
+        });
+        // Validate/persist the whole reviewed result before changing any Store.
+        saveDrafts({ ...this.data, drafts });
+        this.documentHistories ||= new DocumentHistories();
+        for (const draft of drafts) {
+          if (!replacements.has(draft.id)) continue;
+          if (draft.id === this.store.draft.id) {
+            this.store.checkpoint();
+            this.store.draft = draft;
+          } else {
+            const store = new Store(
+              this.data.drafts.find((item) => item.id === draft.id),
+            );
+            this.documentHistories.restore(store, this.data.drafts);
+            store.checkpoint();
+            store.draft = draft;
+            this.documentHistories.remember(store);
+          }
+        }
+        this.data.drafts = drafts;
+        if (replacements.has(this.store.draft.id)) this.store.emit("blocks");
+        this.save();
+        panel.configure(this.data);
+        panel.status(
+          `Applied reviewed changes to ${plan.entries.length} document(s). Undo is available separately in each document.`,
+        );
+      } catch (error) {
+        panel.invalidate();
+        panel.status(error.message);
+      }
+    });
   }
   async documents() {
     await import("./workspace-documents.js");
@@ -1856,7 +1953,7 @@ export class AppShell extends HTMLElement {
         if (ticket !== generation || !input.isConnected) return;
         const snapshot = JSON.stringify(this.data);
         this.querySelector("#restore-status").textContent =
-          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.badgeCollections.items.length} badge collections · ${backup.visualLibrary.themes.length} themes · ${backup.visualLibrary.banners.length} banner presets · ${backup.visualLibrary.bundles.length} visual bundles · ${backup.componentLibrary.snippets.length} reusable snippets`;
+          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.badgeCollections.items.length} badge collections · ${backup.visualLibrary.themes.length} themes · ${backup.visualLibrary.banners.length} banner presets · ${backup.visualLibrary.bundles.length} visual bundles · ${backup.componentLibrary.snippets.length} reusable snippets · ${backup.sharedComponents.items.length} shared components`;
         this.querySelector("#restore-review").innerHTML =
           '<label>Restore mode<select id="restore-mode" aria-label="Restore mode"><option value="merge">Merge with local drafts</option><option value="replace">Replace local drafts</option></select></label><label class="check"><input id="restore-confirm" type="checkbox"> I confirm replacing local drafts, collections, or original recovery data</label><button id="apply-restore" class="primary">Restore backup</button>';
         this.querySelector("#restore-mode").focus();
@@ -1987,6 +2084,9 @@ export class AppShell extends HTMLElement {
     if (action === "collections") this.openCollections();
     if (action === "badges") this.openBadges();
     switch (action) {
+      case "shared-components":
+        this.sharedComponents();
+        break;
       case "documents":
         this.documents();
         break;
