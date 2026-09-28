@@ -8,7 +8,7 @@ Version 1.5.1 reuses common Markdown across documents in one local workspace. Sh
 2. Enter a name and Markdown, or choose an editable example: Contributing footer, Testing stack, Security section, Sponsor/contact block, Common badge row, or Organization/community links.
 3. Replace example prompts and placeholder URLs with verified information. **Save shared definition** saves only the reusable definition.
 4. Select the documents to receive it. Only the current document is selected initially.
-5. Choose **Preview insertion**. Inspect the before/after source and diff for each document, approve **I reviewed every document diff**, then **Apply reviewed changes**.
+5. Choose **Preview insertion**. Inspect the before/after source and diff for each document, approve **I reviewed all selected document diffs**, then **Apply reviewed changes**.
 
 Insertion appends a linked Custom Markdown block. Existing source and other builder blocks remain intact. Repeated insertion creates another linked copy; no hidden deduplication or replacement occurs. After applying, each affected document has its own Undo/Redo checkpoint.
 
@@ -35,3 +35,7 @@ A single Studio project or README carries its document/source, not the workspace
 Up to 200 definitions are supported, each up to 100,000 source characters. Definitions are local, not hosted or synced across browsers. Undo/Redo for document application follows the workspace's bounded session history; it does not undo the library definition itself. You can edit a definition back to an earlier value and preview another update.
 
 All fields are untrusted. Source previews use textareas/diff text, never executable HTML; they make no remote image requests. Normal README preview sanitization still applies after insertion, while exported Markdown remains the user source. Shared components do not publish to GitHub automatically.
+
+## Workspace-wide changes
+
+v1.5.2 adds [Cross-README updates](cross-readme-updates.md): preview all linked pending changes, see the affected count, and select recipients beside their diffs. No recipients are preselected in workspace-wide mode; changing recipients clears approval.

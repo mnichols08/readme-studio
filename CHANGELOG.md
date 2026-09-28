@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.2
+
+- Add Cross-README updates and a workspace-wide preview of pending shared changes, with affected and selected README counts.
+- Select recipients beside each document diff; workspace-wide previews start with none selected. Select all/clear are explicit actions, and every selection change invalidates approval.
+- Apply only the chosen preview entries, preserving unselected sources and checking selected document snapshots plus the shared definition before local persistence.
+
 ## 1.5.1
 
 - Add versioned shared Markdown definitions for contributing, testing, security, contact, badges and community links, with editable starting examples.

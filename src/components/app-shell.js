@@ -945,11 +945,11 @@ export class AppShell extends HTMLElement {
       })
       .join("");
   }
-  async sharedComponents() {
+  async sharedComponents(cross = false) {
     await import("./shared-components.js");
     this.modal("<shared-components></shared-components>");
     const panel = this.querySelector("shared-components");
-    panel.configure(this.data);
+    panel.configure(this.data, cross);
     panel.addEventListener("shared-library-save", ({ detail }) => {
       try {
         if (this.storageBlocked)
@@ -2084,6 +2084,9 @@ export class AppShell extends HTMLElement {
     if (action === "collections") this.openCollections();
     if (action === "badges") this.openBadges();
     switch (action) {
+      case "cross-readme-updates":
+        this.sharedComponents(true);
+        break;
       case "shared-components":
         this.sharedComponents();
         break;

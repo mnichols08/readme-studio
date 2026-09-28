@@ -309,3 +309,9 @@ The lazy `workspace-documents` component supplies grouped search and target sett
 The lazy `shared-components` dialog renders inert per-document source diffs. Editing fields or selections invalidates approval. Apply checks definition identity and every affected full draft snapshot, then persists the complete result before changing any Store. Active/inactive document Stores receive independent history checkpoints; inactive history is returned to the workspace cache. Raw edits remove shared ownership; Undo restores it. Existing preview sanitization remains separate from source export.
 
 Workspace backup validation/recovery includes shared definitions. Merge remaps incoming definition IDs and block references, suffixes name collisions, and detaches orphan incoming references without touching their Markdown. No remote fetch, dynamic include resolution or automatic propagation occurs.
+
+### Cross-document preview selection (1.5.2)
+
+Workspace-wide shared preview scans only documents linked to the chosen definition. `planShared` produces immutable before/after snapshots for safe changes; `selectSharedPlan` narrows those entries without regenerating source, preserving workspace order and rejecting unknown recipients. The dialog keeps the full preview separate from its selected apply plan. Every recipient change resets approval and updates affected/selected counts.
+
+The existing persistence boundary accepts only the dialog's approved selected plan, validates its definition and selected document snapshots, and writes only those entries. Unselected document changes are irrelevant to this transaction and remain intact. There is no background propagation, GitHub write, or new persistence schema.
