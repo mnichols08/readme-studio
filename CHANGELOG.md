@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+
+- Grouped task navigation and searchable command palette with keyboard shortcuts and direct section/library destinations.
+- Persistent pane, builder, tool-group and accessibility preferences; unified settings, draft context and bounded local activity.
+- Shared current/generated source review across imports, refreshes, refactors, assets and GitHub publishing; existing confirmations remain required.
+- Browser coverage for command execution, restoration, focus and source preservation.
+
 ## 0.8.3
 
 - Consistent Escape and click-outside modal dismissal with unsaved-edit protection and predictable focus return.

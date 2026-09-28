@@ -13,7 +13,7 @@ async function start(page) {
     .click();
 }
 async function open(page) {
-  await page.locator(".header-actions [data-action=import]").click();
+  await page.locator(".workspace-tools [data-action=import]").click();
 }
 async function local(page, markdown, mode = "new", backup = false) {
   await open(page);

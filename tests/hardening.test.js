@@ -7,6 +7,7 @@ import {
   STORAGE_KEY,
 } from "../src/state/drafts.js";
 import {
+  workspaceSettings,
   validateWorkspace,
   createBackup,
   restoreWorkspace,
@@ -95,7 +96,7 @@ describe("storage recovery and backups", () => {
     const restored = validateWorkspace(JSON.parse(JSON.stringify(backup)));
     expect(restored.drafts[0].markdown).toBe(current.drafts[0].markdown);
     expect(restored.drafts[0].metadata).toEqual(current.drafts[0].metadata);
-    expect(restored.settings).toEqual(current.settings);
+    expect(restored.settings).toEqual(workspaceSettings(current.settings));
     expect(restored.drafts[0].id).not.toBe(current.drafts[0].id);
     expect(restored.createdAt).toBeTruthy();
   });
