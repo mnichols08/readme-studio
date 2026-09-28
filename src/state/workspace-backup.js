@@ -64,7 +64,7 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     drafts = [];
   let active;
   for (const original of data.drafts) {
-    const d = validateDraft(original);
+    const d = validateDraft(original, { preserveBlockIds: preserveIds });
     d.name = uniqueName(d.name, drafts);
     if (
       preserveIds &&

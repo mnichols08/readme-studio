@@ -18,7 +18,7 @@ import { publishDiff } from "../publishing/diff.js";
 export class PublishDialog extends HTMLElement {
   connectedCallback() {
     this.client = new PublishingClient();
-    this.innerHTML = `<h1>Publish to GitHub</h1><p>Optional publishing. Your local draft stays unchanged. Every write requires a source review and confirmation.</p><p role="status" data-status>Checking connection…</p><section data-auth></section><section data-target></section><section data-review></section><section data-history></section><button data-download>Download README fallback</button>`;
+    this.innerHTML = `<h1>Publish to GitHub</h1><p>Optional publishing. Your README source stays unchanged. Every write requires a source review and confirmation.</p><p role="status" data-status>Checking connection…</p><section data-auth></section><section data-target></section><section data-review></section><section data-history></section><button data-download>Download README fallback</button>`;
     this.querySelector("[data-download]").onclick = () =>
       this.emit("publish-download", {
         content: this.source,
@@ -309,9 +309,14 @@ export class PublishDialog extends HTMLElement {
     }
     try {
       recordPublish(result, previous);
+      this.emit("publish-complete", {
+        draftId: this.draftId,
+        kind: this.kind || "readme",
+        result,
+      });
       this.historyView();
       this.status(
-        `${this.kind === "workflow" ? "Workflow" : "README"} published. Your local draft is unchanged.`,
+        `${this.kind === "workflow" ? "Workflow" : "README"} published. Your README source is unchanged.`,
       );
     } catch (e) {
       this.status(

@@ -3,6 +3,9 @@
 README Studio exports ordinary Markdown/HTML. Its preview is an approximation of GitHub, and optional remote images/widgets depend on their providers.
 
 - [Run, edit, import and recover drafts](../README.md)
+- [Portable Studio projects](studio-projects.md)
+- [Project schema](project-schema.md) and [migrations](migrations.md)
+- [Security](security.md) and [privacy](privacy.md)
 - [Workspace navigation, search and settings](workspace.md)
 - [Badges and collections](badges.md)
 - [Project showcases and packs](projects.md)
