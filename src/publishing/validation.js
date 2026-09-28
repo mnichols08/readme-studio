@@ -1,3 +1,4 @@
+import { assetPath } from "./asset-path.js";
 export const MAX_SOURCE_BYTES = 750_000;
 export function target(value) {
   const { repository, branch, path } = value || {};
@@ -25,7 +26,8 @@ export function target(value) {
     branch === "@"
   )
     throw new Error("Choose a valid branch.");
-  if (
+  if (value.kind === "asset") assetPath(path);
+  else if (
     typeof path !== "string" ||
     path.length > 240 ||
     !/^(?:[A-Za-z0-9_-][A-Za-z0-9_. -]*\/)*README(?:\.[A-Za-z0-9_-]+)?$/i.test(
@@ -36,7 +38,12 @@ export function target(value) {
     throw new Error(
       "Choose a relative README file path without traversal or hidden folders.",
     );
-  return { repository, branch, path };
+  return {
+    repository,
+    branch,
+    path,
+    ...(value.kind === "asset" ? { kind: "asset" } : {}),
+  };
 }
 export function writeInput(value) {
   const result = target(value);

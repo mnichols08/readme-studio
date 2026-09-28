@@ -62,6 +62,7 @@ export class Store extends EventTarget {
       this.draft.blocks.length === 1 && this.draft.blocks[0].type === "custom"
         ? this.draft.blocks[0]
         : null;
+    delete this.draft.metadata.bannerReference;
     this.draft.markdown = markdown;
     this.draft.blocks = [
       current

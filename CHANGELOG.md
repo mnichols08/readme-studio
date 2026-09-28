@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.2
+
+- Reviewed generated SVG asset plans with per-file SHAs, source differences, size limits, and path validation.
+- Server regenerates banner SVGs before accepting writes; arbitrary SVG uploads and hidden/traversal paths are rejected.
+- Exact Studio-owned banner reference rewrites, light/dark pairs, preflight conflicts and precise partial-success reporting.
+
 ## 0.8.1
 
 - Re-fetch remote SHAs in browser and server before writes; stale changes stop for explicit review.

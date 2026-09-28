@@ -462,11 +462,16 @@ export class AppShell extends HTMLElement {
         return;
       }
       const blocks = structuredClone(this.store.draft.blocks);
-      if (e.detail.markdown)
-        blocks.push(createBlock("custom", { markdown: e.detail.markdown }));
+      let bannerReference = this.store.draft.metadata.bannerReference;
+      if (e.detail.markdown) {
+        const block = createBlock("custom", { markdown: e.detail.markdown });
+        blocks.push(block);
+        bannerReference = { blockId: block.id, source: e.detail.markdown };
+      }
       this.store.blocks(blocks, {
         ...this.store.draft.metadata,
         bannerSettings: e.detail.banner,
+        ...(bannerReference ? { bannerReference } : {}),
       });
       this.bannerSnapshot = JSON.stringify(this.store.draft);
       e.target.initial = JSON.stringify(e.target.value);

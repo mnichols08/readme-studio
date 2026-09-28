@@ -175,3 +175,5 @@ The Health worker lazily initializes `analysis/wasm-loader.js`. Runtime statisti
 ## Optional publishing boundary (0.8.0)
 
 `server/publishing.js` owns ephemeral credentials and a fixed GitHub API operation allowlist. The optional Node server serves built static files and the same-origin boundary. `src/github/publishing-client.js` carries an in-memory CSRF nonce only; `publish-dialog` holds an immutable prepared source and independent remote baseline. Pure `publishing/validation.js` validates targets on both sides. Writes never flow through autosave, local backups, or generic public GitHub reads. See [deployment/security model](github-publishing.md).
+
+Generated asset publishing uses pure plans in `publishing/assets.js`. The browser reviews each file and the optional owned banner rewrite; the server independently regenerates requested SVGs from normalized settings. Each remote write has a SHA precondition. Files are sequential, README last, with explicit partial-result reporting. Banner ownership is exact-source metadata and detaches on raw edits.
