@@ -1,3 +1,4 @@
+import { providers, providerFor } from "../writing/providers.js";
 import "./writing-comparison.js";
 import { variants, generateAlternatives } from "../writing/alternatives.js";
 import "./writing-context.js";
@@ -33,6 +34,12 @@ export class WritingAssistant extends HTMLElement {
       <label>Exact messages to send<textarea data-request rows="8" readonly></textarea></label>
       <p>The request also includes the model identifier, stream/store flags and completion-token limit. The API key is sent only as an Authorization header, never in these messages.</p>
       <fieldset data-connection><legend>Optional AI connection — memory only</legend>
+        <label>Provider<select data-provider>${Object.entries(providers)
+          .map(
+            ([id, provider]) =>
+              `<option value="${id}">${h(provider.name)}</option>`,
+          )
+          .join("")}</select></label><p data-destination role="status"></p>
         <label>Chat completions endpoint<input data-endpoint type="url" autocomplete="off" placeholder="http://localhost:1234/v1/chat/completions"></label>
         <label>Model identifier<input data-model autocomplete="off" maxlength="200"></label>
         <label>API key (optional for local models)<input data-key type="password" autocomplete="off" spellcheck="false" maxlength="4096"></label>
@@ -51,6 +58,9 @@ export class WritingAssistant extends HTMLElement {
       <label><input type="checkbox" data-approve> I reviewed Original, Proposed and Diff</label><button data-apply disabled>Apply</button></section>`;
     for (const key of ["endpoint", "model", "key"])
       this.querySelector(`[data-${key}]`).value = sessionConnection[key];
+    this.querySelector("[data-provider]").value =
+      sessionConnection.provider || "compatible";
+    this.updateProvider();
     const initial = this.ranges.findIndex((r) => r.id === "selection");
     const cursor = this.ranges.at(-1).start;
     const atCursor = this.ranges.findIndex(
@@ -106,17 +116,30 @@ export class WritingAssistant extends HTMLElement {
       this.cancel();
       this.invalidate();
       this.querySelector("[data-consent]").checked = false;
-      if (e.target.matches("[data-endpoint]")) {
+      if (e.target.matches("[data-endpoint], [data-provider]")) {
         this.querySelector("[data-key]").value = "";
-        sessionConnection = { endpoint: "", model: "", key: "" };
+        sessionConnection = {
+          provider: this.querySelector("[data-provider]").value,
+          endpoint: "",
+          model: "",
+          key: "",
+        };
       }
+      this.updateProvider();
     };
     this.querySelector("[data-forget]").onclick = () => {
       this.cancel();
-      sessionConnection = { endpoint: "", model: "", key: "" };
+      sessionConnection = {
+        provider: "disabled",
+        endpoint: "",
+        model: "",
+        key: "",
+      };
       for (const key of ["endpoint", "model", "key"])
         this.querySelector(`[data-${key}]`).value = "";
       this.querySelector("[data-consent]").checked = false;
+      this.querySelector("[data-provider]").value = "disabled";
+      this.updateProvider();
       this.status("Connection forgotten. Local review remains available.");
     };
     this.querySelector("[data-consent]").onchange = () => {
@@ -140,6 +163,17 @@ export class WritingAssistant extends HTMLElement {
           }),
         );
     };
+  }
+  updateProvider() {
+    const id = this.querySelector("[data-provider]").value;
+    const provider = providerFor(id);
+    const disabled = id === "disabled";
+    for (const field of ["endpoint", "model", "consent"])
+      this.querySelector(`[data-${field}]`).disabled = disabled;
+    this.querySelector("[data-key]").disabled = id !== "compatible";
+    this.querySelector("[data-destination]").textContent =
+      `${provider.name}. ${provider.keyPolicy} ${disabled ? "Manual editing and diff review remain available." : `Destination: ${this.querySelector("[data-endpoint]").value || "not configured"}. Only displayed messages, selected context and model settings are sent; your browser connects directly.`}`;
+    this.busyState(!!this.busy);
   }
   range() {
     return this.ranges[Number(this.querySelector("[data-scope]").value)];
@@ -229,7 +263,8 @@ export class WritingAssistant extends HTMLElement {
       this.alternatives || [],
       value,
     );
-    this.querySelector("[data-generate]").disabled = value;
+    this.querySelector("[data-generate]").disabled =
+      value || this.querySelector("[data-provider]").value === "disabled";
     this.querySelector("[data-cancel]").disabled = !value;
     this.querySelector("[data-review]").disabled = value;
   }
@@ -250,7 +285,7 @@ export class WritingAssistant extends HTMLElement {
         throw Error("Confirm the content and endpoint before sending.");
       const config = connection(
         Object.fromEntries(
-          ["endpoint", "model", "key"].map((key) => [
+          ["provider", "endpoint", "model", "key"].map((key) => [
             key,
             this.querySelector(`[data-${key}]`).value,
           ]),

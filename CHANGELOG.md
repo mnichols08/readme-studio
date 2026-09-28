@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.3
+
+- Separate writing provider adapters from document editing and bounded network transport; offer compatible endpoints, key-free loopback servers and explicit no-AI mode.
+- Show provider, destination, key policy and transmitted context. Provider changes clear credentials/consent and cancel pending work; manual diff review stays available offline.
+- Harden prompts against instructions embedded in imported repository content and reject legacy function-call responses alongside tool calls.
+- Strip credential fields from portable project metadata, draft JSON and workspace backups without changing Markdown source. Document prompt-injection boundaries and residual model risks.
+
 ## 1.4.2
 
 - Optional comparison mode generates Concise, Technical and Friendly alternatives with distinct style instructions and the same reviewed source/context.
