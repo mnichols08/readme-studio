@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { validateGeneratedAsset } from "../src/publishing/assets.js";
 import {
   target,
   writeInput,
@@ -338,6 +339,7 @@ export function createPublishingService({
           let input;
           try {
             input = writeInput(data);
+            if (input.kind === "asset") validateGeneratedAsset(data);
           } catch (e) {
             throw fail(400, e.message);
           }

@@ -204,6 +204,26 @@ it("leaves static deployments unconfigured and uses HTTPS only", async () => {
     ).json(),
   ).toEqual({ configured: false, connected: false });
 });
+it("does not accept arbitrary SVG content or hidden asset paths", async () => {
+  const h = harness();
+  await h.connect();
+  const input = {
+    repository: "octocat/octocat",
+    branch: "main",
+    path: "assets/readme/banner.svg",
+    kind: "asset",
+    sha: null,
+    content: '<svg onload="alert(1)"/>',
+    message: "update",
+    confirmed: true,
+  };
+  expect((await h.request("commit", input)).response.status).toBe(400);
+  expect(
+    (await h.request("commit", { ...input, path: ".github/workflows/a.svg" }))
+      .response.status,
+  ).toBe(400);
+  expect(h.upstream.mock.calls.some(([, o]) => o.method === "PUT")).toBe(false);
+});
 it("stops stale writes on the server before PUT and returns a reviewable remote baseline", async () => {
   const h = harness();
   await h.connect();

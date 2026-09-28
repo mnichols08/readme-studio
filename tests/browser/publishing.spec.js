@@ -3,7 +3,14 @@ const sha = "a".repeat(40),
   next = "b".repeat(40);
 async function setup(
   page,
-  { exists = true, fail = false, stale = false, writable = true } = {},
+  {
+    exists = true,
+    fail = false,
+    stale = false,
+    writable = true,
+    assets = false,
+    failAsset = false,
+  } = {},
 ) {
   const writes = [];
   let connected = false,
@@ -54,9 +61,19 @@ async function setup(
         commitSha: sha,
       };
     }
+    if (op === "read" && route.request().postDataJSON().kind === "asset")
+      data = {
+        ...route.request().postDataJSON(),
+        content: "",
+        sha: null,
+        commitSha: sha,
+      };
     if (op === "commit") {
       writes.push(route.request().postDataJSON());
-      if (fail) {
+      if (
+        fail ||
+        (failAsset && route.request().postDataJSON().path.endsWith("-dark.svg"))
+      ) {
         status = 403;
         data = {
           error:
@@ -84,6 +101,20 @@ async function setup(
   await page
     .getByRole("textbox", { name: "Markdown editor", exact: true })
     .fill("# New 🦀");
+  if (assets)
+    await page.locator("app-shell").evaluate(async (app) => {
+      const { newBanner } = await import("/src/banners/banner-model.js");
+      const { bannerMarkup } = await import("/src/banners/export.js");
+      const { createBlock } = await import("/src/markdown/serialize.js");
+      const banner = newBanner(),
+        source = bannerMarkup(banner),
+        block = createBlock("custom", { markdown: source });
+      app.store.blocks([...app.store.draft.blocks, block], {
+        ...app.store.draft.metadata,
+        bannerSettings: banner,
+        bannerReference: { blockId: block.id, source },
+      });
+    });
   await page
     .getByRole("button", { name: "Publish to GitHub", exact: true })
     .click();
@@ -195,3 +226,50 @@ test("branch creation is explicit and does not commit a README", async ({
   expect(writes).toHaveLength(0);
   await expect(d.getByLabel("Prepared Markdown")).not.toBeVisible();
 });
+
+for (const failAsset of [false, true])
+  test(`asset plan is reviewed and partial=${failAsset} reports exact file outcomes`, async ({
+    page,
+  }) => {
+    const { d, writes } = await setup(page, { assets: true, failAsset });
+    await d
+      .getByLabel("Include generated banner SVG files in this publishing plan")
+      .check();
+    await d
+      .getByLabel(
+        "Update only Studio-owned banner references in the prepared README",
+      )
+      .check();
+    await d.getByRole("button", { name: "Load remote README" }).click();
+    await expect(
+      d.getByRole("heading", { name: "Asset publish plan" }),
+    ).toBeVisible();
+    await expect(d.getByLabel("Prepared Markdown")).toHaveValue(
+      /assets\/readme\/banner-light.svg/,
+    );
+    expect(writes).toHaveLength(0);
+    await d.getByLabel(/I reviewed this diff/).check();
+    await d.getByRole("button", { name: "Confirm and publish README" }).click();
+    if (failAsset) {
+      await expect(d.locator("[data-status]")).toContainText(
+        "Partial asset publish",
+      );
+      expect(writes.map((w) => w.path)).toEqual([
+        "assets/readme/banner-light.svg",
+        "assets/readme/banner-dark.svg",
+      ]);
+      await expect(d.locator("[data-asset-results]")).toContainText("failed");
+    } else {
+      await expect(d.locator("[data-status]")).toContainText(
+        "README published",
+      );
+      expect(writes.map((w) => w.path)).toEqual([
+        "assets/readme/banner-light.svg",
+        "assets/readme/banner-dark.svg",
+        "README.md",
+      ]);
+    }
+    await expect(
+      page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+    ).not.toHaveValue(/assets\/readme/);
+  });
