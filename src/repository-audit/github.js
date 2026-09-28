@@ -23,16 +23,53 @@ export class AuditClient {
     this.fetcher = (...args) => fetcher(...args);
     this.now = now;
     this.timeout = timeout;
+    this.histories = new Map();
+    this.cooldown = 0;
     this.pages = new Map();
     this.readmes = new Map();
     this.bytes = 0;
   }
   clear() {
+    this.histories.clear();
     this.pages.clear();
     this.readmes.clear();
     this.bytes = 0;
   }
   async request(path, signal) {
+    for (let attempt = 0; ; attempt++) {
+      signal?.throwIfAborted();
+      if (this.now() < this.cooldown)
+        throw new AuditError(
+          "rate-limit",
+          `GitHub requests paused until ${new Date(this.cooldown).toLocaleTimeString()}. Completed results are retained.`,
+        );
+      try {
+        return await this.requestOnce(path, signal);
+      } catch (error) {
+        if (
+          signal?.aborted ||
+          attempt >= 1 ||
+          !["transient", "network"].includes(error.kind)
+        )
+          throw error;
+        await new Promise((resolve, reject) => {
+          const finish = () => {
+            signal?.removeEventListener("abort", abort);
+            resolve();
+          };
+          const timer = setTimeout(finish, 300);
+          const abort = () => {
+            clearTimeout(timer);
+            signal?.removeEventListener("abort", abort);
+            reject(signal.reason);
+          };
+          if (signal?.aborted) abort();
+          else signal?.addEventListener("abort", abort, { once: true });
+        });
+      }
+    }
+  }
+  async requestOnce(path, signal) {
     const controller = new AbortController();
     const abort = () => controller.abort(signal.reason);
     if (signal?.aborted) abort();
@@ -63,15 +100,27 @@ export class AuditClient {
           (response.status === 403 &&
             (response.headers.get("x-ratelimit-remaining") === "0" ||
               response.headers.has("retry-after")))
-        )
+        ) {
+          const retry = response.headers.get("retry-after"),
+            reset = Number(response.headers.get("x-ratelimit-reset")) * 1000;
+          const after =
+            retry && /^\d+$/.test(retry)
+              ? this.now() + Number(retry) * 1000
+              : Date.parse(retry);
+          this.cooldown = Math.max(
+            this.now() + 60_000,
+            Number.isFinite(after) ? after : 0,
+            Number.isFinite(reset) ? reset : 0,
+          );
           throw new AuditError("rate-limit", rateLimitMessage(response));
+        }
         if (response.status === 403)
           throw new AuditError(
             "forbidden",
             "GitHub denied the request. Access restrictions or a secondary rate limit may apply; try again later.",
           );
         throw new AuditError(
-          "http",
+          [502, 503, 504].includes(response.status) ? "transient" : "http",
           `GitHub request failed (${response.status}). Retry this repository later.`,
         );
       }
@@ -104,6 +153,48 @@ export class AuditClient {
       clearTimeout(timer);
       signal?.removeEventListener("abort", abort);
     }
+  }
+  async history(repo, path, { signal } = {}) {
+    const name = githubRepository(repo.full_name);
+    const key = `${name}:${repo.default_branch}:${path}`;
+    const cached = this.histories.get(key);
+    if (cached && this.now() - cached.at < TTL) return cached.value;
+    const base = `/repos/${name.split("/").map(encodeURIComponent).join("/")}/commits`;
+    const branch = encodeURIComponent(repo.default_branch || "HEAD");
+    const latest = await this.request(
+      `${base}?sha=${branch}&path=${encodeURIComponent(path)}&per_page=1`,
+      signal,
+    );
+    if (!Array.isArray(latest.data))
+      throw new AuditError("response", "Unreadable README commit history.");
+    const raw = latest.data[0]?.commit?.committer?.date;
+    const timestamp = Date.parse(raw);
+    const updated =
+      Number.isFinite(timestamp) && timestamp <= this.now()
+        ? new Date(timestamp).toISOString()
+        : "";
+    let commits = [];
+    if (updated && this.now() - timestamp >= 90 * 86400000) {
+      const since = new Date(this.now() - 30 * 86400000).toISOString();
+      const recent = await this.request(
+        `${base}?sha=${branch}&since=${encodeURIComponent(since)}&per_page=30`,
+        signal,
+      );
+      if (!Array.isArray(recent.data) || recent.data.length > 30)
+        throw new AuditError(
+          "response",
+          "Unreadable repository activity history.",
+        );
+      commits = recent.data.map((c) => ({
+        sha: c.sha,
+        commit: { committer: { date: c.commit?.committer?.date } },
+      }));
+    }
+    const value = { updated, commits };
+    this.histories.set(key, { at: this.now(), value });
+    if (this.histories.size > 1000)
+      this.histories.delete(this.histories.keys().next().value);
+    return value;
   }
   async repositories(input, page = 1, { signal, force = false } = {}) {
     const username = githubUsername(input);
@@ -294,7 +385,8 @@ export async function auditRepositories(
   ].slice(0, REPOSITORY_LIMIT);
   let cursor = 0,
     stopped = "",
-    completed = 0;
+    completed = 0,
+    failed = 0;
   await Promise.all(
     Array.from({ length: Math.min(3, unique.length) }, async () => {
       while (cursor < unique.length && !stopped && !signal?.aborted) {
@@ -320,6 +412,7 @@ export async function auditRepositories(
           if (["rate-limit", "forbidden"].includes(error.kind))
             stopped = error.message;
           completed++;
+          failed++;
           onResult({
             repo,
             error: error.message,
@@ -333,6 +426,9 @@ export async function auditRepositories(
   return {
     completed,
     total: unique.length,
+    assessed: completed - failed,
+    failed,
+    remaining: unique.length - completed,
     stopped,
     cancelled: signal?.aborted === true,
   };

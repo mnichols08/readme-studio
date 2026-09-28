@@ -418,3 +418,89 @@ test("project type overrides update cached evidence, retain keyboard focus and r
       .evaluate((el) => el.state.typeOverrides.size),
   ).toBe(0);
 });
+
+test("optional history and link review preserves assessments and explains uncertain resources", async ({
+  page,
+}) => {
+  const current = Date.now();
+  let historyCalls = 0,
+    linkCalls = 0;
+  await page.route("https://api.github.com/**", (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.includes("/users/"))
+      return route.fulfill({ json: [metadata("review")] });
+    if (url.pathname.endsWith("/commits")) {
+      historyCalls++;
+      return route.fulfill({
+        json: url.searchParams.has("path")
+          ? [
+              {
+                commit: {
+                  committer: {
+                    date: new Date(current - 200 * 86400000).toISOString(),
+                  },
+                },
+              },
+            ]
+          : Array.from({ length: 10 }, (_, i) => ({
+              sha: String(i),
+              commit: {
+                committer: {
+                  date: new Date(current - i * 86400000).toISOString(),
+                },
+              },
+            })),
+      });
+    }
+    return route.fulfill({
+      json: file(
+        "# your-project-name\n\nTODO: add project details.\n\n![Diagram](https://audit-test.example/missing.png)\n[Website](https://audit-test.example/blocked)",
+      ),
+    });
+  });
+  await page.route("https://audit-test.example/**", (route) => {
+    linkCalls++;
+    return route.request().url().includes("blocked")
+      ? route.abort()
+      : route.fulfill({ status: 404, body: "" });
+  });
+  await open(page);
+  await page
+    .getByRole("button", { name: "Select all filtered repositories" })
+    .click();
+  await page
+    .getByRole("button", { name: "Audit selected", exact: true })
+    .click();
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "Audit complete",
+  );
+  await expect(page.locator("[data-audit-results]")).toContainText(
+    "Possible template placeholder",
+  );
+  expect(historyCalls).toBe(0);
+  expect(linkCalls).toBe(0);
+  await page.getByRole("button", { name: "Check history and links" }).click();
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "checks complete",
+  );
+  await expect(page.locator("[data-audit-results]")).toContainText(
+    "README may need review",
+  );
+  await expect(page.locator("[data-audit-results]")).toContainText(
+    "Image unavailable",
+  );
+  await expect(page.locator("[data-audit-results]")).toContainText(
+    "1 unverifiable",
+  );
+  await expect(
+    page.getByRole("button", { name: "Check history and links" }),
+  ).toBeFocused();
+  expect(historyCalls).toBe(2);
+  expect(linkCalls).toBe(2);
+  await page.getByRole("button", { name: "Check history and links" }).click();
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "checks complete",
+  );
+  expect(historyCalls).toBe(2);
+  expect(linkCalls).toBe(2);
+});

@@ -84,7 +84,11 @@ export function attentionItem(
     keyTopics[assessment.type.id].includes(key),
   );
   const thin = ["missing", "stub", "minimal"].includes(assessment.state);
-  if (!thin && !gaps.length) return null;
+  const findings = [
+    ...(record.result.findings || []),
+    ...(record.review?.findings || []),
+  ];
+  if (!thin && !gaps.length && !findings.length) return null;
   const pushed = Date.parse(repo.pushed_at);
   const days =
     Number.isFinite(pushed) && pushed <= now
@@ -100,6 +104,7 @@ export function attentionItem(
     !!repo.homepage;
   const reasons = [
     assessment.label,
+    ...findings,
     repo.archived
       ? "Archived repository; placed below active work."
       : days === null
