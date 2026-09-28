@@ -30,7 +30,7 @@ async function configure(panel) {
     .fill("memory-secret");
   await panel
     .getByLabel(
-      "Send only Original and my notes to this endpoint when I choose Generate",
+      "Send the displayed messages and selected context to this endpoint when I choose Generate",
     )
     .check();
 }

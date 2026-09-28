@@ -83,7 +83,12 @@ export async function generateWriting(
   { signal, fetcher = fetch, timeout = 60_000 } = {},
 ) {
   const settings = connection(config);
-  const messages = writingMessages(input.action, input.original, input.notes);
+  const messages = writingMessages(
+    input.action,
+    input.original,
+    input.notes,
+    input.context,
+  );
   const controller = new AbortController();
   let timedOut = false;
   const abort = () => controller.abort();
