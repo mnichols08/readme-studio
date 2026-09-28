@@ -1,3 +1,7 @@
+import {
+  documentationType,
+  documentationDefaults,
+} from "../documentation/sections.js";
 import { createBlock, text, html, safeUrl } from "../markdown/serialize.js";
 
 export const repositoryTemplates = [
@@ -195,11 +199,22 @@ export function buildRepositoryTemplate({
   if (values.topics?.trim()) info.push(`Topics: ${text(values.topics.trim())}`);
   add("Repository overview", info.join("\n\n"));
   for (const section of template.sections) {
-    if (sections.includes(section))
-      add(
-        section,
-        `## ${section}\n\n<!-- TODO: Write project-specific ${section.toLowerCase()} information. Remove this section if it does not apply. -->`,
-      );
+    if (sections.includes(section)) {
+      const type = documentationType(section);
+      if (type) {
+        const block = createBlock(type, {
+          ...documentationDefaults(type),
+          title: section,
+        });
+        block.section = { title: section, kind: "documentation" };
+        if (sourceContext) block.sourceContext = structuredClone(sourceContext);
+        blocks.push(block);
+      } else
+        add(
+          section,
+          `## ${section}\n\n<!-- TODO: Write project-specific ${section.toLowerCase()} information. Remove this section if it does not apply. -->`,
+        );
+    }
   }
   return blocks;
 }

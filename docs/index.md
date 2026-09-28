@@ -44,3 +44,5 @@ The [1.0 readiness audit](releases/1.0-readiness.md) tracks release gates separa
 See [repository audit hardening](audit-hardening.md) for conservative placeholder/history findings, optional link checks, retry policy and large-account limits.
 
 In v1.2.0, Improve README / Improve next opens the [repository README builder](repository-builder.md) with an appropriate template and reviewed metadata. Open in Studio still preserves the exact original source.
+
+[Documentation section builders](documentation-sections.md): structured repository sections, command examples, environment-variable placeholders and ordinary Markdown output.
