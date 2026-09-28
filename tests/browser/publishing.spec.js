@@ -1,9 +1,13 @@
 import { test, expect } from "@playwright/test";
 const sha = "a".repeat(40),
   next = "b".repeat(40);
-async function setup(page, { exists = true, fail = false } = {}) {
+async function setup(
+  page,
+  { exists = true, fail = false, stale = false, writable = true } = {},
+) {
   const writes = [];
-  let connected = false;
+  let connected = false,
+    reads = 0;
   await page.route("**/api/publishing/*", async (route) => {
     const op = route.request().url().split("/").at(-1);
     let data = {};
@@ -32,17 +36,24 @@ async function setup(page, { exists = true, fail = false } = {}) {
             repository: "octocat/octocat",
             branch: "main",
             visibility: "public",
-            writable: true,
+            writable,
           },
         ],
       };
-    if (op === "read")
+    if (op === "branch")
       data = {
         ...route.request().postDataJSON(),
-        content: exists ? "# Old" : "",
-        sha: exists ? sha : null,
+        branch: route.request().postDataJSON().newBranch,
+      };
+    if (op === "read") {
+      reads++;
+      data = {
+        ...route.request().postDataJSON(),
+        content: stale && reads > 1 ? "# Remote change" : exists ? "# Old" : "",
+        sha: stale && reads > 1 ? next : exists ? sha : null,
         commitSha: sha,
       };
+    }
     if (op === "commit") {
       writes.push(route.request().postDataJSON());
       if (fail) {
@@ -123,4 +134,64 @@ test("failed publish preserves review and download at mobile width", async ({
   expect(await d.evaluate((el) => el.scrollWidth <= el.clientWidth + 2)).toBe(
     true,
   );
+});
+
+test("stale README requires explicit conflict resolution and fresh confirmation", async ({
+  page,
+}) => {
+  const { d, writes } = await setup(page, { stale: true });
+  await d.getByLabel(/I reviewed this diff/).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await expect(d.locator("[data-status]")).toContainText(
+    "Remote README changed",
+  );
+  expect(writes).toHaveLength(0);
+  await d.getByRole("button", { name: "Merge local and remote" }).click();
+  await d.getByRole("button", { name: "Review merged README" }).click();
+  await expect(d.locator("[data-status]")).toContainText("every conflict");
+  await d.locator("[data-resolution]").selectOption("manual");
+  await d.locator("[data-manual]").fill("# Resolved");
+  await d.getByRole("button", { name: "Review merged README" }).click();
+  await expect(d.getByLabel("Prepared Markdown")).toHaveValue("# Resolved");
+  await expect(d.getByLabel(/I reviewed this diff/)).not.toBeChecked();
+  await d.getByLabel(/I reviewed this diff/).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await expect(d.locator("[data-status]")).toContainText("published");
+  expect(writes[0].sha).toBe(next);
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue("# New 🦀");
+  await d
+    .getByText("Local publishing history and recovery", { exact: true })
+    .click();
+  await d
+    .getByRole("button", { name: "Restore checkpoint as a new draft" })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue("# New 🦀");
+});
+test("read-only disables publish and creating a branch still requires a separate README review", async ({
+  page,
+}) => {
+  const { d, writes } = await setup(page, { writable: false });
+  await expect(
+    d.getByRole("button", { name: "Confirm and publish README" }),
+  ).toBeDisabled();
+  expect(writes).toHaveLength(0);
+});
+test("branch creation is explicit and does not commit a README", async ({
+  page,
+}) => {
+  const { d, writes } = await setup(page);
+  await d.getByText("Publish on a new branch instead", { exact: true }).click();
+  await d.getByLabel("New branch name").fill("readme-studio/review");
+  await d.getByLabel(/I confirm creating this branch/).check();
+  await d.getByRole("button", { name: "Create branch for review" }).click();
+  await expect(d.getByLabel("Target branch")).toHaveValue(
+    "readme-studio/review",
+  );
+  await expect(d.locator("[data-status]")).toContainText("created");
+  expect(writes).toHaveLength(0);
+  await expect(d.getByLabel("Prepared Markdown")).not.toBeVisible();
 });

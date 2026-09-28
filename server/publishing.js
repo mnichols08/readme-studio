@@ -307,6 +307,33 @@ export function createPublishingService({
           return reply({ repositories: await repositories(s) });
         if (operation === "read")
           return reply(await read(s, await authorizeTarget(s, data)));
+        if (operation === "branch") {
+          const t = await authorizeTarget(s, data, true);
+          const next = target({ ...t, branch: data.newBranch });
+          if (
+            data.confirmed !== true ||
+            next.branch === t.branch ||
+            !/^[a-f0-9]{40,64}$/.test(data.commitSha || "")
+          )
+            throw fail(
+              400,
+              "Review the source branch SHA and confirm creation of a different branch.",
+            );
+          const current = await github(
+            s,
+            `/repos/${t.repository}/branches/${encodeURIComponent(t.branch)}`,
+          );
+          if (current.commit.sha !== data.commitSha)
+            throw fail(
+              409,
+              "Source branch changed. Reload it before creating a branch.",
+            );
+          await github(s, `/repos/${t.repository}/git/refs`, "POST", {
+            ref: `refs/heads/${next.branch}`,
+            sha: data.commitSha,
+          });
+          return reply(next);
+        }
         if (operation === "commit") {
           let input;
           try {
@@ -315,6 +342,15 @@ export function createPublishingService({
             throw fail(400, e.message);
           }
           const t = await authorizeTarget(s, input, true);
+          const current = await read(s, t);
+          if (current.sha !== input.sha)
+            throw Object.assign(
+              fail(
+                409,
+                "Remote README changed since you loaded it. Review the latest version.",
+              ),
+              { remote: current },
+            );
           const result = await github(
             s,
             `/repos/${t.repository}/contents/${encodedPath(t.path)}`,
@@ -329,6 +365,7 @@ export function createPublishingService({
           return reply({
             commitSha: result.commit.sha,
             sha: result.content.sha,
+            previousCommitSha: current.commitSha,
             ...t,
           });
         }
@@ -342,6 +379,7 @@ export function createPublishingService({
           error: e.status
             ? e.message
             : "Publishing could not complete. Your local draft is safe.",
+          ...(e.remote ? { remote: e.remote } : {}),
         },
         Number.isInteger(e.status) && e.status >= 400 && e.status < 600
           ? e.status
