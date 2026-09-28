@@ -261,3 +261,9 @@ The versioned catalog in stack-intelligence/catalog.js maps exact normalized eco
 The version-3 session result envelope carries the existing GitHub primary-language field and explicit package.json engine signals. These provide labeled evidence without fetching language files, workflows or registry data. Engine values remain unexecuted data. No runtime inference is made from manifest presence alone.
 
 The stack-dna Web Component filters categories, groups Core/Data for display, and exposes bounded evidence with keyboard focus return. It reads existing result state and never changes drafts, skills or scan consent. Raw dependency evidence remains independently available.
+
+### Stack-to-README (1.3.3)
+
+`readme-metadata.js` retains only recognized package-manager identifiers, test/build script presence and bounded package names. Script bodies, arbitrary URLs, tokens and raw manifests are not retained. This additive metadata is session-only. `readme-suggestions.js` combines it with the deterministic DNA catalog; it never requests registry data or executes commands. Inferred conventions are labeled separately from declarations.
+
+The lazy `stack-readme-review` component starts with no selection, renders evidence as escaped text, and places editable source in textarea values. Each selected item becomes a separate Custom Markdown block. Before application it verifies builder/source synchronization and that the generated document retains the existing source prefix, presents the exact diff, and requires explicit approval tied to the selection and text. The app also checks a full draft snapshot (ID, source, blocks, metadata). Accepted blocks bypass theme regeneration so the reviewed source is applied exactly; one Store checkpoint preserves Undo/Redo. Existing blocks and metadata remain intact. No analysis metadata or Studio runtime is injected into README exports.

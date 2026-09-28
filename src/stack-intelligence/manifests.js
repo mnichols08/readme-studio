@@ -1,3 +1,4 @@
+import { readmeMetadata } from "./readme-metadata.js";
 import { tomlRecords, tomlValue } from "./toml.js";
 export const MANIFEST_LIMIT = 256_000;
 export const DETECTION_LIMIT = 200;
@@ -295,5 +296,6 @@ export function analyzeManifest(path, source) {
     entries,
     notes,
     signals,
+    readme: readmeMetadata(path, source),
   };
 }

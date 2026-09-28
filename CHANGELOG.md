@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.3
+
+- Reviewed stack-to-README suggestions for technology badges, grouped stack sections, package managers, installation, testing/build commands and package/crate links.
+- Allowlisted manifest metadata retains recognized manager names, test/build script presence and bounded package identities; script bodies and arbitrary configuration are discarded.
+- Every suggestion starts unselected, shows evidence and inference limits, and allows Markdown editing. Exact diff approval is invalidated by edits; stale draft snapshots cannot be overwritten.
+- Append-only application preserves existing source, builder ownership and metadata, supports Undo/Redo and autosave, and performs no repository writes or command execution.
+- Conventional commands and publication links remain unverified suggestions; remote badge rendering contacts Shields.io. No skill claims, automatic insertion or new dependencies.
+
 ## 1.3.2
 
 - Stack DNA workspace summary groups selected repository evidence into meaningful technology categories using a versioned curated catalog.
