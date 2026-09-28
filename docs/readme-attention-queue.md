@@ -60,3 +60,5 @@ Malformed/future-version preferences are left untouched. Queue review and source
 ## Verification
 
 Unit fixtures cover deterministic order, explanations, all filters, unknown activity, archived/high-interest repositories, appropriate experiments, 1,000 candidates, SHA/missing transitions, ignore expiry, account scoping, corruption, duplicate identities and write failures. Browser fixtures cover keyboard/mobile controls, source-preserving actions, persisted suppression across reload, changed README reappearance, type overrides, recovery and bounded pages. Network responses are synthetic.
+
+See [repository audit hardening](audit-hardening.md) for conservative placeholder/history findings, optional link checks, retry policy and large-account limits.
