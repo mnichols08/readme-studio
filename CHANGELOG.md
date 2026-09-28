@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.0
+
+- Optional Writing Assistant with nine actions: draft section, improve wording, shorten, expand, technical/casual tone, notes to bullets, bullets to paragraph and grammar cleanup.
+- Operates on exact selected text, a chosen Markdown section or a new section at the cursor. Only Original and optional notes are sent after explicit consent and Generate.
+- Editable Proposed source, Original and full README Diff, explicit approval and Apply. Edits invalidate approval; stale drafts cannot be overwritten. Undo restores source and builder ownership.
+- Configurable OpenAI-compatible chat endpoint and model, including local models. Connection settings and keys stay in tab memory and out of storage, drafts and backups.
+- Cancel/timeout, bounded inputs/responses, safe error reporting and no automatic retries. Manual proposals and core editing remain usable without AI.
+
 ## 1.3.3
 
 - Reviewed stack-to-README suggestions for technology badges, grouped stack sections, package managers, installation, testing/build commands and package/crate links.
