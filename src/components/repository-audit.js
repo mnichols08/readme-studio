@@ -6,16 +6,18 @@ import {
   filterRepositories,
   auditRepositories,
 } from "../repository-audit/github.js";
-import { auditAnalyzer } from "../repository-audit/analyzer.js";
 import {
-  stateLabels,
-  activityStatus,
-} from "../repository-audit/presentation.js";
+  projectTypes,
+  assessProjectType,
+  suggestProjectType,
+} from "../repository-audit/project-types.js";
+import { auditAnalyzer } from "../repository-audit/analyzer.js";
+import { activityStatus } from "../repository-audit/presentation.js";
 
 export class RepositoryAudit extends HTMLElement {
   connectedCallback() {
     this.state = auditSession;
-    this.innerHTML = `<h1>Repository README audit</h1><p>Find documentation that needs attention using evidence, not scores. Only public owned repositories are listed. README content is analyzed locally; nothing is published.</p><form data-load><label>GitHub username<input name="username" autocomplete="off" required maxlength="200" value="${h(this.state.username)}"></label><button type="submit">Load repositories</button></form><p class="hint">100 repositories per page, up to 1,000. Three concurrent README requests. GitHub's unauthenticated rate limit may stop larger scans. Results and a bounded source cache stay in this tab; cached requests expire after five minutes.</p><div class="audit-controls"><label><input type="checkbox" data-forks ${this.state.includeForks ? "checked" : ""}> Include forks</label><label><input type="checkbox" data-archived ${this.state.includeArchived ? "checked" : ""}> Include archived repositories</label><label><input type="checkbox" data-fresh> Fetch fresh README content</label><button data-more>Load next 100 repositories</button><button data-select>Select all filtered repositories</button><button data-clear>Clear selection</button><button data-scan>Audit selected</button><button data-cancel disabled>Cancel audit</button></div><p data-status role="status" aria-live="polite"></p><p data-count></p><div class="audit-table-wrap"><table class="audit-table"><caption>Public repository documentation evidence</caption><thead><tr><th scope="col">Select / Repository</th><th scope="col">README state and evidence</th><th scope="col">Activity / Language</th><th scope="col">Actions</th></tr></thead><tbody></tbody></table></div><div class="audit-pagination"><button data-prev>Previous results</button><span data-page></span><button data-next>Next results</button></div><p>Improve README opens a new local draft and preserves the exact fetched source. Missing READMEs start blank. English setup/usage phrases are heuristic; evidence is not a judgment of the project or its developer.</p>`;
+    this.innerHTML = `<h1>Repository README audit</h1><p>Find documentation that needs attention using evidence, not scores. Only public owned repositories are listed. README content is analyzed locally; nothing is published.</p><form data-load><label>GitHub username<input name="username" autocomplete="off" required maxlength="200" value="${h(this.state.username)}"></label><button type="submit">Load repositories</button></form><p class="hint">100 repositories per page, up to 1,000. Three concurrent README requests. GitHub's unauthenticated rate limit may stop larger scans. Results and a bounded source cache stay in this tab; cached requests expire after five minutes.</p><div class="audit-controls"><label><input type="checkbox" data-forks ${this.state.includeForks ? "checked" : ""}> Include forks</label><label><input type="checkbox" data-archived ${this.state.includeArchived ? "checked" : ""}> Include archived repositories</label><label><input type="checkbox" data-fresh> Fetch fresh README content</label><button data-more>Load next 100 repositories</button><button data-select>Select all filtered repositories</button><button data-clear>Clear selection</button><button data-scan>Audit selected</button><button data-cancel disabled>Cancel audit</button></div><p data-status role="status" aria-live="polite"></p><p data-count></p><div class="audit-table-wrap"><table class="audit-table"><caption>Public repository documentation evidence</caption><thead><tr><th scope="col">Select / Repository</th><th scope="col">README state and evidence</th><th scope="col">Activity / Language</th><th scope="col">Actions</th></tr></thead><tbody></tbody></table></div><div class="audit-pagination"><button data-prev>Previous results</button><span data-page></span><button data-next>Next results</button></div><p>Improve README opens a new local draft and preserves the exact fetched source. Missing READMEs start blank. Project types and English documentation signals are suggestions. Missing topics are commonly useful, never universally required; evidence is not a judgment of the project or its developer.</p>`;
     this.querySelector("form").onsubmit = (e) => {
       e.preventDefault();
       this.load(false);
@@ -76,7 +78,7 @@ export class RepositoryAudit extends HTMLElement {
   }
   controls() {
     this.querySelectorAll(
-      "form input, form button, .audit-controls input, .audit-controls button, tbody input, tbody button",
+      "form input, form button, .audit-controls input, .audit-controls button, tbody input, tbody button, tbody select",
     ).forEach((el) => {
       el.disabled = !!this.busy;
     });
@@ -124,9 +126,38 @@ export class RepositoryAudit extends HTMLElement {
     if (index < 0) return;
     const row = this.querySelector(`[data-row="${index}"]`),
       record = this.state.results.get(repo.full_name);
-    row.querySelector("[data-result]").innerHTML = record?.result
-      ? `<strong>${h(stateLabels[record.result.state])}</strong><ul>${record.result.evidence.map((v) => `<li>${h(v)}</li>`).join("")}</ul><small>Checked ${h(new Date(record.checkedAt).toLocaleString())}</small>`
+    const cell = row.querySelector("[data-result]");
+    if (!cell.querySelector("[data-type]")) {
+      cell.innerHTML = `<div data-assessment></div><p data-suggestion></p><label for="audit-type-${index}">Project type for ${h(repo.full_name)}</label><select id="audit-type-${index}" data-type><option value="auto">Automatic suggestion</option>${projectTypes.map((type) => `<option value="${type.id}">${h(type.name)}</option>`).join("")}</select><p class="hint" data-type-mode></p>`;
+      cell.querySelector("[data-type]").onchange = (event) => {
+        const choice = event.target.value;
+        if (choice === "auto") this.state.typeOverrides.delete(repo.full_name);
+        else this.state.typeOverrides.set(repo.full_name, choice);
+        this.result(repo);
+        this.status(
+          `Project type updated for ${repo.name}. ${record?.result ? "Assessment updated from cached evidence." : "Audit the README to assess documentation."}`,
+        );
+      };
+    }
+    const choice = this.state.typeOverrides.get(repo.full_name) || "auto";
+    const assessment = record?.result
+      ? assessProjectType(record.result, choice)
+      : null;
+    const suggestion = record?.result?.suggestion || suggestProjectType(repo);
+    const suggestedName = projectTypes.find(
+      (type) => type.id === suggestion.id,
+    ).name;
+    cell.querySelector("[data-assessment]").innerHTML = assessment
+      ? `<strong>${h(assessment.label)}</strong><ul>${assessment.evidence.map((v) => `<li>${h(v)}</li>`).join("")}</ul><small>Checked ${h(new Date(record.checkedAt).toLocaleString())}</small>`
       : `<strong>Not assessed</strong><p>${h(record?.error || "Select this repository to fetch and analyze its README.")}</p>`;
+    cell.querySelector("[data-suggestion]").textContent =
+      `Suggested type: ${suggestedName}. ${suggestion.reason} This is an inference, not a certainty.${suggestion.alternatives.length ? ` Other signals: ${suggestion.alternatives.map((id) => projectTypes.find((t) => t.id === id).name).join(", ")}.` : ""}`;
+    cell.querySelector("[data-type]").value = choice;
+    cell.querySelector("[data-type]").disabled = !!this.busy;
+    cell.querySelector("[data-type-mode]").textContent =
+      choice === "auto"
+        ? "Using the automatic suggestion. You can choose another type."
+        : "Manual override; retained in this tab. Choose Automatic suggestion to reset.";
     const url = `https://github.com/${repo.full_name.split("/").map(encodeURIComponent).join("/")}`;
     const readme = record?.readme;
     row.querySelector("[data-actions]").innerHTML =
@@ -156,6 +187,7 @@ export class RepositoryAudit extends HTMLElement {
         viewPage: 0,
         selected: new Set(),
         results: new Map(),
+        typeOverrides: new Map(),
       });
       this.list();
     }
@@ -226,7 +258,7 @@ export class RepositoryAudit extends HTMLElement {
         client: auditClient,
         signal: this.controller.signal,
         force: fresh,
-        analyze: (source) => this.analyzer.analyze(source),
+        analyze: (source, repo) => this.analyzer.analyze(source, repo),
         onResult: (record) => {
           if (!this.isConnected || this.controller.signal.aborted) return;
           this.state.results.set(record.repo.full_name, record);

@@ -78,7 +78,7 @@ test("selected audit distinguishes states, reuses cache and improves exact sourc
   );
   await expect(page.locator("repository-audit")).toContainText("Stub README");
   await expect(page.locator("repository-audit")).toContainText(
-    "Minimal documentation",
+    "Minimal for a Generic Repository",
   );
   if (test.info().project.name === "chromium")
     await page.screenshot({
@@ -99,7 +99,7 @@ test("selected audit distinguishes states, reuses cache and improves exact sourc
   ).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator("repository-audit")).toContainText(
-    "Minimal documentation",
+    "Minimal for a Generic Repository",
   );
   const row = page
     .locator("repository-audit tr")
@@ -287,7 +287,7 @@ test("analysis falls back if Worker creation fails", async ({ page }) => {
   await page.route("https://api.github.com/**", (route) =>
     route.fulfill({
       json: route.request().url().includes("/users/")
-        ? [metadata("fallback")]
+        ? [metadata("fallback", { topics: ["game"] })]
         : file(),
     }),
   );
@@ -302,6 +302,102 @@ test("analysis falls back if Worker creation fails", async ({ page }) => {
     "Audit complete: 1 of 1",
   );
   await expect(page.locator("repository-audit")).toContainText(
-    "Minimal documentation",
+    "Minimal for a Game",
   );
+});
+
+test("project type overrides update cached evidence, retain keyboard focus and reset explicitly", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  let reads = 0;
+  await page.route("https://api.github.com/**", (route) => {
+    const url = route.request().url();
+    if (url.includes("/users/")) {
+      const owner = url.includes("/another/") ? "another" : "example";
+      return route.fulfill({
+        json: [
+          metadata("tool", {
+            topics: ["cli"],
+            full_name: `${owner}/tool`,
+            owner: { login: owner },
+          }),
+        ],
+      });
+    }
+    reads++;
+    return route.fulfill({ json: file() });
+  });
+  await open(page);
+  const type = page.getByLabel("Project type for example/tool", {
+    exact: true,
+  });
+  await expect(type.locator("option")).toHaveCount(15);
+  await expect(page.locator("repository-audit")).toContainText(
+    "Suggested type: CLI",
+  );
+  await expect(page.locator("repository-audit")).toContainText(
+    "Repository topic “cli”",
+  );
+  await type.selectOption("experiment");
+  await page.getByLabel("Select example/tool", { exact: true }).check();
+  await page
+    .getByRole("button", { name: "Audit selected", exact: true })
+    .click();
+  await expect(page.locator("repository-audit")).toContainText(
+    "Basic for an Experiment",
+  );
+  expect(reads).toBe(1);
+  await type.focus();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(type).toHaveValue("web-app");
+  await expect(type).toBeFocused();
+  await expect(page.locator("repository-audit")).toContainText(
+    "Minimal for a Web App",
+  );
+  await expect(page.locator("repository-audit")).toContainText(
+    "Deployment: not detected. Commonly useful for this project type.",
+  );
+  await expect(page.locator("repository-audit")).toContainText(
+    "Suggested type: CLI",
+  );
+  expect(reads).toBe(1);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(320);
+  // Leave the native select popup before dismissing the containing dialog.
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await page.getByRole("button", { name: "README audit", exact: true }).click();
+  await expect(type).toHaveValue("web-app");
+  await page.getByLabel("Fetch fresh README content").check();
+  await page
+    .getByRole("button", { name: "Audit selected", exact: true })
+    .click();
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "Audit complete: 1 of 1",
+  );
+  await expect(type).toHaveValue("web-app");
+  expect(reads).toBe(2);
+  await type.selectOption("auto");
+  await expect(page.locator("repository-audit")).toContainText(
+    "Minimal for a CLI",
+  );
+  expect(reads).toBe(2);
+  await type.selectOption("experiment");
+  await page.getByLabel("GitHub username", { exact: true }).fill("another");
+  await page
+    .getByRole("button", { name: "Load repositories", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Project type for another/tool", { exact: true }),
+  ).toHaveValue("auto");
+  expect(
+    await page
+      .locator("repository-audit")
+      .evaluate((el) => el.state.typeOverrides.size),
+  ).toBe(0);
 });

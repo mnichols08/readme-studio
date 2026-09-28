@@ -1,5 +1,6 @@
 import { analyzeDocument } from "../analysis/analyze.js";
 import { parseSource } from "../analysis/source.js";
+import { documentationFacts, suggestProjectType } from "./project-types.js";
 import { safeUrl } from "../markdown/url-safety.js";
 
 const words = (text) =>
@@ -44,12 +45,14 @@ function prose(tokens, out = []) {
 }
 
 // Explainable rules, not a score. Activity and popularity never affect the state.
-export function classifyReadme(source) {
+export function classifyReadme(source, repo = {}) {
   if (source === null)
     return {
       state: "missing",
       evidence: ["GitHub reports no README", "README needs attention"],
       metrics: null,
+      documentation: {},
+      suggestion: suggestProjectType(repo),
     };
   if (typeof source !== "string")
     throw Error("README source must be text or confirmed missing.");
@@ -68,18 +71,25 @@ export function classifyReadme(source) {
     /\b(install(?:ation|ing)?|setup|set up|getting started|prerequisites?|requirements?)\b/i;
   const usagePattern =
     /\b(usage|how to use|quick ?start|controls|running|run the|use the|examples?)\b/i;
+  const sections = analysis.headings.map((heading, i) => {
+    const section = analysisSource.slice(
+      heading.sourceRange.end,
+      analysis.headings[i + 1]?.sourceRange.start ?? analysisSource.length,
+    );
+    const parsed = parseSource(section);
+    return {
+      title: heading.title,
+      populated:
+        words(prose(parsed.tokens).join(" ")).length >= 6 ||
+        parsed.nodes.some(
+          ({ token }) => token.type === "code" && token.text?.trim(),
+        ),
+    };
+  });
   const sectionHas = (pattern) =>
-    analysis.headings.some((heading, i) => {
-      if (!pattern.test(heading.title)) return false;
-      const start = heading.sourceRange.end;
-      const end =
-        analysis.headings[i + 1]?.sourceRange.start ?? analysisSource.length;
-      const section = analysisSource.slice(start, end);
-      return (
-        words(prose(parseSource(section).tokens).join(" ")).length >= 6 ||
-        /(?:```|~~~)[^\n]*\n\s*\S/.test(section)
-      );
-    });
+    sections.some(
+      (section) => section.populated && pattern.test(section.title),
+    );
   const setup =
     sectionHas(setupPattern) ||
     /\b(?:install|set up|requires)\b[^.!?\n]{8,}/i.test(body);
@@ -152,5 +162,11 @@ export function classifyReadme(source) {
   ];
   if (["stub", "minimal"].includes(state))
     evidence.push("README needs attention");
-  return { state, evidence, metrics };
+  return {
+    state,
+    evidence,
+    metrics,
+    documentation: documentationFacts(metrics, sectionHas),
+    suggestion: suggestProjectType(repo, body),
+  };
 }

@@ -203,3 +203,9 @@ The audit workspace loads on demand. `repository-audit/github.js` constructs fix
 `classify.js` consumes the existing analyzer and token parser; it returns explicit coverage rules and evidence rather than a numerical score. Activity lives separately in `presentation.js` and cannot change documentation classification. A dedicated Worker runs classification, with a deferred JavaScript fallback when Workers fail. The DOM renders at most 25 repository rows and never previews remote images.
 
 Improve emits an exact-source request to the app shell, which creates a new Custom Markdown draft with source context. No writes or automatic transformations occur. Modal closure aborts active requests and terminates analysis. The selected user's public repository identifiers are the only new data sent to GitHub; README text is analyzed locally.
+
+### Project-type intelligence (1.1.1)
+
+`repository-audit/project-types.js` owns stable type IDs, advisory profiles, deterministic inference and pure assessment. Classification extracts populated-section facts once in the audit Worker and returns bounded boolean topic evidence plus a suggestion/reason. It does not retain another copy of README source. Worker and deferred fallback receive the same repository metadata. No extra API request, package scan or remote inference is introduced.
+
+The audit view applies session-only overrides to cached evidence; it does not rerun parsing or fetch on selection. The original suggestion remains visible. Select controls retain their DOM identity during reassessment so keyboard focus stays predictable. Changing accounts clears overrides; fresh scans preserve them. Neither suggested nor chosen type mutates draft source, stored project schemas, preview or exports. Missing/fetch failure and activity remain separate boundaries.
