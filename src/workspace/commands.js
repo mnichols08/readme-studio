@@ -20,6 +20,7 @@ export const commandGroups = {
     ["show-health", "README Health"],
     ["compatibility", "Compatibility Lab"],
     ["refactors", "Safe refactors"],
+    ["writing-assistant", "Writing assistant"],
   ],
   GitHub: [
     ["profile", "Autofill from GitHub"],

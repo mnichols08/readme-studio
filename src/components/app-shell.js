@@ -146,6 +146,7 @@ export class AppShell extends HTMLElement {
       this.querySelector("import-dialog")?.cancel();
       this.querySelector("refresh-center")?.cancel();
       this.querySelector("refactor-dialog")?.cancel();
+      this.querySelector("writing-assistant")?.cancel();
       this.querySelector("repository-health")?.controller?.abort();
       this.querySelector("repository-audit")?.cancel();
       this.querySelector("repository-authoring")?.controller?.abort();
@@ -1820,6 +1821,45 @@ export class AppShell extends HTMLElement {
     if (action === "publish-github") {
       this.modal("<publish-dialog></publish-dialog>");
       this.querySelector("publish-dialog").configure(this.store.draft);
+    }
+    if (action === "writing-assistant") {
+      const start = this.editor.input.selectionStart,
+        end = this.editor.input.selectionEnd;
+      this.modal(
+        "<writing-assistant><p role='status'>Loading writing assistant…</p></writing-assistant>",
+      );
+      const panel = this.querySelector("writing-assistant");
+      import("./writing-assistant.js")
+        .then(() => {
+          if (!panel.isConnected || !this.dialog.open) return;
+          panel.configure(this.store.draft, start, end);
+          panel.querySelector("select").focus();
+          panel.addEventListener("writing-apply", (event) => {
+            if (
+              !panel.canApply() ||
+              event.detail.snapshot !== draftSnapshot(this.store.draft)
+            ) {
+              panel.invalidate();
+              panel.status(
+                "The draft changed. Close and reopen the writing assistant before applying.",
+              );
+              return;
+            }
+            this.store.raw(event.detail.markdown);
+            this.closeDialog();
+            this.mobile("markdown", false);
+            this.focusDocument();
+            this.notify(
+              "Reviewed writing applied. Undo restores the previous source and builder ownership.",
+            );
+          });
+        })
+        .catch(() => {
+          if (panel.isConnected)
+            panel.textContent =
+              "Writing assistant could not load. Your draft is preserved; reload and try again.";
+        });
+      return;
     }
     if (action === "refactors") {
       this.modal("<refactor-dialog></refactor-dialog>");

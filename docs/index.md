@@ -50,3 +50,5 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 [Project-specific documentation](project-documentation.md): CLI, API, packages, games, Rust crates and web-app recommendations and forms.
 
 - [Stack-to-README suggestions](stack-to-readme.md) — review detected stack, commands and links before inserting.
+
+- [Writing Assistant](writing-assistant.md) — optional selected-content AI with Original / Proposed / Diff / Apply.

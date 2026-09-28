@@ -20,3 +20,9 @@ Generated workflow commands run only if you commit and run them on GitHub; their
 ## Your control
 
 Core authoring works without signing in. Network-dependent features may be unavailable offline; remote media can fail while editing and export remain usable. Clear local activity from its dialog, disconnect publishing from its dialog, export your documents, and use browser site-data controls to remove local data. The optional deployment host may keep access logs independently of this code; ask its operator about retention.
+
+## Optional Writing Assistant
+
+Writing assistance is off until you configure an endpoint/model, confirm the displayed content and choose Generate. The request sends the selected Original, optional notes and the chosen editing instructions to that endpoint; the API key is an Authorization header. Other drafts, repository metadata and editing history are not sent. Connections are held in tab memory, not browser storage, projects, backups or exports; Forget connection or reload clears them. Changing the endpoint clears the key.
+
+Provider processing, retention and billing depend on your chosen service. The request asks not to store the completion, but Studio cannot guarantee provider policy. Browser network tools and extensions can still access a key used by the page. Use a trusted local endpoint or an operator-controlled gateway for shared deployments; never bundle an operator secret into a public site. No connection test, model-list fetch, background generation or automatic retry occurs. See [Writing Assistant](writing-assistant.md).
