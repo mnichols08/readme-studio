@@ -42,6 +42,13 @@ test("repository templates are accessible from Create and produce editable local
     "data-mobile",
     "build",
   );
+  await page.getByRole("button", { name: "Library", exact: true }).click();
+  await expect(page.getByLabel("Documentation project type")).toHaveValue(
+    "rust-crate",
+  );
+  await expect(page.locator("[data-recommended]")).toContainText(
+    "Cargo Dependency",
+  );
 });
 
 test("Queue Improve README opens the suggested template with reviewed context and preserves original source", async ({
