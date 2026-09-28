@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.6.3** · Native Web Components · Local drafts · Static hosting
+**Version 0.8.0** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -203,3 +203,7 @@ Health optionally accelerates source statistics with a local WASM core. Missing 
 **Health → GitHub Compatibility** explains likely supported, stripped, unsafe and review-worthy patterns, with alternatives and source jumps. See [compatibility guidance and fixture verification limits](docs/compatibility.md).
 
 **Health → Safe refactors** prepares deterministic fixes with complete Before/After source and a combined Diff. Apply is explicit, overlapping fixes require sequential review, and Undo restores source and builder ownership. This release converts an applied draft to Custom Markdown to avoid stale visual settings. See [safe refactors and supported patterns](docs/refactors.md).
+
+### Optional GitHub publishing (0.8.0)
+
+Connect a GitHub App, select a repository/branch, load its README, review the source diff and explicitly confirm a commit. Local editing and downloads never require sign-in. GitHub Pages and other static-only deployments keep publishing disabled unless the optional same-origin Node service is deployed. See [authentication and publishing setup](docs/github-publishing.md) for permissions, HTTPS, session handling and deployment limitations.
