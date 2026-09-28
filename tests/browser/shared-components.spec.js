@@ -34,7 +34,7 @@ async function all(panel) {
     await box.check();
 }
 async function apply(panel) {
-  await panel.getByLabel("I reviewed every document diff").check();
+  await panel.getByLabel("I reviewed all selected document diffs").check();
   await panel.getByRole("button", { name: "Apply reviewed changes" }).click();
   await expect(panel.locator("[data-status]")).toContainText(
     "Applied reviewed changes",
@@ -111,7 +111,7 @@ test("stale multi-document preview and failed persistence leave every source unc
     document.querySelector("app-shell").store.raw("# Local edit"),
   );
   const changed = await sources(page);
-  await panel.getByLabel("I reviewed every document diff").check();
+  await panel.getByLabel("I reviewed all selected document diffs").check();
   await panel.getByRole("button", { name: "Apply reviewed changes" }).click();
   await expect(panel.locator("[data-status]")).toContainText(
     "document changed",
@@ -125,7 +125,7 @@ test("stale multi-document preview and failed persistence leave every source unc
       throw new DOMException("Full", "QuotaExceededError");
     };
   });
-  await panel.getByLabel("I reviewed every document diff").check();
+  await panel.getByLabel("I reviewed all selected document diffs").check();
   await panel.getByRole("button", { name: "Apply reviewed changes" }).click();
   await expect(panel.locator("[data-status]")).toContainText("Full");
   expect(await sources(page)).toEqual(changed);

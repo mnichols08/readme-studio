@@ -188,6 +188,17 @@ export function checkSharedPlan(plan, drafts, library) {
   }
 }
 
+// Keep the reviewed source/snapshots intact while narrowing the apply set.
+export function selectSharedPlan(preview, selectedIds) {
+  const ids = new Set(selectedIds);
+  if ([...ids].some((id) => !preview.entries.some((entry) => entry.id === id)))
+    throw Error("Only documents in this preview can be selected.");
+  return {
+    ...preview,
+    entries: preview.entries.filter((entry) => ids.has(entry.id)),
+  };
+}
+
 export const sharedStarters = {
   "Contributing footer":
     "## Contributing\n\nDescribe how to propose changes and where to find contribution guidelines.",
