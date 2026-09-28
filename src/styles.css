@@ -2013,3 +2013,24 @@ refresh-center textarea {
   width: 100%;
   min-height: 10rem;
 }
+refactor-dialog,
+compatibility-lab {
+  display: block;
+  min-width: 0;
+}
+refactor-dialog pre {
+  max-width: 100%;
+  max-height: 22rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 1rem;
+  background: var(--bg);
+}
+refactor-dialog textarea {
+  width: 100%;
+  min-width: 0;
+}
+refactor-dialog fieldset {
+  min-width: 0;
+}

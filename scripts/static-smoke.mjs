@@ -47,7 +47,7 @@ try {
       .click();
     await page
       .getByRole("textbox", { name: "Markdown editor", exact: true })
-      .fill("# Static hosting");
+      .fill("# Static hosting\n\n### Deeper\n\nContent");
     await page
       .locator("github-preview h1")
       .filter({ hasText: "Static hosting" })
@@ -59,9 +59,23 @@ try {
       "WASM"
     )
       throw new Error("Production WASM asset failed to load");
+    await page
+      .getByRole("button", { name: "Safe refactors", exact: true })
+      .click();
+    await page.getByLabel(/Normalize heading hierarchy/).check();
+    await page
+      .getByRole("button", { name: "Review selected refactors", exact: true })
+      .click();
+    await page.getByLabel("After refactor").waitFor();
+    if (
+      !(await page.getByLabel("After refactor").inputValue()).includes(
+        "\n## Deeper",
+      )
+    )
+      throw new Error("Production refactor worker failed");
     if (errors.length) throw new Error(errors.join("\n"));
     console.log(
-      `Static smoke passed: ${path} (preview, Health Worker and WASM)`,
+      `Static smoke passed: ${path} (preview, Health/WASM and refactor workers)`,
     );
     await page.close();
   }

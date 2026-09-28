@@ -1,3 +1,4 @@
+import "./refactor-dialog.js";
 import "./compatibility-lab.js";
 import "./refresh-center.js";
 import { invalidateHealth } from "../github/health-cache.js";
@@ -142,6 +143,7 @@ export class AppShell extends HTMLElement {
       if (this.dialog.open) return; // Ignore a queued close event from the previous dialog content.
       this.querySelector("import-dialog")?.cancel();
       this.querySelector("refresh-center")?.cancel();
+      this.querySelector("refactor-dialog")?.cancel();
       this.querySelector("repository-health")?.controller?.abort();
       this.querySelector("repository-authoring")?.controller?.abort();
       const target = this.afterDialogFocus || this.dialogTrigger;
@@ -182,6 +184,25 @@ export class AppShell extends HTMLElement {
       if (b.dataset.blockAction)
         this.blockAction(b.dataset.blockAction, b.dataset.id);
     };
+    this.addEventListener("refactor-cancel", () => this.closeDialog());
+    this.addEventListener("refactor-apply", (e) => {
+      if (
+        e.detail.snapshot !== JSON.stringify(this.store.draft) ||
+        e.detail.source !== this.store.draft.markdown
+      ) {
+        this.querySelector("refactor-dialog")?.fail(
+          "The draft changed. Close and reopen Safe refactors before applying.",
+        );
+        return;
+      }
+      this.store.raw(e.detail.plan.newMarkdown);
+      this.closeDialog(this.editor.input);
+      this.mobile("markdown");
+      this.focusDocument();
+      this.notify(
+        "Reviewed refactors applied. Undo restores source and builder ownership.",
+      );
+    });
     this.addEventListener("analysis-jump", (e) => {
       if (e.detail.source !== this.store.draft.markdown) {
         this.notify("The document changed. Wait for updated analysis.");
@@ -1528,6 +1549,10 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (action === "refactors") {
+      this.modal("<refactor-dialog></refactor-dialog>");
+      this.querySelector("refactor-dialog").configure(this.store.draft);
+    }
     if (action === "compatibility") {
       this.modal("<compatibility-lab></compatibility-lab>");
       this.querySelector("compatibility-lab").draft = this.store.draft;
