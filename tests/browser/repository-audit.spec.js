@@ -112,6 +112,9 @@ test("selected audit distinguishes states, reuses cache and improves exact sourc
     "https://github.com/example/notes/blob/main/README.md",
   );
   await row.getByRole("button", { name: "Improve README" }).click();
+  await page
+    .getByRole("button", { name: "Open existing README unchanged" })
+    .click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
   expect(await page.locator("#draft-select option").count()).toBe(2);
   expect(
@@ -157,6 +160,9 @@ test("archive/fork options and missing README improvement work by keyboard at 32
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(320);
   await page.locator("repository-audit [data-improve]").first().click();
+  await page
+    .getByRole("button", { name: "Open existing README unchanged" })
+    .click();
   expect(
     await page.evaluate(
       () => document.querySelector("app-shell").store.draft.markdown,
