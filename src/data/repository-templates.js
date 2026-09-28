@@ -175,6 +175,7 @@ export function buildRepositoryTemplate({
   sections,
   existing = null,
   sourceContext = null,
+  includeContext = true,
 }) {
   const template = repositoryTemplates.find((t) => t.id === templateId);
   if (!template) throw Error("Choose a supported repository template.");
@@ -201,7 +202,8 @@ export function buildRepositoryTemplate({
   if (values.language?.trim())
     info.push(`Primary language: ${text(values.language.trim())}`);
   if (values.topics?.trim()) info.push(`Topics: ${text(values.topics.trim())}`);
-  add("Repository overview", info.join("\n\n"));
+  if (existing === null || includeContext)
+    add("Repository overview", info.join("\n\n"));
   for (const section of template.sections) {
     if (sections.includes(section)) {
       const type = documentationType(section);
