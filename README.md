@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.2.1 — Documentation Section Builders.** Edit 18 repository documentation sections with structured fields, command blocks and environment-variable rows while exporting ordinary Markdown. See the [documentation sections guide](docs/documentation-sections.md).
+**Version 1.2.2 — Project-Specific Documentation Builders.** Use recommended sections and specialized fields for CLI, API, library/package, game, Rust crate and web-app documentation. See the [project documentation guide](docs/project-documentation.md).
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
