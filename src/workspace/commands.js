@@ -7,6 +7,7 @@ export const commandGroups = {
     ["badges", "Badge Studio"],
     ["collections", "Collections"],
     ["components", "Components"],
+    ["shared-components", "Shared components"],
     ["widgets", "Widget Hub"],
   ],
   Design: [

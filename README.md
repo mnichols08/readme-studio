@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.5.0 — Multi-README Workspace.** Organize profile, repository and local documents, each with its own source, GitHub target, Health analysis and undo history while switching. Audit actions reopen matching local work without replacing edits. See the [workspace documents guide](docs/workspace-documents.md).
+**Version 1.5.1 — Shared Components.** Reuse common Markdown across workspace documents, then preview and approve linked updates. Saving a definition never changes a README; local edits stay protected. See the [shared components guide](docs/shared-components.md).
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

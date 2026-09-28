@@ -1,3 +1,8 @@
+import {
+  validateShared,
+  recoverShared,
+  mergeShared,
+} from "../workspace/shared-components.js";
 import { portableData } from "./portable-data.js";
 import {
   validateComponents,
@@ -87,6 +92,7 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     badgeCollections: validateCollections(data.badgeCollections),
     visualLibrary: validateVisualLibrary(data.visualLibrary),
     componentLibrary: validateComponents(data.componentLibrary),
+    sharedComponents: validateShared(data.sharedComponents),
     ...(typeof data.createdAt === "string"
       ? { createdAt: data.createdAt }
       : {}),
@@ -103,6 +109,11 @@ export function restoreWorkspace(current, backup, mode) {
   const incoming = validateWorkspace(backup);
   if (mode === "replace") return incoming;
   if (mode !== "merge") throw new Error("Choose replace or merge.");
+  const sharedComponents = mergeShared(
+    current.sharedComponents,
+    incoming.sharedComponents,
+    incoming.drafts,
+  );
   const drafts = structuredClone(current.drafts);
   for (const d of incoming.drafts) {
     d.name = uniqueName(d.name, drafts);
@@ -115,6 +126,7 @@ export function restoreWorkspace(current, backup, mode) {
   return {
     ...current,
     drafts,
+    sharedComponents,
     componentLibrary: mergeComponents(
       current.componentLibrary,
       incoming.componentLibrary,
@@ -156,6 +168,7 @@ export function recoverWorkspace(raw) {
           badgeCollections: recoverCollections(data.badgeCollections),
           visualLibrary: recoverVisualLibrary(data.visualLibrary),
           componentLibrary: recoverComponents(data.componentLibrary),
+          sharedComponents: recoverShared(data.sharedComponents),
         })
       : null;
   } catch {

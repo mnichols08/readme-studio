@@ -2429,3 +2429,12 @@ workspace-documents [aria-current="true"] {
   font-weight: 700;
   border-width: 2px;
 }
+
+shared-components fieldset {
+  max-height: 35vh;
+  overflow: auto;
+}
+shared-components [data-diffs] {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
