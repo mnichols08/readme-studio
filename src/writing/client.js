@@ -88,6 +88,7 @@ export async function generateWriting(
     input.original,
     input.notes,
     input.context,
+    input.variant,
   );
   const controller = new AbortController();
   let timedOut = false;

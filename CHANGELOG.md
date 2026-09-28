@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.2
+
+- Optional comparison mode generates Concise, Technical and Friendly alternatives with distinct style instructions and the same reviewed source/context.
+- Side-by-side source cards on desktop, stacked cards on mobile; choosing a version copies it into editable Proposed without changing the draft.
+- Exact preview of all three messages and explicit notice of up to three sequential provider requests. Failure/cancellation stops remaining requests and preserves completed versions; no automatic retries.
+- Warns when the provider returns identical alternatives. Choosing another version invalidates diff approval; context/action/mode changes clear stale alternatives.
+- Explicit long-to-short, paragraph/notes-to-bullets, bullets-to-paragraph and technical-notes-to-README-summary transformations. Existing grounding and diff-reviewed Apply remain mandatory.
+
 ## 1.4.1
 
 - Seven explicit, editable writing-context sources: GitHub profile, one selected repository, project type, that repository's Stack DNA, draft project metadata, one selected section and current writing style.
