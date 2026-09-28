@@ -11,7 +11,7 @@ export class StackResults extends HTMLElement {
   render() {
     const records = this.records || [],
       pages = Math.max(1, Math.ceil(records.length / 25));
-    this.innerHTML = `<h2 tabindex="-1">Detected in selected repositories</h2><p>Manifest declarations are repository evidence, not developer skill or proof that a dependency runs in production. Root manifests only; nested projects, transitive resolution and executable configuration are outside this scan.</p><p>${records.length} selected repositories with results. Results stay in this tab; no README or profile is changed.</p><div>${records
+    this.innerHTML = `<h2 tabindex="-1">Detected in selected repositories</h2><p>Direct dependency declarations are repository evidence, not developer skill or proof that a dependency runs in production. Root manifests only. Indirect Go requirements and unused or unresolved Cargo workspace declarations are excluded. No transitive dependency resolution or executable configuration.</p><p>${records.length} selected repositories with results. Results stay in this tab; no README or profile is changed.</p><div>${records
       .slice(this.page * 25, (this.page + 1) * 25)
       .map(
         (record) =>
@@ -25,7 +25,7 @@ export class StackResults extends HTMLElement {
         const body = details.querySelector("[data-stack-body]");
         if (!details.open || body.childElementCount) return;
         const record = records[Number(details.dataset.stackRecord)];
-        body.innerHTML = `<p>Observed: ${h(new Date(record.checkedAt).toLocaleString())}; branch: ${h(record.ref || "unknown")}</p>${record.issues.map((issue) => `<p class="hint">Notice: ${h(issue)}</p>`).join("")}${record.manifests.map((manifest) => `<section><h3>${h(manifest.ecosystem)} — ${h(manifest.path)}</h3><p>Manifest present. ${manifest.entries.length} dependency declarations shown.</p><ul>${manifest.entries.map((entry) => `<li><strong>${h(entry.name)}</strong> — ${h(entry.role)}; ${h(entry.evidence)}${entry.line ? ` (line ${entry.line})` : ""}</li>`).join("")}</ul>${manifest.notes.map((note) => `<p class="hint">${h(note)}</p>`).join("")}</section>`).join("")}`;
+        body.innerHTML = `<p>Observed: ${h(new Date(record.checkedAt).toLocaleString())}; branch: ${h(record.ref || "unknown")}</p>${record.issues.map((issue) => `<p class="hint">Notice: ${h(issue)}</p>`).join("")}<h3>Direct dependencies</h3><p>${record.dependencies?.length || 0} normalized dependency records. The same name in different kinds remains separate.</p><ul data-dependencies>${(record.dependencies || []).map((entry) => `<li><strong>${h(entry.name)}</strong> — ${h(entry.ecosystem)} · ${h(entry.kind)} · ${h(entry.repository)}<ul>${entry.evidence.map((item) => `<li>${h(item.manifest)} — ${h(item.section)}${item.line ? ` (line ${item.line})` : ""}</li>`).join("")}</ul></li>`).join("")}</ul>${record.manifests.map((manifest) => `<section><h3>${h(manifest.ecosystem)} — ${h(manifest.path)}</h3><p>Manifest present.</p>${manifest.notes.map((note) => `<p class="hint">${h(note)}</p>`).join("")}</section>`).join("")}`;
       };
     });
     for (const [selector, step] of [

@@ -124,36 +124,54 @@ export function analyzeManifest(path, source) {
         group.value[tail[1]] = value;
       else throw Error("Unsupported Cargo dependency structure.");
     }
+    const workspace = new Map(
+      [...groups.values()]
+        .filter((group) => group.section.join(".") === "workspace.dependencies")
+        .map((group) => [group.name, group]),
+    );
     for (const group of groups.values()) {
+      if (group.section[0] === "workspace") continue;
+
       if (typeof group.value !== "string" && !object(group.value))
         throw Error("Invalid Cargo dependency declaration.");
       const section = group.section.join(".");
-      const role =
-        group.section[0] === "workspace"
-          ? "workspace declaration"
-          : section.endsWith("dev-dependencies")
-            ? "development"
-            : section.endsWith("build-dependencies")
-              ? "build"
-              : "runtime";
+      const role = section.endsWith("dev-dependencies")
+        ? "development"
+        : section.endsWith("build-dependencies")
+          ? "build"
+          : "runtime";
       const inherited = object(group.value) && group.value.workspace === true;
+      let value = group.value;
+      if (inherited) {
+        const shared = workspace.get(group.name);
+        if (
+          !shared ||
+          (typeof shared.value !== "string" && !object(shared.value))
+        ) {
+          note(
+            "Unresolved workspace references were omitted from direct dependency results.",
+          );
+          continue;
+        }
+        value = shared.value;
+      }
       add(
-        object(group.value) && typeof group.value.package === "string"
-          ? group.value.package
+        object(value) && typeof value.package === "string"
+          ? value.package
           : group.name,
-        inherited ? "workspace reference" : role,
-        section,
+        role === "runtime" &&
+          object(group.value) &&
+          group.value.optional === true
+          ? "optional"
+          : role,
+        section + (inherited ? " (inherited from workspace.dependencies)" : ""),
         group.line,
       );
-      if (inherited)
-        note(
-          "Workspace references are declarations, not resolved dependency identities.",
-        );
     }
     if (/\[workspace(?:\]|\.)/.test(source))
       note("Workspace members and local path dependencies are not followed.");
     note(
-      "Optional, target-specific and workspace declarations do not prove a dependency is active in a build.",
+      "Optional and target-specific declarations do not prove a dependency is active in a build. Unused workspace declarations are excluded.",
     );
   } else if (path === "pyproject.toml") {
     for (const record of tomlRecords(source)) {
@@ -203,6 +221,9 @@ export function analyzeManifest(path, source) {
       "Only declarative project, Poetry, dependency-group and build-system dependencies are read; setup.py is never executed.",
     );
   } else if (path === "requirements.txt") {
+    note(
+      "Requirements are explicitly declared entries; generated freeze files may also list transitive packages. No dependency graph is inferred.",
+    );
     source.split("\n").forEach((raw, index) => {
       const line = raw.trim();
       if (!line || line.startsWith("#")) return;
@@ -212,7 +233,7 @@ export function analyzeManifest(path, source) {
         );
         return;
       }
-      python(line, "declared requirement", "requirements.txt", index + 1);
+      python(line, "runtime", "requirements.txt", index + 1);
     });
   } else {
     let block = "";
@@ -239,12 +260,13 @@ export function analyzeManifest(path, source) {
       if (declaration !== null) {
         const match = declaration.match(/^("[^"]+"|[^\s]+)\s+v\S+$/);
         if (!match) throw Error("Unsupported go.mod require declaration.");
-        add(
-          match[1].replace(/^"|"$/g, ""),
-          /\/\/\s*indirect\b/.test(raw) ? "indirect" : "direct",
-          "require",
-          index + 1,
-        );
+        if (/\/\/\s*indirect\b/.test(raw)) {
+          note(
+            "Indirect Go requirements were excluded from direct dependency results.",
+          );
+          return;
+        }
+        add(match[1].replace(/^"|"$/g, ""), "runtime", "require", index + 1);
       }
       if (/^replace\b|^exclude\b/.test(line))
         note(

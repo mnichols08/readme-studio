@@ -1,3 +1,4 @@
+import { normalizeDependencies } from "./dependencies.js";
 import { auditClient, AuditError } from "../repository-audit/github.js";
 import { githubRepository } from "../badges/providers/github.js";
 import { manifests, analyzeManifest, MANIFEST_LIMIT } from "./manifests.js";
@@ -14,11 +15,11 @@ export class StackClient {
   }
   async repository(repo, { signal, force = false } = {}) {
     signal?.throwIfAborted();
-    const name = githubRepository(repo.full_name);
+    const name = githubRepository(repo.full_name).toLowerCase();
     const key = JSON.stringify([name, repo.default_branch || "HEAD"]);
     const cached = this.cache.get(key);
     if (!force && cached && this.now() - cached.at < 300000)
-      return cached.value;
+      return { ...cached.value, repository: repo.full_name };
     if (cached) {
       this.bytes -= cached.size;
       this.cache.delete(key);
@@ -29,6 +30,7 @@ export class StackClient {
     if (!Array.isArray(listing) || listing.length > 1000)
       throw new AuditError("response", "Unreadable root manifest listing.");
     const result = {
+      version: 2,
       repository: repo.full_name,
       ref: repo.default_branch || "HEAD",
       checkedAt: this.now(),
@@ -108,6 +110,10 @@ export class StackClient {
         }
       }
     }
+    result.dependencies = normalizeDependencies(
+      repo.full_name,
+      result.manifests,
+    );
     result.status = result.issues.length
       ? "partial"
       : result.manifests.length
