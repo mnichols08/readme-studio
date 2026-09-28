@@ -1,3 +1,5 @@
+import "./writing-comparison.js";
+import { variants, generateAlternatives } from "../writing/alternatives.js";
 import "./writing-context.js";
 import { html as h } from "../markdown/serialize.js";
 import { draftSnapshot } from "../state/import-plan.js";
@@ -23,6 +25,8 @@ export class WritingAssistant extends HTMLElement {
       <label>Writing action<select data-action-choice>${Object.entries(actions)
         .map(([id, [name]]) => `<option value="${id}">${h(name)}</option>`)
         .join("")}</select></label>
+      <label>Generation mode<select data-mode><option value="single">Single proposal</option><option value="compare">Compare Concise, Technical and Friendly (up to 3 requests)</option></select></label>
+      <p>Comparison generates three versions sequentially and may incur three provider charges. It stops on failure and keeps completed versions. No automatic retry.</p>
       <label>Original<textarea data-original rows="6" readonly></textarea></label>
       <label>Optional factual notes or instructions<textarea data-notes rows="3" maxlength="32000"></textarea></label>
       <writing-context></writing-context>
@@ -39,6 +43,7 @@ export class WritingAssistant extends HTMLElement {
       <p>Unchecked context, other drafts and workspace history are not sent. Check the displayed messages for secrets before sending.</p>
       <div class="row-actions"><button data-generate>Generate proposal</button><button data-cancel disabled>Cancel request</button></div>
       <p data-status role="status"></p>
+      <writing-comparison hidden></writing-comparison>
       <label>Proposed<textarea data-proposed rows="8" maxlength="64000" placeholder="Generate a proposal, or paste and edit one here without connecting AI."></textarea></label>
       <p>AI can make mistakes. Verify facts, links and commands. Applying uses source editing and converts builder-owned content to Custom Markdown; Undo restores source and ownership.</p>
       <button data-review>Review diff</button>
@@ -83,6 +88,16 @@ export class WritingAssistant extends HTMLElement {
     this.querySelector("[data-action-choice]").onchange = () =>
       this.resetInput();
     this.querySelector("[data-notes]").oninput = () => this.resetInput();
+    this.querySelector("[data-mode]").onchange = () => this.resetInput();
+    this.addEventListener("writing-alternative", (event) => {
+      if (this.busy) return;
+      this.invalidate();
+      this.querySelector("[data-proposed]").value = event.detail;
+      this.status(
+        "Alternative copied into Proposed. Review its diff before applying.",
+      );
+      this.querySelector("[data-proposed]").focus();
+    });
     this.querySelector("[data-proposed]").oninput = () => {
       this.cancel();
       this.invalidate();
@@ -147,16 +162,26 @@ export class WritingAssistant extends HTMLElement {
       context: this.querySelector("writing-context").entries(),
     };
   }
+  requestMessages(input = this.input()) {
+    const messages = (variant = "") =>
+      writingMessages(
+        input.action,
+        input.original,
+        input.notes,
+        input.context,
+        variant,
+      );
+    return this.querySelector("[data-mode]").value === "compare"
+      ? Object.entries(variants).map(([id, [label]]) => ({
+          alternative: label,
+          messages: messages(id),
+        }))
+      : messages();
+  }
   updateRequest() {
     try {
-      const input = this.input();
       this.querySelector("[data-request]").value = JSON.stringify(
-        writingMessages(
-          input.action,
-          input.original,
-          input.notes,
-          input.context,
-        ),
+        this.requestMessages(),
         null,
         2,
       );
@@ -167,6 +192,8 @@ export class WritingAssistant extends HTMLElement {
   }
   resetInput() {
     this.cancel();
+    this.alternatives = [];
+    this.querySelector("writing-comparison").show([]);
     this.invalidate();
     this.querySelector("[data-proposed]").value = "";
     this.querySelector("[data-consent]").checked = false;
@@ -185,6 +212,7 @@ export class WritingAssistant extends HTMLElement {
       this.querySelector("[data-action-choice]").value,
       this.querySelector("[data-notes]").value,
       this.querySelector("writing-context").entries(),
+      this.querySelector("[data-mode]").value,
     ]);
   }
   canApply() {
@@ -197,6 +225,10 @@ export class WritingAssistant extends HTMLElement {
   }
   busyState(value) {
     this.busy = value;
+    this.querySelector("writing-comparison")?.show(
+      this.alternatives || [],
+      value,
+    );
     this.querySelector("[data-generate]").disabled = value;
     this.querySelector("[data-cancel]").disabled = !value;
     this.querySelector("[data-review]").disabled = value;
@@ -204,6 +236,8 @@ export class WritingAssistant extends HTMLElement {
   cancel() {
     this.requestId++;
     this.controller?.abort();
+    for (const item of this.alternatives || [])
+      if (item.status === "pending") item.status = "not generated";
     if (this.querySelector("[data-generate]")) this.busyState(false);
   }
   disconnectedCallback() {
@@ -223,12 +257,7 @@ export class WritingAssistant extends HTMLElement {
         ),
       );
       const input = this.input();
-      const messages = writingMessages(
-        input.action,
-        input.original,
-        input.notes,
-        input.context,
-      );
+      const messages = this.requestMessages(input);
       if (
         this.querySelector("[data-request]").value !==
         JSON.stringify(messages, null, 2)
@@ -241,12 +270,31 @@ export class WritingAssistant extends HTMLElement {
       }
       this.cancel();
       this.invalidate();
+      this.alternatives = [];
       this.busyState(true);
       const id = this.requestId;
       this.controller = new AbortController();
       sessionConnection = config;
       this.status("Generating a proposal. Your draft is unchanged…");
       try {
+        if (this.querySelector("[data-mode]").value === "compare") {
+          const items = await generateAlternatives(config, input, {
+            generate: generateWriting,
+            signal: this.controller.signal,
+            onResult: (items) => {
+              if (id === this.requestId && this.isConnected) {
+                this.alternatives = items;
+                this.querySelector("writing-comparison").show(items, true);
+              }
+            },
+          });
+          if (id !== this.requestId || !this.isConnected) return;
+          this.alternatives = items;
+          this.status(
+            `${items.filter((item) => item.status === "ready").length} of 3 alternatives ready. Compare and choose one for Proposed; your draft is unchanged.`,
+          );
+          return;
+        }
         const proposed = await generateWriting(config, input, {
           signal: this.controller.signal,
         });
