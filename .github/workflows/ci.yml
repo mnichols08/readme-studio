@@ -17,8 +17,11 @@ jobs:
       - run: npm test
       - run: npx playwright install --with-deps chromium firefox webkit
       - name: Browser tests
+        env:
+          TEST_BRANCH: ${{ github.head_ref || github.ref_name }}
+          TEST_REF_TYPE: ${{ github.ref_type }}
         run: |
-          if [[ "${{ github.head_ref || github.ref_name }}" == release/* ]]; then
+          if [[ "$TEST_BRANCH" == release/* || "$TEST_REF_TYPE" == tag ]]; then
             npm run test:browser:all
           else
             npm run test:browser

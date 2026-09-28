@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.3
+
+- Feature freeze for 1.0: representative 0.1–0.9 migration and source-recovery regression fixtures.
+- Seven fictional, portable example projects with exact README round-trip checks.
+- Concise onboarding, task tutorials, public format compatibility policy and documented limitations.
+- MIT license, bundled third-party notices and unpublished stable-release notes.
+
 ## 0.9.2
 
 - Production offline reload with an explicit static-file cache, credential/API exclusions and save-before-update activation.

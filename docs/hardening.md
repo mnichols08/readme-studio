@@ -1,5 +1,7 @@
 # v0.1.3 hardening review
 
+Historical release evidence. For the current offline and performance behavior, see [offline](offline.md) and [performance](performance.md).
+
 The release focuses on recovery, keyboard predictability, safe previewing, and large-document usability. It adds no major block family or service integration.
 
 ## Performance evidence
