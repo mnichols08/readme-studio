@@ -6,20 +6,28 @@ Results are titled **Detected in selected repositories**. They describe declarat
 
 ## Initial scope
 
-| Ecosystem | Root files                       | Evidence                                                                                                         |
-| --------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Node      | package.json                     | Runtime, development, peer and optional declarations, including npm aliases                                      |
-| Rust      | Cargo.toml                       | Dependency, development, build, target-specific and workspace declarations, including renamed crates             |
-| Python    | pyproject.toml, requirements.txt | Project/optional dependencies, build requirements, dependency groups and Poetry declarations; named requirements |
-| Go        | go.mod                           | Direct and indirect require declarations                                                                         |
+| Ecosystem | Root files                       | Evidence                                                                                                                   |
+| --------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Node      | package.json                     | Runtime, development, peer and optional declarations, including npm aliases                                                |
+| Rust      | Cargo.toml                       | Direct runtime, development, build and optional declarations, including same-file workspace inheritance and renamed crates |
+| Python    | pyproject.toml, requirements.txt | Project/optional dependencies, build requirements, dependency groups and Poetry declarations; named requirements           |
+| Go        | go.mod                           | Direct require declarations; indirect entries are excluded                                                                 |
 
-A manifest's presence is evidence of configuration for that ecosystem, not proof its dependencies are used. Workspace-only and build-only declarations are labeled accordingly. The same dependency can appear in multiple roles.
+A manifest's presence is evidence of configuration for that ecosystem, not proof its dependencies are used. Unused workspace declarations are excluded; referenced same-file workspace values are resolved without fetching member manifests. Unresolved references are omitted with a notice. Build dependencies are labeled accordingly. The same dependency can appear in multiple roles.
 
 Only allowlisted regular root files are read. Nested projects, workspace members, local paths, include files, lockfiles and transitive resolution are not followed. Symlinks/submodules and oversized files produce notices. This initial version may miss technologies in monorepos or executable configuration.
 
 The conservative TOML declaration reader supports common quoted keys, arrays, inline tables and dependency tables. It is not a general TOML validator. Unsupported dependency values are reported rather than evaluated; unrelated tool configuration is ignored. Multiline dependency strings, Python dynamic dependencies/group includes, requirements options/continuations and Go replacement/exclusion resolution have explicit limitations. Missing detections do not prove a technology is absent.
 
 The adapters follow the declaration models documented by [Cargo](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html), [Python packaging](https://packaging.python.org/en/latest/specifications/pyproject-toml/) and [Go modules](https://go.dev/ref/mod).
+
+## Normalized dependency records (1.3.1)
+
+Each direct declaration produces a record containing name, ecosystem (node/rust/python/go), kind (runtime/development/peer/build/optional), repository and source evidence. Names normalize to lowercase for npm and to lowercase with collapsed dash/underscore/dot runs for Python. Rust crate spelling and case-sensitive Go module paths are preserved. GitHub repository association uses canonical lowercase owner/repository.
+
+Matching name/ecosystem/kind/repository records merge their manifest/section/line evidence. Different kinds and repositories remain independent. npm aliases and Cargo renamed dependencies use the declared package name, retaining alias evidence. Results have deterministic ordering and share the existing session cache.
+
+“Direct” means explicitly declared by the inspected root manifest; it does not mean verified production usage. Go indirect entries are excluded. requirements.txt has no universal direct/transitive distinction: explicit lines are retained, and generated freeze files may contain transitive packages. No graph or lockfile is traversed to guess that distinction. Optional/target-specific dependencies may not run in every build.
 
 ## Security and privacy
 

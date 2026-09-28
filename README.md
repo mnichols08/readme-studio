@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.3.0 — Stack Intelligence.** Opt in to read Node, Rust, Python and Go manifests in selected public repositories. See dependency declarations and source evidence under “Detected in selected repositories,” without skill claims or repository code execution. See the [Stack Intelligence guide](docs/stack-intelligence.md).
+**Version 1.3.1 — Dependency Detection.** Normalize direct dependency declarations from Node, Rust, Python and Go manifests, with dependency kinds, repository associations and merged source evidence. Results remain opt-in and session-cached. See the [Stack Intelligence guide](docs/stack-intelligence.md).
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

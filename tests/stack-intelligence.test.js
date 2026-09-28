@@ -77,17 +77,12 @@ tracing = "0.1"
     expect(names(result)).toEqual([
       "serde",
       "actual",
-      "shared",
       "tokio",
       "insta",
       "cc",
       "libc",
-      "tracing",
     ]);
-    expect(result.entries.find((e) => e.name === "shared").role).toBe(
-      "workspace reference",
-    );
-    expect(result.entries.at(-1).role).toBe("workspace declaration");
+    expect(result.notes.join(" ")).toContain("Unresolved workspace");
     expect(result.entries[0].line).toBeGreaterThan(5);
   });
   it("reads Python declarative arrays, extras, build dependencies, groups and Poetry", () => {
@@ -148,8 +143,11 @@ exclude example.org/no v1.0.0
 // require example.org/fake v1.0.0
 `,
     );
-    expect(names(result)).toEqual(["example.org/one", "example.org/two"]);
-    expect(result.entries[1].role).toBe("indirect");
+    expect(names(result)).toEqual(["example.org/one"]);
+    expect(result.entries[0].role).toBe("runtime");
+    expect(result.notes.join(" ")).toContain(
+      "Indirect Go requirements were excluded",
+    );
     expect(result.notes.join(" ")).toContain("not resolved");
   });
   it.each([
