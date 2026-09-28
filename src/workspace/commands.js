@@ -24,6 +24,7 @@ export const commandGroups = {
     ["profile", "Autofill from GitHub"],
     ["repositories", "Repositories"],
     ["repository-audit", "README audit"],
+    ["readme-attention", "README Attention Queue"],
     ["intelligence", "Profile Intelligence"],
     ["repository-health", "Check links"],
     ["refresh-github", "Refresh GitHub data"],

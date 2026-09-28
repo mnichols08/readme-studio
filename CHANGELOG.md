@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.2
+
+- README Attention Queue with explainable High/Medium/Low priorities from audited documentation, project-type gaps, recent pushes and public-interest signals; no scores or developer rankings.
+- Combined priority, missing, active, archived, language, project type, minimum stars and recent-push filters, with bounded 25-item pages.
+- Improve next and Open in Studio preserve exact source in a new local draft.
+- Seven-day ignore and persistent intentionally-minimal decisions bound to the README revision, with deferred-item review and explicit return to queue.
+- Safe attention-settings recovery and visible storage failures; deterministic ordering, 1,000-record, browser, source-preservation and revision-change regression coverage.
+
 ## 1.1.1
 
 - Explainable project-type suggestions for 14 types, from public topics, repository names and README prose; ambiguous signals remain visible.

@@ -150,6 +150,9 @@ export class AppShell extends HTMLElement {
       if (target?.isConnected && target.getClientRects().length) target.focus();
       else this.querySelector("#draft-select").focus();
     });
+    this.addEventListener("attention-download", (e) =>
+      this.download(e.detail.content, e.detail.name, e.detail.type),
+    );
     this.addEventListener("audit-improve", (e) => {
       const { repo, readme } = e.detail;
       if (this.data.drafts.length >= 500) {
@@ -1704,9 +1707,9 @@ export class AppShell extends HTMLElement {
     if (action === "repository-health") this.openRepositoryHealth();
     if (action === "intelligence") this.openIntelligence();
     if (action === "repositories") this.openRepositories();
-    if (action === "repository-audit") {
+    if (action === "repository-audit" || action === "readme-attention") {
       this.modal(
-        '<repository-audit><p role="status">Loading README audit…</p></repository-audit>',
+        `<repository-audit data-start-view="${action === "readme-attention" ? "queue" : "audit"}"><p role="status">Loading README audit…</p></repository-audit>`,
       );
       this.dialog.classList.add("import-modal");
       const panel = this.querySelector("repository-audit");
