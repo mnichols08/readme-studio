@@ -1,3 +1,10 @@
+import {
+  documentTarget,
+  documentGroup,
+  documentGroups,
+  findDocument,
+  DocumentHistories,
+} from "../workspace/documents.js";
 import { portableData } from "../state/portable-data.js";
 import {
   documentationProfiles,
@@ -96,6 +103,11 @@ export class AppShell extends HTMLElement {
       this.storageBlocked = true;
     }
     const draft = newDraft("My developer profile", template());
+    draft.metadata.workspaceDocument = {
+      version: 1,
+      kind: "profile",
+      target: null,
+    };
     this.data = saved || {
       version: 1,
       drafts: [draft],
@@ -128,7 +140,7 @@ export class AppShell extends HTMLElement {
   }
   draw() {
     this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="workflows">Workflows</button><button data-action="publish-github">Publish to GitHub</button><button data-action="refresh-github">Refresh GitHub data</button><button data-action="repository-health">Check links</button><button data-action="intelligence">Profile Intelligence</button><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
-  <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
+  <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="documents">Documents</button><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
   <main class="workspace" data-mobile="build"><aside class="builder-pane pane" id="build-panel" aria-label="Builder"><div class="pane-heading"><span>WORKSPACE</span><button data-action="collapse" aria-label="Collapse builder">‹</button></div><nav class="builder-tabs" aria-label="Builder tools"><button class="active" data-tab="sections">Sections</button><button data-tab="library">Library</button><button data-tab="health">Health</button></nav><div class="builder-content"></div><div class="builder-footer"><span>✦</span> Make it yours. Keep it Markdown.</div></aside>
@@ -192,6 +204,21 @@ export class AppShell extends HTMLElement {
     });
     this.addEventListener("audit-improve", (e) => {
       const { repo, readme } = e.detail;
+      const existing = findDocument(this.data.drafts, {
+        repository: repo.full_name,
+        branch: repo.default_branch,
+        path: readme.path || "README.md",
+      });
+      if (existing) {
+        this.load(existing.id);
+        this.closeDialog();
+        this.mobile("markdown", false);
+        this.focusDocument();
+        this.notify(
+          "Opened the existing workspace document. Local edits were preserved.",
+        );
+        return;
+      }
       if (e.detail.builder) {
         this.repositoryReadme(e.detail);
         return;
@@ -301,6 +328,7 @@ export class AppShell extends HTMLElement {
           ...(sha ? { sha } : {}),
         },
       };
+      this.draftOptions();
       this.save();
     });
     this.addEventListener("publish-download", (e) =>
@@ -772,16 +800,25 @@ export class AppShell extends HTMLElement {
     );
   }
   load(id) {
-    if (this.store) this.save();
+    const draft = this.data.drafts.find((d) => d.id === id);
+    if (!draft) return;
+    if (this.store?.draft.id === id && this.store.draft === draft) return;
+    this.documentHistories ||= new DocumentHistories();
+    if (this.store) {
+      this.save();
+      this.documentHistories.remember(this.store);
+    }
     clearTimeout(this.saveTimer);
     clearTimeout(this.healthTimer);
     clearTimeout(this.updateTimer);
-    this.store = new Store(this.data.drafts.find((d) => d.id === id));
+    this.store = new Store(draft);
+    this.documentHistories.restore(this.store, this.data.drafts);
     this.data.active = id;
     this.store.addEventListener("change", (e) => {
       this.data.drafts[this.data.drafts.findIndex((d) => d.id === id)] =
         this.store.draft;
       this.editor.value = this.store.draft.markdown;
+      if (e.detail !== "raw") this.draftOptions();
       this.querySelector(".save-status").textContent = "Saving…";
       clearTimeout(this.updateTimer);
       this.updateTimer = setTimeout(() => {
@@ -802,7 +839,7 @@ export class AppShell extends HTMLElement {
     });
     this.editor.value = this.store.draft.markdown;
     this.refreshDocument();
-    this.showTab("sections");
+    this.showTab(this.tab === "health" ? "health" : "sections");
     this.draftOptions();
     this.save();
   }
@@ -885,13 +922,53 @@ export class AppShell extends HTMLElement {
     this.dialog.close();
   }
   draftOptions() {
-    this.querySelector("#draft-select").innerHTML = this.data.drafts
-      .map(
-        (d) =>
-          `<option value="${html(d.id)}" ${d.id === this.data.active ? "selected" : ""}>${html(d.name)}</option>`,
-      )
+    this.querySelector("#draft-select").innerHTML = Object.entries(
+      documentGroups,
+    )
+      .map(([group, label]) => {
+        const drafts = this.data.drafts.filter(
+          (draft) => documentGroup(draft) === group,
+        );
+        return drafts.length
+          ? `<optgroup label="${label}">${drafts
+              .map((draft) => {
+                const destination = documentTarget(draft);
+                return `<option value="${html(draft.id)}" ${draft.id === this.data.active ? "selected" : ""}>${html(draft.name)}${destination ? ` · ${html(destination.repository)}/${html(destination.path)}` : ""}</option>`;
+              })
+              .join("")}</optgroup>`
+          : "";
+      })
       .join("");
   }
+  async documents() {
+    await import("./workspace-documents.js");
+    this.modal("<workspace-documents></workspace-documents>");
+    const panel = this.querySelector("workspace-documents");
+    panel.configure(this.data.drafts, this.data.active);
+    panel.addEventListener("document-open", (event) => {
+      this.load(event.detail);
+      this.closeDialog(this.querySelector("#draft-select"));
+      this.notify(`Opened ${this.store.draft.name}.`);
+    });
+    panel.addEventListener("document-new", () => {
+      this.addDraft("Untitled document", []);
+      this.closeDialog();
+      this.focusDocument();
+    });
+    panel.addEventListener("document-settings", ({ detail }) => {
+      if (detail.id !== this.store.draft.id) return;
+      this.store.checkpoint();
+      this.store.draft.metadata.workspaceDocument = detail.settings;
+      this.store.emit("metadata");
+      this.draftOptions();
+      this.save();
+      this.closeDialog();
+      this.notify(
+        "Document settings saved locally. No GitHub changes were made.",
+      );
+    });
+  }
+
   saveCollections(items) {
     try {
       const collections = validateCollections({ version: 1, items });
@@ -1604,6 +1681,13 @@ export class AppShell extends HTMLElement {
     );
   }
   addDraft(name, blocks, metadata = {}) {
+    if (this.data.drafts.length >= 500) {
+      this.notify(
+        "Document limit reached. Back up and remove unused documents first.",
+        "warning",
+      );
+      return;
+    }
     const d = newDraft(uniqueName(name, this.data.drafts), blocks);
     d.metadata = metadata;
     this.data.drafts.push(d);
@@ -1796,6 +1880,7 @@ export class AppShell extends HTMLElement {
             this.storageBlocked = false;
             this.recoveryRaw = undefined;
             this.store = null;
+            this.documentHistories = new DocumentHistories();
             this.load(plan.active);
             this.applySettings();
             this.closeDialog(this.querySelector("#draft-select"));
@@ -1902,6 +1987,9 @@ export class AppShell extends HTMLElement {
     if (action === "collections") this.openCollections();
     if (action === "badges") this.openBadges();
     switch (action) {
+      case "documents":
+        this.documents();
+        break;
       case "backup-all":
         this.download(
           JSON.stringify(createBackup(this.data), null, 2),

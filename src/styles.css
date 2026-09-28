@@ -2407,3 +2407,25 @@ stack-dna [hidden] {
     grid-template-columns: 1fr;
   }
 }
+
+.draft-control > [data-action="documents"] {
+  font-size: 12px;
+  min-height: 36px;
+  padding: 4px 8px;
+}
+workspace-documents [data-documents] {
+  max-height: 40vh;
+  overflow: auto;
+}
+workspace-documents li {
+  margin-block: 6px;
+}
+workspace-documents [data-document] {
+  text-align: left;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+workspace-documents [aria-current="true"] {
+  font-weight: 700;
+  border-width: 2px;
+}

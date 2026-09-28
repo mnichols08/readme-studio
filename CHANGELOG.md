@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.0
+
+- Add searchable workspace documents grouped into Profile, Repositories and Local documents, with keyboard navigation and a grouped quick switcher.
+- Configure an independent repository, branch and README path for each document; publishing suggests that target without skipping review.
+- Preserve separate, bounded Undo/Redo histories across document switches in the current tab. Health follows the active document and cancels obsolete work.
+- Reopen matching audit documents without replacing local edits; preserve targets and exact sources in workspace recovery and portable projects.
+
 ## 1.4.3
 
 - Separate writing provider adapters from document editing and bounded network transport; offer compatible endpoints, key-free loopback servers and explicit no-AI mode.
