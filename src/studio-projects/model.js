@@ -14,6 +14,7 @@ export const PROJECT_SCHEMA = 1,
   PROJECT_LIMIT = 10_000_000;
 const object = (v) => v && typeof v === "object" && !Array.isArray(v);
 const metadataKeys = [
+  "workspaceDocument",
   "visualTheme",
   "bannerSettings",
   "bannerReference",

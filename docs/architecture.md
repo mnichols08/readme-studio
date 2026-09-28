@@ -293,3 +293,11 @@ The inert `writing-comparison` component renders at most three bounded text outp
 `writing/client.js` owns bounded transport, timeout/cancellation and safe HTTP errors. `writing/model.js` continues to own action/grounding instructions and exact source replacement without provider selection. The UI shows adapter metadata and destination, cancels requests and clears keys/consent when destinations or adapters change. Keys remain module memory only.
 
 `state/portable-data.js` removes credential-shaped object fields recursively at project, single-draft JSON and workspace-backup boundaries. Source strings remain exact. This is defense in depth, not a scanner that can find secrets pasted into arbitrary prose. The [AI safety audit](ai-safety.md) documents prompt injection and output-review boundaries.
+
+### Multi-document workspace (1.5.0)
+
+Documents remain entries in the existing version-1 drafts envelope. `workspace/documents.js` validates draft-specific `metadata.workspaceDocument` (version 1, group and optional target), reads legacy import/publishing targets, derives display groups and matches repository/branch/path identities. Source is never inferred from the target. A null explicit target overrides legacy metadata. Portable Studio projects allowlist this document metadata; workspace backups already preserve it.
+
+`DocumentHistories` retains inactive Store histories by draft ID in session memory, with a 32 MB aggregate cap in addition to the Store's own 8 MB / 80-checkpoint cap. Load creates a fresh Store/listener and restores only matching source history; deleted entries are pruned and workspace restore clears the cache. Neither history nor credential state is serialized. Active Markdown remains authoritative and survives history eviction.
+
+The lazy `workspace-documents` component supplies grouped search and target settings. App-shell flushes saves before switching, cancels scheduled updates and recreates the active Health panel, terminating its old worker. Audit actions look for an existing target before opening a template or adding a draft, preserving local edits. Publish dialog may prefill an authorized saved target but does not fetch/write it automatically.
