@@ -8,7 +8,7 @@ export function auditAnalyzer() {
       const { classifyReadme } = await import("./classify.js");
       await new Promise((resolve) => setTimeout(resolve, 0));
       if (closed) throw new DOMException("Audit cancelled", "AbortError");
-      job.resolve(classifyReadme(job.source));
+      job.resolve(classifyReadme(job.source, job.repo));
     } catch (error) {
       job.reject(error);
     }
@@ -34,13 +34,13 @@ export function auditAnalyzer() {
     worker = null;
   }
   return {
-    analyze(source) {
+    analyze(source, repo = {}) {
       if (closed)
         return Promise.reject(
           new DOMException("Audit cancelled", "AbortError"),
         );
       return new Promise((resolve, reject) => {
-        const job = { source, resolve, reject },
+        const job = { source, repo, resolve, reject },
           id = ++sequence;
         if (!worker) {
           fallback(job);
@@ -48,7 +48,7 @@ export function auditAnalyzer() {
         }
         pending.set(id, job);
         try {
-          worker.postMessage({ id, source });
+          worker.postMessage({ id, source, repo });
         } catch {
           pending.delete(id);
           fallback(job);

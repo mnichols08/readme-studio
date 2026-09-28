@@ -302,7 +302,7 @@ export async function auditRepositories(
         try {
           const readme = await client.readme(repo, { signal, force });
           signal?.throwIfAborted();
-          const result = await analyze(readme.source);
+          const result = await analyze(readme.source, repo);
           signal?.throwIfAborted();
           const { source, ...metadata } = readme;
           if (readme.alternatePath)
@@ -345,6 +345,7 @@ export const auditSession = {
   next: false,
   selected: new Set(),
   results: new Map(),
+  typeOverrides: new Map(),
   includeForks: false,
   includeArchived: false,
   viewPage: 0,

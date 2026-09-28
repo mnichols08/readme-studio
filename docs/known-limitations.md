@@ -8,5 +8,6 @@
 - Publishing requires an operator-configured HTTPS service, a GitHub App, installation and effective permissions. Static hosting alone provides authoring/export. Multi-process session storage is not supported.
 - Asset and README writes are sequential, not atomic. A lost response may hide a completed remote write; inspect GitHub before retrying. No force-push or silent conflict overwrite is provided.
 - Offline support requires successful prior caching and a browser that permits service workers. Remote fetch/publish/preview still needs connectivity; installation is optional.
+- Repository audit project types are explainable suggestions with manual overrides. English prose/topics and approximate section evidence may misidentify mixed-purpose or multilingual repositories. Type expectations are advisory, and overrides last only for the current audit tab session. See [project-type rules](repository-auditing.md#project-types-111).
 
 Release candidate automation covers three browser engines, source recovery and mocked publishing failures. Manual screen-reader acceptance, live GitHub App authentication/writes, and production deployment have **not** been certified by that automation. These remain stable-release acceptance gates, not completed checks. See the [readiness record](releases/1.0-readiness.md).

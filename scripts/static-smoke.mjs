@@ -97,6 +97,7 @@ try {
             ? [
                 {
                   name: "sample",
+                  topics: ["cli"],
                   full_name: "example/sample",
                   default_branch: "main",
                 },
@@ -131,8 +132,18 @@ try {
         .waitFor();
       await page
         .locator("repository-audit")
-        .getByText("Stub README", { exact: true })
+        .getByText("Stub README for a CLI", { exact: true })
         .waitFor();
+      await page
+        .getByLabel("Project type for example/sample", { exact: true })
+        .selectOption("web-app");
+      await page
+        .locator("repository-audit")
+        .getByText("Stub README for a Web App", { exact: true })
+        .waitFor();
+      await page
+        .getByRole("button", { name: "Audit selected", exact: true })
+        .focus();
       await page.keyboard.press("Escape");
       await page.evaluate(() => navigator.serviceWorker.ready);
       await page.reload();
