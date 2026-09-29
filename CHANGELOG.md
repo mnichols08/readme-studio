@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.2
+
+- Production offline reload with an explicit static-file cache, credential/API exclusions and save-before-update activation.
+- JavaScript fallback when Health/refactor Workers fail; stale fallback work is ignored.
+- 500 KB/1 MB source and 100-project/200-badge smoke coverage, 360px keyboard checks and faster duplicate heading anchors.
+- Markdown dependency chunk split, bundle reporting and stricter publishing-history recovery.
+
 ## 0.9.1
 
 - Versioned portable Studio projects with exact Markdown, supported builder/ownership metadata, preferences and verified SVG asset manifests.

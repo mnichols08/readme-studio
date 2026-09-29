@@ -1,9 +1,15 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
-import { chromium } from "@playwright/test";
+import { chromium, firefox, webkit } from "@playwright/test";
 const root = resolve("dist");
+let originUnavailable = false;
+let workerRevision = 0;
 const server = createServer(async (req, res) => {
+  if (originUnavailable) {
+    req.socket.destroy();
+    return;
+  }
   try {
     const pathname = decodeURIComponent(
       new URL(req.url, "http://localhost").pathname,
@@ -26,7 +32,14 @@ const server = createServer(async (req, res) => {
         ".woff": "font/woff",
       }[extname(file)] || "application/octet-stream",
     );
-    res.end(body);
+    res.end(
+      relative === "sw.js"
+        ? Buffer.concat([
+            body,
+            Buffer.from(`\n// update-smoke-${workerRevision}\n`),
+          ])
+        : body,
+    );
   } catch {
     res.writeHead(404);
     res.end("Not found");
@@ -35,50 +48,137 @@ const server = createServer(async (req, res) => {
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 let browser;
 try {
-  browser = await chromium.launch();
-  for (const path of ["/", "/readme-studio/"]) {
-    const page = await browser.newPage();
-    const errors = [];
-    page.on("pageerror", (e) => errors.push(e.message));
-    await page.route("https://**/*", (route) => route.abort());
-    await page.goto(`http://127.0.0.1:${server.address().port}${path}`);
-    await page
-      .getByRole("button", { name: "Explore the sample profile" })
-      .click();
-    await page
-      .getByRole("textbox", { name: "Markdown editor", exact: true })
-      .fill("# Static hosting\n\n### Deeper\n\nContent");
-    await page
-      .locator("github-preview h1")
-      .filter({ hasText: "Static hosting" })
-      .waitFor();
-    await page.getByRole("button", { name: "Health", exact: true }).click();
-    await page.locator("readme-health .stats").waitFor();
-    if (
-      (await page.locator("readme-health").getAttribute("data-engine")) !==
-      "WASM"
-    )
-      throw new Error("Production WASM asset failed to load");
-    await page
-      .getByRole("navigation", { name: "Workspace tools" })
-      .getByRole("button", { name: "Safe refactors", exact: true })
-      .click();
-    await page.getByLabel(/Normalize heading hierarchy/).check();
-    await page
-      .getByRole("button", { name: "Review selected refactors", exact: true })
-      .click();
-    await page.getByLabel("After refactor").waitFor();
-    if (
-      !(await page.getByLabel("After refactor").inputValue()).includes(
-        "\n## Deeper",
+  for (const engine of [chromium, firefox, webkit]) {
+    browser = await engine.launch();
+    for (const path of ["/", "/readme-studio/"]) {
+      const page = await browser.newPage();
+      const errors = [];
+      page.on("pageerror", (e) => errors.push(e.message));
+      await page.route("https://**/*", (route) => route.abort());
+      await page.goto(`http://127.0.0.1:${server.address().port}${path}`);
+      await page
+        .getByRole("button", { name: "Explore the sample profile" })
+        .click();
+      await page
+        .getByRole("textbox", { name: "Markdown editor", exact: true })
+        .fill("# Static hosting\n\n### Deeper\n\nContent");
+      await page
+        .locator("github-preview h1")
+        .filter({ hasText: "Static hosting" })
+        .waitFor();
+      await page.getByRole("button", { name: "Health", exact: true }).click();
+      await page.locator("readme-health .stats").waitFor();
+      if (
+        (await page.locator("readme-health").getAttribute("data-engine")) !==
+        "WASM"
       )
-    )
-      throw new Error("Production refactor worker failed");
-    if (errors.length) throw new Error(errors.join("\n"));
-    console.log(
-      `Static smoke passed: ${path} (preview, Health/WASM and refactor workers)`,
-    );
-    await page.close();
+        throw new Error("Production WASM asset failed to load");
+      await page
+        .getByRole("navigation", { name: "Workspace tools" })
+        .getByRole("button", { name: "Safe refactors", exact: true })
+        .click();
+      await page.getByLabel(/Normalize heading hierarchy/).check();
+      await page
+        .getByRole("button", { name: "Review selected refactors", exact: true })
+        .click();
+      await page.getByLabel("After refactor").waitFor();
+      if (
+        !(await page.getByLabel("After refactor").inputValue()).includes(
+          "\n## Deeper",
+        )
+      )
+        throw new Error("Production refactor worker failed");
+      if (errors.length) throw new Error(errors.join("\n"));
+      await page.keyboard.press("Escape");
+      await page.evaluate(() => navigator.serviceWorker.ready);
+      await page.reload();
+      await page.waitForFunction(
+        () => navigator.serviceWorker.controller !== null,
+      );
+      await page
+        .getByRole("textbox", { name: "Markdown editor", exact: true })
+        .fill("# Offline source\n\n### Heading");
+      await page.keyboard.press("Control+s");
+      originUnavailable = true;
+      const offlineResponse = await page.reload();
+      if (!offlineResponse?.fromServiceWorker())
+        throw Error("Offline reload did not come from the service worker");
+      if (
+        (await page
+          .getByRole("textbox", { name: "Markdown editor", exact: true })
+          .inputValue()) !== "# Offline source\n\n### Heading"
+      )
+        throw Error("Offline reload lost source");
+      await page.getByRole("button", { name: "Health", exact: true }).click();
+      await page.locator("readme-health .stats").waitFor();
+      await page
+        .getByRole("navigation", { name: "Workspace tools" })
+        .getByRole("button", { name: "Safe refactors", exact: true })
+        .click();
+      await page.getByLabel(/Normalize heading hierarchy/).check();
+      await page
+        .getByRole("button", { name: "Review selected refactors", exact: true })
+        .click();
+      await page.getByLabel("After refactor").waitFor();
+      await page.keyboard.press("Escape");
+      await page
+        .getByRole("button", { name: "Save Studio project", exact: true })
+        .click();
+      const download = page.waitForEvent("download");
+      await page
+        .getByRole("button", { name: "Download Studio project", exact: true })
+        .click();
+      const project = JSON.parse(
+        await readFile(await (await download).path(), "utf8"),
+      );
+      if (project.document.markdown !== "# Offline source\n\n### Heading")
+        throw Error("Offline project export lost source");
+      const cached = await page.evaluate(async () => {
+        const urls = [];
+        for (const name of await caches.keys())
+          for (const request of await (await caches.open(name)).keys())
+            urls.push(request.url);
+        return urls;
+      });
+      if (
+        cached.some(
+          (url) =>
+            new URL(url).origin !== new URL(page.url()).origin ||
+            url.includes("/api/"),
+        )
+      )
+        throw Error("Offline cache contains a non-static request");
+      originUnavailable = false;
+      if (engine.name() === "chromium" && path === "/") {
+        await page.keyboard.press("Escape");
+        await page
+          .getByRole("textbox", { name: "Markdown editor", exact: true })
+          .fill("# Saved before update");
+        workerRevision++;
+        await page.evaluate(async () => {
+          const registration = await navigator.serviceWorker.ready;
+          await registration.update();
+        });
+        await page
+          .getByRole("button", { name: "Save and reload update", exact: true })
+          .click();
+        await page.waitForFunction(
+          () => !document.querySelector(".update-status"),
+        );
+        if (
+          (await page
+            .getByRole("textbox", { name: "Markdown editor", exact: true })
+            .inputValue()) !== "# Saved before update"
+        )
+          throw Error("Update reload lost unsaved source");
+      }
+      console.log(
+        `Static smoke passed: ${engine.name()} ${path} (preview, Health/WASM and refactor workers)`,
+      );
+      if (errors.length) throw new Error(errors.join("\n"));
+      await page.close();
+    }
+    await browser.close();
   }
 } finally {
   await browser?.close();

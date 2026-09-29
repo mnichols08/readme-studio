@@ -6,3 +6,5 @@ import "@fontsource/ibm-plex-mono/latin-400.css";
 import "./styles.css";
 import "highlight.js/styles/github.css";
 import "./components/app-shell.js";
+import { installOfflineStatus } from "./workspace/offline.js";
+installOfflineStatus();

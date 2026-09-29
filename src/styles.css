@@ -5,6 +5,15 @@
   color: var(--text);
   font-size: 12px;
 }
+.offline-status,
+.update-status {
+  padding: 10px 16px;
+  background: var(--accent-bg);
+  color: var(--text);
+}
+.offline-status[hidden] {
+  display: none;
+}
 .workspace-tools {
   display: flex;
   flex-wrap: wrap;

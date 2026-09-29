@@ -189,3 +189,9 @@ Workflow generation is a pure structured model and central quoted YAML serialize
 ## Portable projects (0.9.1)
 
 `studio-projects/model.js` owns the schema-1 envelope, sequential legacy adapter, exact source checks, credential-key exclusion, generated-banner asset validation and recovery extraction. `studio-projects/ui.js` owns explicit file review and new-draft application. No filesystem write handle is retained: saves download a new file, and opening never changes the original. Global libraries are opt-in and use existing collision-safe validators/merge paths. Normal workspace reload preserves block IDs; import remaps exact banner ownership. GitHub publish completion records non-secret target/commit references independently of source and authentication.
+
+## Offline and fallback boundaries (0.9.2)
+
+The build-only offline plugin emits a versioned service worker with a static asset allowlist. Credential-free installation is atomic; failed installation deletes its incomplete cache. Navigation is network-first, and API/auth/write/query/remote requests are never intercepted. Update activation is user-triggered after a successful workspace save. Scope-specific cleanup retains the previous cache and does not remove other applications' caches.
+
+Health and refactor Workers fall back to locally imported JavaScript modules when unavailable. Request IDs and component connection checks reject stale fallback results. The fallback can briefly occupy the main thread on large documents; source editing/export remain independent. Marked/DOMPurify are a separate shared chunk, while fallback analysis modules load only when needed. No external analysis service is used.

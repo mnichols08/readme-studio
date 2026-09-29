@@ -364,7 +364,7 @@ test("project packs validate, append with collision handling, export and remain 
     page.getByRole("textbox", { name: "Markdown editor", exact: true }),
   ).toHaveValue(/Reusable project \(2\)/);
 });
-for (const count of [10, 25, 50])
+for (const count of [10, 25, 50, 100])
   test(`${count} projects defer closed forms and screenshots and remain editable`, async ({
     page,
   }) => {

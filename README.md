@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.9.1** · Native Web Components · Local drafts · Static hosting
+**Version 0.9.2** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -59,11 +59,11 @@ Autosave waits briefly after editing, saves before switching drafts, and flushes
 
 Dialogs focus a meaningful field and return to their trigger when closed. Applying an import focuses the editor (or the import trigger on small screens); deleting/restoring drafts focuses the draft selector. Mobile pane buttons announce their selected state, and hidden panes leave the tab order. Section and form-row reorder controls work with the keyboard. Visible focus indicators, stronger control contrast, reduced-motion support, and mobile touch targets are included. Clipboard denial opens selectable text for manual copying.
 
-Preview and Health errors stay local and preserve source/export. Unexpected runtime errors offer reload and current-draft download. Health runs in a Web Worker and does not block the editor. The app is tested with 100 KB and 250 KB READMEs; complexity and device speed still affect latency. See [hardening results](docs/hardening.md) for measurements and limits.
+Preview and Health errors stay local and preserve source/export. Unexpected runtime errors offer reload and current-draft download. Health runs in a Web Worker and does not block the editor. The app is tested with 100 KB, 250 KB, 500 KB and 1 MB READMEs; complexity and device speed still affect latency. See [hardening results](docs/hardening.md) for measurements and limits.
 
-After the app has loaded, editing, local preview, existing drafts, and downloads work offline. GitHub import/autofill require connectivity; rate-limit responses include a retry time when GitHub provides one. Remote images, badges, and widgets may fail offline. There is no service worker or offline reload/install guarantee.
+After the app has loaded, editing, local preview, existing drafts, and downloads work offline. GitHub import/autofill require connectivity; rate-limit responses include a retry time when GitHub provides one. Remote images, badges, and widgets may fail offline. Production builds cache the local app after a successful initial load, supporting offline reload where browser storage permits. Updates offer Save and reload; authentication and publishing requests are never cached. See [offline behavior](docs/offline.md).
 
-Current Chromium, Firefox, and WebKit engines run the core workflow suite, including 320, 375, 390, 430, and 768px layouts. Keyboard tests are regression coverage, not a complete screen-reader or accessibility certification.
+Current Chromium, Firefox, and WebKit engines run the core workflow suite, including 320, 360, 375, 390, 430, and 768px layouts. Keyboard tests are regression coverage, not a complete screen-reader or accessibility certification.
 
 ## Import Intelligence
 

@@ -24,6 +24,7 @@ jobs:
             npm run test:browser
           fi
       - run: npm run build
+      - run: npm run report:bundle
       - run: npm run test:static
       - uses: actions/upload-artifact@v4
         if: failure()

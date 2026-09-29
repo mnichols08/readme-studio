@@ -18,6 +18,7 @@ export function readPublishingHistory(storage = localStorage) {
     value.entries.length > 50 ||
     value.entries.some(
       (e) =>
+        !e ||
         typeof e.commitSha !== "string" ||
         !/^[a-f0-9]{40,64}$/.test(e.commitSha) ||
         !Number.isFinite(e.timestamp),
@@ -29,7 +30,32 @@ export function readPublishingHistory(storage = localStorage) {
     throw new Error(
       "Publishing history is malformed. Original storage was preserved.",
     );
-  return value;
+  try {
+    return {
+      version: 1,
+      entries: value.entries.map((e) => ({
+        ...target(e),
+        commitSha: e.commitSha,
+        previousCommitSha: /^[a-f0-9]{40,64}$/.test(e.previousCommitSha || "")
+          ? e.previousCommitSha
+          : null,
+        timestamp: e.timestamp,
+      })),
+      checkpoint: value.checkpoint
+        ? {
+            draftId: value.checkpoint.draftId,
+            source: value.checkpoint.source,
+            timestamp: Number.isFinite(value.checkpoint.timestamp)
+              ? value.checkpoint.timestamp
+              : 0,
+          }
+        : null,
+    };
+  } catch {
+    throw new Error(
+      "Publishing history has an invalid target. Original storage was preserved.",
+    );
+  }
 }
 function save(value, storage) {
   try {
