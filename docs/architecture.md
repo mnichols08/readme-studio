@@ -195,3 +195,11 @@ Workflow generation is a pure structured model and central quoted YAML serialize
 The build-only offline plugin emits a versioned service worker with a static asset allowlist. Credential-free installation is atomic; failed installation deletes its incomplete cache. Navigation is network-first, and API/auth/write/query/remote requests are never intercepted. Update activation is user-triggered after a successful workspace save. Scope-specific cleanup retains the previous cache and does not remove other applications' caches.
 
 Health and refactor Workers fall back to locally imported JavaScript modules when unavailable. Request IDs and component connection checks reject stale fallback results. The fallback can briefly occupy the main thread on large documents; source editing/export remain independent. Marked/DOMPurify are a separate shared chunk, while fallback analysis modules load only when needed. No external analysis service is used.
+
+## Repository README audit (1.1.0)
+
+The audit workspace loads on demand. `repository-audit/github.js` constructs fixed public GitHub API requests, paginates owned repositories, verifies root READMEs, and schedules at most three fetch/analysis jobs. Timeouts, rate limits and malformed source are separate from confirmed missing results. Session caches are bounded and never enter workspace/project exports.
+
+`classify.js` consumes the existing analyzer and token parser; it returns explicit coverage rules and evidence rather than a numerical score. Activity lives separately in `presentation.js` and cannot change documentation classification. A dedicated Worker runs classification, with a deferred JavaScript fallback when Workers fail. The DOM renders at most 25 repository rows and never previews remote images.
+
+Improve emits an exact-source request to the app shell, which creates a new Custom Markdown draft with source context. No writes or automatic transformations occur. Modal closure aborts active requests and terminates analysis. The selected user's public repository identifiers are the only new data sent to GitHub; README text is analyzed locally.

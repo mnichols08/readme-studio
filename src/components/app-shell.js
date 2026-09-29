@@ -143,11 +143,44 @@ export class AppShell extends HTMLElement {
       this.querySelector("refresh-center")?.cancel();
       this.querySelector("refactor-dialog")?.cancel();
       this.querySelector("repository-health")?.controller?.abort();
+      this.querySelector("repository-audit")?.cancel();
       this.querySelector("repository-authoring")?.controller?.abort();
       const target = this.afterDialogFocus || this.dialogTrigger;
       this.afterDialogFocus = null;
       if (target?.isConnected && target.getClientRects().length) target.focus();
       else this.querySelector("#draft-select").focus();
+    });
+    this.addEventListener("audit-improve", (e) => {
+      const { repo, readme } = e.detail;
+      if (this.data.drafts.length >= 500) {
+        this.notify(
+          "Draft limit reached. Export and remove an unused draft first.",
+          "warning",
+        );
+        return;
+      }
+      const [owner, repository] = repo.full_name.split("/");
+      const source = {
+        type: "github",
+        owner,
+        repository,
+        ref: repo.default_branch,
+        readmePath: readme.path || "README.md",
+        sha: readme.sha,
+        fetchedAt: new Date().toISOString(),
+      };
+      const block = createBlock("custom", { markdown: readme.source ?? "" });
+      block.sourceContext = source;
+      this.addDraft(`${repo.name} README`, [block], {
+        repository: repo.full_name,
+        importSource: source,
+      });
+      this.closeDialog();
+      this.mobile("markdown", false);
+      this.focusDocument();
+      this.notify(
+        "README opened in a new local draft. No GitHub changes were made.",
+      );
     });
     this.addEventListener("import-apply", (e) => {
       const { plan, mode, name, snapshot } = e.detail;
@@ -1671,6 +1704,23 @@ export class AppShell extends HTMLElement {
     if (action === "repository-health") this.openRepositoryHealth();
     if (action === "intelligence") this.openIntelligence();
     if (action === "repositories") this.openRepositories();
+    if (action === "repository-audit") {
+      this.modal(
+        '<repository-audit><p role="status">Loading README audit…</p></repository-audit>',
+      );
+      this.dialog.classList.add("import-modal");
+      const panel = this.querySelector("repository-audit");
+      import("./repository-audit.js")
+        .then(() => {
+          if (panel.isConnected && this.dialog.open)
+            panel.querySelector("input")?.focus();
+        })
+        .catch(() => {
+          if (panel.isConnected)
+            panel.textContent =
+              "README audit could not load. Reload the app and try again; your draft is preserved.";
+        });
+    }
     if (action === "widgets") this.openWidgets();
     if (action === "components") this.openComponents();
     if (action === "visual-presets") this.openVisualPresets();

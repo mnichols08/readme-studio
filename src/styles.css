@@ -2147,3 +2147,98 @@ app-shell {
 app-shell > .workspace {
   height: max(420px, calc(100dvh - 310px));
 }
+/* Repository audit keeps large result sets paginated and long evidence contained. */
+repository-audit {
+  display: block;
+  min-width: 0;
+}
+repository-audit form,
+.audit-controls,
+.audit-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-block: 16px;
+}
+repository-audit form label {
+  flex: 1 1 220px;
+}
+.audit-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.audit-controls input[type="checkbox"],
+.audit-table input[type="checkbox"] {
+  width: auto;
+}
+.audit-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.audit-table th,
+.audit-table td {
+  padding: 12px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+}
+.audit-table th:nth-child(2) {
+  width: 38%;
+}
+.audit-table caption {
+  text-align: left;
+  font-weight: 600;
+  padding-block: 8px;
+}
+.audit-table ul {
+  padding-left: 18px;
+}
+.audit-table a,
+.audit-table button {
+  display: block;
+  margin-bottom: 12px;
+}
+.audit-table small {
+  display: block;
+}
+@media (max-width: 600px) {
+  .audit-table,
+  .audit-table tbody,
+  .audit-table tr,
+  .audit-table td,
+  .audit-table th {
+    display: block;
+    width: 100%;
+  }
+  .audit-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .audit-table tr {
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+  }
+  repository-audit button,
+  .audit-table a {
+    min-height: 44px;
+  }
+}
+
+.audit-table th label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 14px;
+}

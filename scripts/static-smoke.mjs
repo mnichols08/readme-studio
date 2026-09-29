@@ -90,6 +90,50 @@ try {
         throw new Error("Production refactor worker failed");
       if (errors.length) throw new Error(errors.join("\n"));
       await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+      await page.route("https://api.github.com/**", (route) =>
+        route.fulfill({
+          json: route.request().url().includes("/users/")
+            ? [
+                {
+                  name: "sample",
+                  full_name: "example/sample",
+                  default_branch: "main",
+                },
+              ]
+            : {
+                path: "README.md",
+                sha: "a".repeat(40),
+                size: 7,
+                encoding: "base64",
+                content: Buffer.from("# Hello").toString("base64"),
+              },
+        }),
+      );
+      await page
+        .getByRole("button", { name: "README audit", exact: true })
+        .click();
+      await page.getByLabel("GitHub username", { exact: true }).fill("example");
+      await page
+        .getByRole("button", { name: "Load repositories", exact: true })
+        .click();
+      await page.getByLabel("Select example/sample", { exact: true }).check();
+      const auditWorker = page.waitForEvent("worker", {
+        predicate: (worker) => worker.url().includes("analyze.worker"),
+      });
+      await page
+        .getByRole("button", { name: "Audit selected", exact: true })
+        .click();
+      await auditWorker;
+      await page
+        .locator("repository-audit [data-status]")
+        .filter({ hasText: "Audit complete: 1 of 1" })
+        .waitFor();
+      await page
+        .locator("repository-audit")
+        .getByText("Stub README", { exact: true })
+        .waitFor();
+      await page.keyboard.press("Escape");
       await page.evaluate(() => navigator.serviceWorker.ready);
       await page.reload();
       await page.waitForFunction(
@@ -173,7 +217,7 @@ try {
           throw Error("Update reload lost unsaved source");
       }
       console.log(
-        `Static smoke passed: ${engine.name()} ${path} (preview, Health/WASM and refactor workers)`,
+        `Static smoke passed: ${engine.name()} ${path} (preview, Health/WASM, refactor and repository-audit workers)`,
       );
       if (errors.length) throw new Error(errors.join("\n"));
       await page.close();
