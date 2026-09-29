@@ -22,10 +22,12 @@ Release branches run Chromium, Firefox, and WebKit in CI; other branches run Chr
 
 `npm audit` is useful when its registry endpoint is available. If an audit request fails, report the failed check rather than treating it as a clean result. Prefer a verified advisory fix over unrelated major dependency upgrades.
 
-Project tests cover legacy migration, pure layouts, portable packs, GitHub field ownership, explicit link-check failure classification, and advisory Health rules. `tests/browser/projects.spec.js` covers the user workflows in all three engines, including 10/25/50-project showcases and deferred screenshots. Project pack and GitHub fixtures are inline and deliberately omit authentication.
+Project tests cover legacy migration, pure layouts, portable packs, GitHub field ownership, explicit link-check failure classification, and advisory Health rules. `tests/browser/projects.spec.js` covers the user workflows in all three engines, including 10/25/50/100-project showcases and deferred screenshots. Project pack and GitHub fixtures are inline and deliberately omit authentication.
 
 Visual tests cover pure theme resolution, explicit ownership, XML escaping, deterministic banners, GitHub-safe styling, portable visual libraries, backup recovery and collision handling. `tests/browser/visual.spec.js` covers theme/banner/section/preset workflows, offline gallery use, storage failure and synchronized app/preview light-dark controls across the release browser matrix. Portable visual fixtures are inline and contain no personal content.
 
 Component tests cover versioned models, field interpolation, insertion, exact source, safe embeds, pack collision modes, preset fallback, ownership and undo/detachment. Browser workflows include a fresh isolated browser context for pack portability, failed storage writes, explicit diff confirmation, widget/badge form reopening, keyboard controls and a 200-snippet catalog with bounded cards. Avoid clearing storage followed by reload as a portability test: pagehide intentionally flushes the active workspace.
 
 GitHub-aware tests use synthetic public metadata and mocked network responses in `github-aware`, `profile-intelligence`, `repository-health`, and `generated-refresh` unit suites. `tests/browser/github-aware.spec.js` covers reviewed authoring, offline use, explicit scans, manual preservation, raw detachment and stale refresh protection. Do not use live GitHub availability as a test assertion.
+
+Release source-recovery fixtures are documented in [migration fixtures](../tests/fixtures/migrations/README.md). `release-migrations.test.js` also opens every synthetic example project and compares its canonical source with the paired README byte-for-byte.
