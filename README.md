@@ -2,7 +2,7 @@
 
 A visual GitHub profile README builder and Markdown studio. Build a profile with editable sections, work directly in Markdown, and export an ordinary `README.md` that works without this app.
 
-**Version 0.9.0** · Native Web Components · Local drafts · Static hosting
+**Version 0.9.1** · Native Web Components · Local drafts · Static hosting
 
 ![README Studio desktop workspace](docs/screenshots/studio-desktop.png)
 
@@ -42,6 +42,10 @@ Builder-created documents retain editable block settings. **Editing raw Markdown
 The app light/dark toggle also switches the README preview and its theme-aware picture sources. The preview toggle can then select a different preview mode independently. Neither changes Markdown.
 
 Drafts and theme/preview settings autosave to this browser’s localStorage. Use the menu beside the draft name to rename, duplicate, delete, or create drafts. Download a JSON draft backup to retain builder settings; Markdown export preserves only the portable document. Clearing browser storage removes drafts. Storage failures are reported without silently claiming a successful save.
+
+## Portable Studio projects
+
+Save or open `.readme-studio.json` files from Save or first launch. Project files preserve exact source, supported structured blocks, themes, ownership, generated SVG manifests and non-secret GitHub references. Reusable libraries and workspace preferences are opt-in. Unsupported schemas or damaged metadata offer Markdown-only recovery as a new draft, leaving the original file untouched. See [portable projects](docs/studio-projects.md), [schema](docs/project-schema.md) and [migrations](docs/migrations.md).
 
 ## Backups and recovery
 

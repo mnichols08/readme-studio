@@ -30,6 +30,8 @@ export const commandGroups = {
     ["workflows", "Workflows"],
   ],
   Save: [
+    ["save-project", "Save Studio project"],
+    ["open-project", "Open Studio project"],
     ["drafts", "Manage drafts"],
     ["copy", "Copy Markdown"],
     ["download", "Export README"],

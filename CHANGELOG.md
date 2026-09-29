@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1
+
+- Versioned portable Studio projects with exact Markdown, supported builder/ownership metadata, preferences and verified SVG asset manifests.
+- Explicit save/open review, opt-in reusable libraries, collision-safe new drafts and Markdown-only recovery for future or damaged schemas.
+- Deterministic legacy draft migration and authentication-free publishing references.
+- Stable block IDs on reload and remapped banner ownership when importing backups.
+
 ## 0.9.0
 
 - Grouped task navigation and searchable command palette with keyboard shortcuts and direct section/library destinations.

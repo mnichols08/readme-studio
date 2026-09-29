@@ -1,3 +1,4 @@
+import { saveProjectDialog, openProjectDialog } from "../studio-projects/ui.js";
 import { bindDialogDismissal } from "./dialog-dismissal.js";
 import { installWorkspace } from "../workspace/ui.js";
 import "./workflow-builder.js";
@@ -208,6 +209,22 @@ export class AppShell extends HTMLElement {
       this.closeDialog();
       this.focusDocument();
       this.notify("Checkpoint restored as a new draft.");
+    });
+    this.addEventListener("publish-complete", ({ detail }) => {
+      const draft = this.data.drafts.find((d) => d.id === detail.draftId);
+      if (!draft) return;
+      const { repository, branch, path, commitSha, sha } = detail.result;
+      draft.metadata.publishing = {
+        ...draft.metadata.publishing,
+        [detail.kind === "workflow" ? "workflow" : "readme"]: {
+          repository,
+          branch,
+          path,
+          commitSha,
+          ...(sha ? { sha } : {}),
+        },
+      };
+      this.save();
     });
     this.addEventListener("publish-download", (e) =>
       this.download(e.detail.content, e.detail.name, e.detail.type),
@@ -639,6 +656,11 @@ export class AppShell extends HTMLElement {
     this.applySettings();
   }
   applySettings() {
+    this.querySelectorAll("[data-tool-group]").forEach((el) => {
+      el.open = !this.data.settings.closedGroups?.includes(
+        el.dataset.toolGroup,
+      );
+    });
     this.querySelector(".workspace").classList.toggle(
       "collapsed",
       !!this.data.settings.collapsed,
@@ -1445,7 +1467,7 @@ export class AppShell extends HTMLElement {
   }
   welcome() {
     this.modal(
-      `<div class="eyebrow">WELCOME TO YOUR WORKSPACE</div><h1>A README that feels like you.</h1><p>Start with a little structure. Make every line your own.</p><div class="welcome-options"><button class="primary" data-start="templates">Start from a template <span>→</span></button><button data-action="profile">Autofill from GitHub <span>↗</span></button><button data-start="import">Import GitHub README <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button></div><p class="hint">Your drafts stay in this browser. No sign-in required.</p><button class="text-button" data-start="sample">Explore the sample profile →</button>`,
+      `<div class="eyebrow">WELCOME TO YOUR WORKSPACE</div><h1>A README that feels like you.</h1><p>Start with a little structure. Make every line your own.</p><div class="welcome-options"><button class="primary" data-start="templates">Start from a template <span>→</span></button><button data-action="profile">Autofill from GitHub <span>↗</span></button><button data-start="import">Import GitHub README <span>↥</span></button><button data-action="open-project">Open Studio project <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button></div><p class="hint">Your drafts stay in this browser. No sign-in required.</p><button class="text-button" data-start="sample">Explore the sample profile →</button>`,
     );
     this.querySelectorAll("[data-start]").forEach(
       (b) =>
@@ -1628,6 +1650,8 @@ export class AppShell extends HTMLElement {
   }
   action(action) {
     if (this.workspaceAction?.(action)) return;
+    if (action === "save-project") return saveProjectDialog(this);
+    if (action === "open-project") return openProjectDialog(this);
     if (action === "workflows")
       this.modal("<workflow-builder></workflow-builder>");
     if (action === "publish-github") {
