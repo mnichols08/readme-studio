@@ -1,3 +1,4 @@
+import "./writing-context.js";
 import { html as h } from "../markdown/serialize.js";
 import { draftSnapshot } from "../state/import-plan.js";
 import {
@@ -24,6 +25,9 @@ export class WritingAssistant extends HTMLElement {
         .join("")}</select></label>
       <label>Original<textarea data-original rows="6" readonly></textarea></label>
       <label>Optional factual notes or instructions<textarea data-notes rows="3" maxlength="32000"></textarea></label>
+      <writing-context></writing-context>
+      <label>Exact messages to send<textarea data-request rows="8" readonly></textarea></label>
+      <p>The request also includes the model identifier, stream/store flags and completion-token limit. The API key is sent only as an Authorization header, never in these messages.</p>
       <fieldset data-connection><legend>Optional AI connection — memory only</legend>
         <label>Chat completions endpoint<input data-endpoint type="url" autocomplete="off" placeholder="http://localhost:1234/v1/chat/completions"></label>
         <label>Model identifier<input data-model autocomplete="off" maxlength="200"></label>
@@ -31,8 +35,8 @@ export class WritingAssistant extends HTMLElement {
         <p>Use a trusted provider or your own local model. Keys are held in this tab's memory, never saved in drafts or backups. Provider billing and retention policies apply. Browser access requires provider CORS support.</p>
         <button data-forget>Forget connection</button>
       </fieldset>
-      <label><input type="checkbox" data-consent> Send only Original and my notes to this endpoint when I choose Generate</label>
-      <p>No other draft content, repository data or history is sent. Check for secrets before sending.</p>
+      <label><input type="checkbox" data-consent> Send the displayed messages and selected context to this endpoint when I choose Generate</label>
+      <p>Unchecked context, other drafts and workspace history are not sent. Check the displayed messages for secrets before sending.</p>
       <div class="row-actions"><button data-generate>Generate proposal</button><button data-cancel disabled>Cancel request</button></div>
       <p data-status role="status"></p>
       <label>Proposed<textarea data-proposed rows="8" maxlength="64000" placeholder="Generate a proposal, or paste and edit one here without connecting AI."></textarea></label>
@@ -61,9 +65,20 @@ export class WritingAssistant extends HTMLElement {
     this.querySelector("[data-action-choice]").value =
       this.range().start === this.range().end ? "draft" : "improve";
     this.original();
+    this.querySelector("writing-context").configure(
+      draft,
+      this.ranges,
+      this.range(),
+    );
+    this.updateRequest();
+    this.addEventListener("writing-context-change", () => {
+      this.resetInput();
+    });
     this.querySelector("[data-scope]").onchange = () => {
       this.resetInput();
       this.original();
+      this.querySelector("writing-context").setSection(this.range());
+      this.updateRequest();
     };
     this.querySelector("[data-action-choice]").onchange = () =>
       this.resetInput();
@@ -124,11 +139,38 @@ export class WritingAssistant extends HTMLElement {
   status(text) {
     this.querySelector("[data-status]").textContent = text;
   }
+  input() {
+    return {
+      action: this.querySelector("[data-action-choice]").value,
+      original: this.querySelector("[data-original]").value,
+      notes: this.querySelector("[data-notes]").value,
+      context: this.querySelector("writing-context").entries(),
+    };
+  }
+  updateRequest() {
+    try {
+      const input = this.input();
+      this.querySelector("[data-request]").value = JSON.stringify(
+        writingMessages(
+          input.action,
+          input.original,
+          input.notes,
+          input.context,
+        ),
+        null,
+        2,
+      );
+    } catch (error) {
+      this.querySelector("[data-request]").value =
+        `Not ready to send: ${error.message}`;
+    }
+  }
   resetInput() {
     this.cancel();
     this.invalidate();
     this.querySelector("[data-proposed]").value = "";
     this.querySelector("[data-consent]").checked = false;
+    this.updateRequest();
   }
   invalidate() {
     this.plan = null;
@@ -142,6 +184,7 @@ export class WritingAssistant extends HTMLElement {
       this.querySelector("[data-proposed]").value,
       this.querySelector("[data-action-choice]").value,
       this.querySelector("[data-notes]").value,
+      this.querySelector("writing-context").entries(),
     ]);
   }
   canApply() {
@@ -179,12 +222,23 @@ export class WritingAssistant extends HTMLElement {
           ]),
         ),
       );
-      const input = {
-        action: this.querySelector("[data-action-choice]").value,
-        original: this.querySelector("[data-original]").value,
-        notes: this.querySelector("[data-notes]").value,
-      };
-      writingMessages(input.action, input.original, input.notes);
+      const input = this.input();
+      const messages = writingMessages(
+        input.action,
+        input.original,
+        input.notes,
+        input.context,
+      );
+      if (
+        this.querySelector("[data-request]").value !==
+        JSON.stringify(messages, null, 2)
+      ) {
+        this.querySelector("[data-consent]").checked = false;
+        this.updateRequest();
+        throw Error(
+          "Request changed. Review the displayed messages and confirm again.",
+        );
+      }
       this.cancel();
       this.invalidate();
       this.busyState(true);

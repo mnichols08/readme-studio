@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.1
+
+- Seven explicit, editable writing-context sources: GitHub profile, one selected repository, project type, that repository's Stack DNA, draft project metadata, one selected section and current writing style.
+- All sources start unchecked. Allowlisted facts from existing local/session data only; no background fetch, whole-workspace upload or account-wide stack summary.
+- Exact outbound message preview includes Original, notes, selected context and grounding instructions. Context changes cancel pending generation and invalidate consent and diff approval.
+- Grounding instructions require supplied factual support and omission of unsupported claims. Style samples are not factual evidence; detected technology is not proficiency.
+- Context validation and combined request limits fail visibly without silent truncation. Existing Original / Proposed / Diff / Apply and offline manual review remain intact.
+
 ## 1.4.0
 
 - Optional Writing Assistant with nine actions: draft section, improve wording, shorten, expand, technical/casual tone, notes to bullets, bullets to paragraph and grammar cleanup.
