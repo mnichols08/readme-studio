@@ -1,12 +1,12 @@
 # Writing Assistant
 
-Version 1.4.1 adds explicit context to optional AI editing. README Studio's editor, builders, preview, exports and local recovery still work without an AI account, connection or model.
+Version 1.4.2 adds rewrite comparison to optional, context-aware AI editing. README Studio's editor, builders, preview, exports and local recovery still work without an AI account, connection or model.
 
 ## Original → Proposed → Diff → Apply
 
 1. Select text in the Markdown editor, then open **Review → Writing assistant** (also available in workspace search).
 2. Confirm **Content to edit**. Choose selected text, a named Markdown section, or **New section at cursor**. The exact affected source appears under **Original**. For an empty insertion, choose **Draft section** and supply factual notes.
-3. Choose an action: Draft section, Improve wording, Shorten, Expand, Make more technical, Make more casual, Turn notes into bullets, Turn bullets into paragraph, or Grammar cleanup.
+3. Choose an action: Draft section, Improve wording, Shorten (long → short), Expand, Make more technical, Make more casual, Turn notes/paragraph into bullets, Turn bullets into paragraph, Grammar cleanup, or Technical notes → README summary.
 4. Optionally add facts or instructions. Configure a trusted chat-completions endpoint, its model identifier and an API key if required. Confirm the content being sent, then choose **Generate proposal**.
 5. Inspect and edit **Proposed**. Generation never changes the draft. You can also paste a proposal manually without connecting AI.
 6. Choose **Review diff**, inspect the complete current/resulting README and line diff, approve the exact change, then **Apply**.
@@ -55,3 +55,22 @@ Inspect/edit each text field before checking **Include**. Blank sources can rece
 The grounding prompt requires factual claims to be supported by supplied Original, factual notes or selected factual context. Unsupported claims must be omitted, not filled from outside knowledge. All context is treated as data, not system instructions; style guidance cannot establish facts. This is a model instruction, not a factual-verification engine: inspect Proposed and Diff before Apply. Tests verify prompt/request boundaries using mocked output, not universal model compliance.
 
 Each selected context source is limited to 12,000 characters; serialized selected context to 16,000; total Original/notes/context to 32,000. Oversized context is shown intact and rejected until you explicitly shorten or deselect it. No silent truncation or upload of whole drafts/workspaces.
+
+## Rewrite & Compare (1.4.2)
+
+Choose **Generation mode → Compare Concise, Technical and Friendly** to request three alternatives. The chosen writing action applies to each version; each gets a different style instruction but identical Original, notes and checked context. **Exact messages to send** shows all three labeled requests before you confirm and Generate. Single proposal remains the default.
+
+Comparison may incur up to three provider charges. Requests run sequentially, with no automatic retry. If one fails, remaining requests stop and completed versions remain selectable. Cancel stops waiting and suppresses late output; completed versions remain available. A new generation starts a new comparison. Provider availability and model quality remain external.
+
+The alternatives appear side by side on desktop and stack on narrow screens. Their source is inert text. **Use Concise**, **Use Technical** or **Use Friendly** copies that version into Proposed; it does not apply anything to the README. You can edit or combine wording in Proposed, then review the exact full-document diff and explicitly Apply. Choosing another alternative clears prior approval. Undo restores the prior README after Apply.
+
+Different prompts encourage distinct alternatives but cannot guarantee them. Studio warns about exactly identical returned text (ignoring surrounding whitespace) and never relabels one output as three generated versions. Changing Original's scope, notes, action, mode or context clears stale comparisons and consent.
+
+Transformations are available from **Writing action** in either mode:
+
+- **Shorten (long → short)** retains essential facts while reducing length.
+- **Turn notes/paragraph into bullets** organizes supplied prose as Markdown bullets.
+- **Turn bullets into paragraph** produces connected prose.
+- **Technical notes → README summary** explains purpose clearly from supplied technical facts, omitting unsupported claims.
+
+Factual grounding, request limits and Original / Proposed / Diff / Apply apply equally to every alternative. Nothing depends on AI for ordinary editing or exporting.

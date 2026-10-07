@@ -57,7 +57,7 @@ test("AI sends only the selection, requires a diff, preserves surrounding source
   await expect(panel.getByLabel("Original", { exact: true })).toHaveValue(
     "This are selected notes.",
   );
-  expect(await panel.locator("[data-action-choice] option").count()).toBe(9);
+  expect(await panel.locator("[data-action-choice] option").count()).toBe(10);
   expect(calls).toHaveLength(0);
   await panel.getByRole("button", { name: "Generate proposal" }).click();
   await expect(panel.locator("[data-status]")).toContainText("Confirm");

@@ -28,7 +28,7 @@ const response = (content = "Better content", extra = {}) =>
 
 describe("writing scope and instructions", () => {
   it("defines every requested action with a fact-preserving prompt", () => {
-    expect(Object.keys(actions)).toHaveLength(9);
+    expect(Object.keys(actions)).toHaveLength(10);
     for (const key of Object.keys(actions)) {
       const messages = writingMessages(key, "Text", "Notes");
       expect(messages[0].content).toContain("Never invent");

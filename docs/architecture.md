@@ -279,3 +279,9 @@ The lazy `writing-assistant` dialog holds connection data only in module memory,
 `writing/context.js` projects allowlisted profile and repository-builder fields, public repository choices and one repository's existing Stack DNA into editable text. It never enumerates other drafts or fetches data. `writing-context` owns seven unchecked sources and independent repository/section selectors. Sources are session UI state, not persisted prompt history.
 
 The pure context validator rejects unknown/duplicate/empty/oversized entries and labels style as nonfactual guidance. `writingMessages` is shared by exact preview and provider request construction. Generate compares the current normalized messages with the displayed preview before transmission. Context changes abort requests and clear consent/proposal approval; context is also part of the diff review signature. System grounding requires omission of unsupported claims and treats context as data. This constrains the request contract, not a guarantee of model factual correctness.
+
+### Rewrite alternatives (1.4.2)
+
+`writing/alternatives.js` defines fixed style instructions and a sequential three-request orchestrator. It reuses the same input/context and provider boundary for each independent output, stops on failure/abort, and keeps completed versions. No alternative is fed into another request. The preview and provider share `writingMessages` with a validated style identifier, so all three previewed message sets match transmitted messages.
+
+The inert `writing-comparison` component renders at most three bounded text outputs. Selecting a ready card stages Proposed and invalidates diff approval; it never mutates a draft. Input/context/mode changes clear comparisons and consent. Request identities suppress late results. Identical-output detection is exact after trimming, not a semantic quality assessment. Desktop grid becomes a single column on narrow screens.

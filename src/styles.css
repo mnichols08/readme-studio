@@ -2392,3 +2392,18 @@ stack-dna [data-dna-evidence] {
 stack-dna [hidden] {
   display: none !important;
 }
+
+.writing-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.writing-comparison-grid section {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .writing-comparison-grid {
+    grid-template-columns: 1fr;
+  }
+}
