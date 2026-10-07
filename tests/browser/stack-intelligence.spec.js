@@ -230,3 +230,87 @@ test("cancellation and offline failures do not become absence or execute pending
     "No supported root manifests found",
   );
 });
+
+test("direct dependency results normalize all ecosystems and preserve kinds and repository association", async ({
+  page,
+}) => {
+  const files = {
+    "package.json": JSON.stringify({
+      dependencies: { alias: "npm:@scope/real@1" },
+      devDependencies: { vitest: "1" },
+      peerDependencies: { "@scope/real": "1" },
+    }),
+    "Cargo.toml":
+      '[dependencies]\nserde="1"\n[build-dependencies]\ncc="1"\n[workspace.dependencies]\nunused="1"',
+    "pyproject.toml":
+      '[project]\ndependencies=["Some_Pkg>=1"]\n[build-system]\nrequires=["setuptools"]',
+    "requirements.txt": "some-pkg==1",
+    "go.mod":
+      "require example.org/Direct v1.0.0\nrequire example.org/transitive v1.0.0 // indirect",
+  };
+  let reads = 0;
+  await page.route("https://api.github.com/**", async (route) => {
+    const url = route.request().url();
+    if (url.includes("/users/"))
+      return route.fulfill({
+        json: [
+          { name: "app", full_name: "Example/app", default_branch: "main" },
+        ],
+      });
+    reads++;
+    const path = decodeURIComponent(
+      new URL(url).pathname.split("/contents/")[1] || "",
+    );
+    return route.fulfill({
+      json: path
+        ? content(path, files[path])
+        : Object.keys(files).map((path) => ({ type: "file", path })),
+    });
+  });
+  await open(page);
+  await page.getByLabel("GitHub username", { exact: true }).fill("example");
+  await page
+    .getByRole("button", { name: "Load repositories", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Select all filtered repositories" })
+    .click();
+  await page
+    .getByLabel("Allow read-only manifest analysis for this session")
+    .check();
+  await page
+    .getByRole("button", { name: "Analyze selected manifests" })
+    .click();
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "complete",
+  );
+  await page.locator("stack-results summary").click();
+  const dependencies = page.locator("[data-dependencies] > li");
+  await expect(dependencies).toHaveCount(8);
+  await expect(dependencies.filter({ hasText: "some-pkg" })).toHaveCount(1);
+  await expect(dependencies.filter({ hasText: "some-pkg" })).toContainText(
+    "pyproject.toml",
+  );
+  await expect(dependencies.filter({ hasText: "some-pkg" })).toContainText(
+    "requirements.txt",
+  );
+  await expect(dependencies.filter({ hasText: "@scope/real" })).toHaveCount(2);
+  await expect(dependencies.filter({ hasText: "setuptools" })).toContainText(
+    "python · build · example/app",
+  );
+  await expect(
+    dependencies.filter({ hasText: "example.org/Direct" }),
+  ).toContainText("go · runtime · example/app");
+  await expect(page.locator("[data-dependencies]")).not.toContainText(
+    "transitive",
+  );
+  await expect(page.locator("[data-dependencies]")).not.toContainText("unused");
+  expect(reads).toBe(6);
+  await page
+    .getByRole("button", { name: "Analyze selected manifests" })
+    .click();
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "complete",
+  );
+  expect(reads).toBe(6);
+});

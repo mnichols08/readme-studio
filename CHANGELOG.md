@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.1
+
+- Normalized direct dependency records from package.json, Cargo.toml, pyproject.toml, requirements.txt and go.mod: name, ecosystem, kind and repository association.
+- Runtime, development, peer, build and optional kinds remain distinct; matching records merge source evidence across manifests.
+- Excludes Go indirect requirements and unused/unresolved Cargo workspace entries; resolves referenced workspace aliases from the same manifest only.
+- Session caching retains normalized records with branch/repository isolation, bounded storage and explicit refresh. No installs, code execution or transitive graph resolution.
+
 ## 1.3.0
 
 - Opt-in Stack Intelligence within Repository README Audit: read selected public repositories without changing drafts or profiles.

@@ -247,3 +247,9 @@ The stack-intelligence module exposes a fixed root manifest registry and pure ad
 The client reads allowlisted regular files through the shared public GitHub client, reusing timeout/retry/cooldown behavior. Three workers read sequential manifests with cancellation. File bytes, entry counts, cache bytes/count and selected repository count are bounded. Normalized evidence is cached briefly; raw source is discarded. Partial failures remain distinguishable from no supported manifests. An explicit UI consent gate is required for each opened audit workspace.
 
 The stack-results component renders escaped, paginated repository evidence. Result state is separate from README classifications, project-type suggestions and draft storage. Closing the audit cancels work; changing accounts clears visible result state.
+
+### Direct dependency normalization (1.3.1)
+
+The pure dependencies module normalizes name/ecosystem/kind/repository tuples and merges source evidence without collapsing different roles or repositories. Python/npm normalization differs from Rust/Go spelling preservation. Go indirect and unused/unresolved Cargo workspace declarations are excluded before result limits; same-file workspace references retain their consuming dependency kind.
+
+The version-2 session result envelope includes normalized dependencies. Cache keys canonicalize repository casing while retaining branch identity. Cached responses preserve the caller's repository label for audit selection identity. The UI renders normalized evidence; no new network request, package-manager execution, persistence schema or draft mutation is introduced.
