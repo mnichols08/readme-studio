@@ -1,3 +1,4 @@
+import "./stack-dna.js";
 import { html as h } from "../markdown/serialize.js";
 export class StackResults extends HTMLElement {
   setData(records) {
@@ -11,7 +12,7 @@ export class StackResults extends HTMLElement {
   render() {
     const records = this.records || [],
       pages = Math.max(1, Math.ceil(records.length / 25));
-    this.innerHTML = `<h2 tabindex="-1">Detected in selected repositories</h2><p>Direct dependency declarations are repository evidence, not developer skill or proof that a dependency runs in production. Root manifests only. Indirect Go requirements and unused or unresolved Cargo workspace declarations are excluded. No transitive dependency resolution or executable configuration.</p><p>${records.length} selected repositories with results. Results stay in this tab; no README or profile is changed.</p><div>${records
+    this.innerHTML = `<h2 tabindex="-1">Detected in selected repositories</h2><p>Direct dependency declarations are repository evidence, not developer skill or proof that a dependency runs in production. Root manifests only. Indirect Go requirements and unused or unresolved Cargo workspace declarations are excluded. No transitive dependency resolution or executable configuration.</p><p>${records.length} selected repositories with results. Results stay in this tab; no README or profile is changed.</p><stack-dna></stack-dna><div>${records
       .slice(this.page * 25, (this.page + 1) * 25)
       .map(
         (record) =>
@@ -20,6 +21,7 @@ export class StackResults extends HTMLElement {
       .join(
         "",
       )}</div><div class="audit-pagination"><button data-stack-prev ${this.page === 0 ? "disabled" : ""}>Previous stack results</button><span>Page ${this.page + 1} of ${pages}</span><button data-stack-next ${this.page + 1 >= pages ? "disabled" : ""}>Next stack results</button></div>`;
+    this.querySelector("stack-dna").records = records;
     this.querySelectorAll("[data-stack-record]").forEach((details) => {
       details.ontoggle = () => {
         const body = details.querySelector("[data-stack-body]");

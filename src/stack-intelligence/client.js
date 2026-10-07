@@ -19,7 +19,11 @@ export class StackClient {
     const key = JSON.stringify([name, repo.default_branch || "HEAD"]);
     const cached = this.cache.get(key);
     if (!force && cached && this.now() - cached.at < 300000)
-      return { ...cached.value, repository: repo.full_name };
+      return {
+        ...cached.value,
+        repository: repo.full_name,
+        language: repo.language || "",
+      };
     if (cached) {
       this.bytes -= cached.size;
       this.cache.delete(key);
@@ -30,7 +34,8 @@ export class StackClient {
     if (!Array.isArray(listing) || listing.length > 1000)
       throw new AuditError("response", "Unreadable root manifest listing.");
     const result = {
-      version: 2,
+      version: 3,
+      language: repo.language || "",
       repository: repo.full_name,
       ref: repo.default_branch || "HEAD",
       checkedAt: this.now(),
