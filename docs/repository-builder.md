@@ -14,7 +14,7 @@ Select only useful sections and expand **Review generated Markdown** to inspect 
 
 ## Complete the documentation
 
-**Create repository README** creates a new local draft and opens the builder. Each section is independently editable and removable, with ordinary Markdown available throughout. Unknown commands, setup details, environment values, authentication, versions, license terms and project behavior are never guessed. Generated HTML comments identify writing prompts; replace them with actual project information or remove irrelevant sections. Comments do not render in GitHub's preview, so inspect sections in the editor before publishing.
+**Create repository README** creates a new local draft and opens the builder. Each section is independently editable and removable, with ordinary Markdown available throughout. In v1.2.1, supported sections open [structured documentation builders](documentation-sections.md); other sections remain Custom Markdown. Unknown commands, setup details, environment values, authentication, versions, license terms and project behavior are never guessed. Generated HTML comments identify writing prompts; replace them with actual project information or remove irrelevant sections. Comments do not render in GitHub's preview, so inspect sections in the editor before publishing.
 
 The reviewed values and selected template are stored in Studio metadata and survive project/backup export. Exported README content is ordinary Markdown/HTML; internal template metadata is not included. No GitHub write occurs in this flow. Existing drafts and the remote repository are untouched.
 

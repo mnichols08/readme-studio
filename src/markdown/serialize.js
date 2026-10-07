@@ -1,3 +1,4 @@
+import { serializeDocumentation } from "../documentation/sections.js";
 import { callout, details, codeSample, columns } from "../styling/blocks.js";
 import { present, divider } from "../styling/presentation.js";
 import { serializeShowcase } from "../projects/serialize-project.js";
@@ -119,6 +120,7 @@ export const serializeBlock = (b) =>
     ? b.settings.markdown
     : present(serializeContent(b), b);
 function serializeContent({ type, settings: s }) {
+  if (type.startsWith("doc-")) return serializeDocumentation(type, s);
   switch (type) {
     case "callout":
       return callout(s);
