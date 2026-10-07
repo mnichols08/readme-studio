@@ -3,6 +3,8 @@ import { parseSource } from "../analysis/source.js";
 import { documentationFacts, suggestProjectType } from "./project-types.js";
 import { safeUrl } from "../markdown/url-safety.js";
 
+import { placeholderFindings } from "./signals.js";
+
 const words = (text) =>
   text.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) || [];
 const htmlText = (text) =>
@@ -166,6 +168,13 @@ export function classifyReadme(source, repo = {}) {
     state,
     evidence,
     metrics,
+    findings: placeholderFindings(
+      body,
+      parseSource(analysisSource)
+        .tokens.filter((t) => t.type === "heading")
+        .map((t) => inline(t.tokens))
+        .join(" "),
+    ),
     documentation: documentationFacts(metrics, sectionHas),
     suggestion: suggestProjectType(repo, body),
   };

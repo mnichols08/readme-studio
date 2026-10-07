@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.1.2 — README Attention Queue.** Choose which repository README to improve next with explainable High/Medium/Low priorities, project-type filters and local dismissal controls. See the [attention queue guide](docs/readme-attention-queue.md).
+**Version 1.1.3 — Repository Audit Hardening.** Review possible placeholders, observed README history and unavailable links/images, with bounded scanning and partial-result recovery for large accounts. See the [audit hardening guide](docs/audit-hardening.md).
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

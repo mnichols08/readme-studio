@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.3
+
+- Conservative TODO, project-name and combined framework-template signals, excluding code examples and comments.
+- Optional per-repository history/link review using GitHub commit observations and existing link-health checks; unknown/CORS results are not broken links.
+- History review requires an old observed README update and sustained recent activity; activity alone never implies stale documentation.
+- One bounded retry for transient gateway/network errors, shared GitHub rate-limit cooldown, explicit partial-result counts and retained assessments.
+- Synthetic 100/500/1,000-repository coverage, three concurrent README requests, bounded caches and advisory findings in the attention queue.
+
 ## 1.1.2
 
 - README Attention Queue with explainable High/Medium/Low priorities from audited documentation, project-type gaps, recent pushes and public-interest signals; no scores or developer rankings.
