@@ -266,6 +266,31 @@ test("app color toggle synchronizes preview and picture sources without changing
   await expect(editor).toHaveValue(source);
 });
 
+test("app theme follows the device until the editor toggle sets a manual preference", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await start(page);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(
+    page
+      .locator(".app-header")
+      .getByRole("button", { name: "Toggle color theme", exact: true }),
+  ).toHaveCount(0);
+
+  const appToggle = page
+    .locator(".editor-pane")
+    .getByRole("button", { name: "Toggle color theme", exact: true });
+  await appToggle.click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+});
+
 test("saved visual themes can be managed, imported and backed up without touching source", async ({
   page,
 }) => {

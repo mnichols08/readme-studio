@@ -122,13 +122,28 @@ export class AppShell extends HTMLElement {
       version: 1,
       drafts: [draft],
       active: draft.id,
-      settings: { theme: "light", preview: "1012" },
+      settings: {
+        theme: "system",
+        themePreferenceVersion: 1,
+        preview: "1012",
+      },
     };
     this.data.settings = {
-      theme: "light",
+      theme: "system",
+      themePreferenceVersion: 1,
       preview: "1012",
       ...this.data.settings,
     };
+    if (this.data.settings.themePreferenceVersion !== 1) {
+      this.data.settings.theme =
+        this.data.settings.theme === "dark" ? "dark" : "system";
+      this.data.settings.themePreferenceVersion = 1;
+    }
+    this.systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    this.onSystemThemeChange ||= () => {
+      if (this.data.settings.theme === "system") this.applySettings();
+    };
+    this.systemThemeQuery.addEventListener("change", this.onSystemThemeChange);
     this.data.badgeCollections ||= { version: 1, items: [] };
     this.draw();
     this.load(this.data.active);
@@ -147,15 +162,19 @@ export class AppShell extends HTMLElement {
     document.removeEventListener("keydown", this.onWorkspaceKeydown);
     window.removeEventListener("error", this.onRuntimeError);
     window.removeEventListener("unhandledrejection", this.onRuntimeError);
+    this.systemThemeQuery?.removeEventListener(
+      "change",
+      this.onSystemThemeChange,
+    );
   }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="workflows">Workflows</button><button data-action="publish-github">Publish to GitHub</button><button data-action="refresh-github">Refresh GitHub data</button><button data-action="repository-health">Check links</button><button data-action="intelligence">Profile Intelligence</button><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="workflows">Workflows</button><button data-action="publish-github">Publish to GitHub</button><button data-action="refresh-github">Refresh GitHub data</button><button data-action="repository-health">Check links</button><button data-action="intelligence">Profile Intelligence</button><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="documents">Documents</button><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
   <section class="batch-bar" hidden aria-label="Active review batch"></section>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
   <main class="workspace" data-mobile="build"><aside class="builder-pane pane" id="build-panel" aria-label="Builder"><div class="pane-heading"><span>WORKSPACE</span><button data-action="collapse" aria-label="Collapse builder">‹</button></div><nav class="builder-tabs" aria-label="Builder tools"><button class="active" data-tab="sections">Sections</button><button data-tab="library">Library</button><button data-tab="health">Health</button></nav><div class="builder-content"></div><div class="builder-footer"><span>✦</span> Make it yours. Keep it Markdown.</div></aside>
-  <section class="editor-pane pane" id="markdown-panel" aria-label="Markdown editor panel"><div class="pane-heading"><span><span class="purple">M↓</span> README.md</span><div><button data-action="expand" aria-label="Show builder">☰</button><button data-action="undo" aria-label="Undo">↶</button><button data-action="redo" aria-label="Redo">↷</button><button data-action="copy-selection" title="Copy selected text">Copy selection</button></div></div><div class="editor-note">MARKDOWN <span>Editable. Portable. Always yours.</span></div><markdown-editor></markdown-editor><div class="editor-status"><span data-count></span><span>Markdown · UTF-8</span></div></section>
+  <section class="editor-pane pane" id="markdown-panel" aria-label="Markdown editor panel"><div class="pane-heading"><span><span class="purple">M↓</span> README.md</span><div><button data-action="expand" aria-label="Show builder">☰</button><button data-action="undo" aria-label="Undo">↶</button><button data-action="redo" aria-label="Redo">↷</button><button data-action="copy-selection" title="Copy selected text">Copy selection</button><button data-action="theme" aria-label="Toggle color theme" title="Override device color preference">◐</button></div></div><div class="editor-note">MARKDOWN <span>Editable. Portable. Always yours.</span></div><markdown-editor></markdown-editor><div class="editor-status"><span data-count></span><span>Markdown · UTF-8</span></div></section>
   <section class="preview-pane pane" id="preview-panel" aria-label="Preview panel"><div class="pane-heading"><span><i class="live-dot"></i> LIVE PREVIEW</span><span class="muted">GitHub style</span></div><div class="preview-toolbar"><label class="sr-only" for="preview-size">Preview size</label><select id="preview-size"><option value="1012">GitHub desktop</option><option value="760">Narrow README</option><option value="640">Tablet</option><option value="375">Mobile</option></select><span data-width>1012px max</span><button data-action="preview-theme" aria-label="Toggle preview color theme">◐</button></div><div class="preview-scroll"><div class="preview-paper"><div class="readme-label">▤ <strong>README</strong><span>.md</span></div><github-preview></github-preview></div></div><div class="preview-footer">Rendered locally <span>Approximate GitHub rendering</span></div></section></main>
   <div class="toast" role="status" hidden></div><dialog class="modal" aria-label="README Studio dialog"><button class="close-dialog" aria-label="Close dialog">×</button><div class="dialog-content"></div></dialog>`;
     this.editor = this.querySelector("markdown-editor");
@@ -805,18 +824,19 @@ export class AppShell extends HTMLElement {
       "reduce-motion",
       !!this.data.settings.reduceMotion,
     );
-    document.documentElement.dataset.theme = this.data.settings.theme;
+    const theme = this.effectiveTheme();
+    document.documentElement.dataset.theme = theme;
     this.querySelector("#preview-size").value = this.data.settings.preview;
     this.querySelector(".preview-paper").style.maxWidth =
       this.data.settings.preview + "px";
     this.querySelector("[data-width]").textContent =
       this.data.settings.preview + "px max";
     this.querySelector(".preview-paper").dataset.theme =
-      this.data.settings.previewTheme || this.data.settings.theme;
+      this.data.settings.previewTheme || theme;
     this.preview?.applyTheme();
     this.querySelector('[data-action="theme"]').setAttribute(
       "aria-pressed",
-      String(this.data.settings.theme === "dark"),
+      String(theme === "dark"),
     );
     this.querySelector('[data-action="preview-theme"]').setAttribute(
       "aria-pressed",
@@ -825,6 +845,13 @@ export class AppShell extends HTMLElement {
           "dark",
       ),
     );
+  }
+  effectiveTheme() {
+    return this.data.settings.theme === "system"
+      ? this.systemThemeQuery.matches
+        ? "dark"
+        : "light"
+      : this.data.settings.theme;
   }
   load(id) {
     const draft = this.data.drafts.find((d) => d.id === id);
@@ -2331,15 +2358,15 @@ export class AppShell extends HTMLElement {
         break;
       case "theme":
         this.data.settings.theme =
-          this.data.settings.theme === "dark" ? "light" : "dark";
+          this.effectiveTheme() === "dark" ? "light" : "dark";
+        this.data.settings.themePreferenceVersion = 1;
         this.data.settings.previewTheme = this.data.settings.theme;
         this.applySettings();
         this.save();
         break;
       case "preview-theme":
         this.data.settings.previewTheme =
-          (this.data.settings.previewTheme || this.data.settings.theme) ===
-          "dark"
+          (this.data.settings.previewTheme || this.effectiveTheme()) === "dark"
             ? "light"
             : "dark";
         this.applySettings();

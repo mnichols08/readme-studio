@@ -280,12 +280,6 @@ button.primary:hover {
 .header-actions button {
   padding: 10px 15px;
 }
-.header-actions button:last-child {
-  font-size: 20px;
-  padding: 3px 9px;
-  border: 0;
-  margin-left: 5px;
-}
 .workspace-bar {
   height: 57px;
   display: flex;
@@ -1271,11 +1265,6 @@ readme-health h3 {
   .header-actions button[data-action="copy"] {
     display: none;
   }
-  .header-actions button:last-child {
-    margin: 0;
-    font-size: 18px;
-    padding: 0 4px;
-  }
   .workspace-bar {
     height: 49px;
     padding: 0 12px;
@@ -1561,7 +1550,6 @@ label textarea {
 @media (max-width: 760px) {
   button,
   .header-actions button,
-  .header-actions button:last-child,
   .block-actions button,
   .close-dialog {
     min-height: 44px;

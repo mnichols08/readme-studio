@@ -120,7 +120,7 @@ Collapsed editors defer form creation. Preview HTML is prepared in an inert temp
 
 `workspace-backup.js` includes the optional versioned visual library; old workspaces normalize to an empty library without rewriting their source. Library mutations validate and write before changing persisted in-memory state. Invalid library data uses the existing storage recovery boundary and preserves original recovery bytes. Restore resolves IDs and names without silent overwrite. Saved libraries do not establish live references to drafts.
 
-Workspace app theme changes synchronize `previewTheme`, then apply preview colors and temporary picture media overrides. The separate preview control may override that mode afterward. Both preferences persist outside document undo and never mutate source.
+Workspace app appearance follows `prefers-color-scheme` until the editor toolbar toggle stores an explicit light/dark override. Legacy light defaults migrate to system preference; prior dark settings remain explicit. Manual app theme changes synchronize `previewTheme`, then apply preview colors and temporary picture media overrides. The separate preview control may override that mode afterward. Both preferences persist outside document undo and never mutate source.
 
 ## Component Library (v0.5.0)
 

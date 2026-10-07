@@ -11,7 +11,7 @@ import { widgetRegistry as widgets } from "../widgets/registry.js";
 export function installWorkspace(app) {
   const actions = app.querySelector(".header-actions");
   actions.innerHTML =
-    '<button data-action="command-palette">Search workspace <kbd>Ctrl K</kbd></button><button data-action="theme" aria-label="Toggle color theme">◐</button>';
+    '<button data-action="command-palette">Search workspace <kbd>Ctrl K</kbd></button>';
   const tools = document.createElement("nav");
   tools.className = "workspace-tools";
   tools.setAttribute("aria-label", "Workspace tools");

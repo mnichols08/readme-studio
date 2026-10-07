@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.4
+
+- Follow the operating system's light/dark preference by default and respond when it changes.
+- Move the app theme override from the header into the editor toolbar; retain the separate README preview theme control.
+- Migrate legacy default-light workspaces to system preference while preserving an existing dark preference.
+
 ## 1.5.3
 
 - Connect attention-queue Improve next to a persistent local review batch, with explicit reviewed/skip decisions, return-to-pending and next-document navigation.

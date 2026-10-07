@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.5.3 — Batch Review.** Turn the attention queue into a resumable local review batch, improve READMEs one by one, and prepare a common section for selected repositories with per-document diffs. Publishing remains a separate reviewed action. See the [batch review guide](docs/batch-review.md).
+**Version 1.5.4.** App appearance follows your device's light/dark preference by default, with a manual override in the editor toolbar. README preview appearance can still be controlled separately.
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
