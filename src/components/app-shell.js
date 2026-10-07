@@ -1580,15 +1580,18 @@ export class AppShell extends HTMLElement {
     await import("./repository-readme-builder.js");
     this.modal("<repository-readme-builder></repository-readme-builder>");
     const builder = this.querySelector("repository-readme-builder");
-    builder.configure(context);
-    builder.addEventListener("repository-readme-original", () => {
-      this.dispatchEvent(
-        new CustomEvent("audit-improve", {
-          detail: { ...context, builder: false },
-        }),
-      );
+    builder.configure({
+      currentMarkdown: this.store.draft.markdown,
+      previewTheme: this.data.settings.previewTheme || this.data.settings.theme,
+      ...context,
     });
-    builder.addEventListener("repository-readme-create", (event) => {
+    const create = (event, original = false) => {
+      if (!original && !builder.canCreate(event.detail)) {
+        builder.status(
+          "Review and approve the current diff before creating this README.",
+        );
+        return;
+      }
       if (this.data.drafts.length >= 500) {
         builder.status(
           "Draft limit reached. Export and remove an unused draft first.",
@@ -1598,11 +1601,20 @@ export class AppShell extends HTMLElement {
       const { name, blocks, metadata } = event.detail;
       this.addDraft(name, blocks, metadata);
       this.closeDialog();
-      this.mobile("build", false);
+      this.mobile(original ? "markdown" : "build", false);
+      if (original) this.focusDocument();
       this.notify(
-        "Repository README created as a new local draft. Edit the selected sections to replace writing prompts.",
+        original
+          ? "Existing README opened unchanged in a new local draft."
+          : "Repository README created as a new local draft. Edit the selected sections to replace writing prompts.",
       );
-    });
+    };
+    builder.addEventListener("repository-readme-original", (event) =>
+      create(event, true),
+    );
+    builder.addEventListener("repository-readme-create", (event) =>
+      create(event),
+    );
     builder.querySelector("select").focus();
   }
   templates() {

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.3
+
+- Safe UTF-8 file, pasted Markdown and current-draft imports with exact file source preservation.
+- Conservative section matching, aliases and related-section guidance; empty headings and badge-only sections are not treated as complete.
+- Additive merges preserve the original source. Changed imports and replacements require an exact diff review and approval, invalidated by subsequent edits.
+- Optional reviewed context, unchanged-source escape hatch, keyboard review focus and sanitized light/dark previews at narrow widths.
+- Repository fixtures and cross-browser regression coverage for source preservation, false positives, review gating and mobile usability.
+
 ## 1.2.2
 
 - Project-aware Library recommendations follow the repository template, with a draft-specific manual selector that never rewrites existing sections.
