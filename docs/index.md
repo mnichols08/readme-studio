@@ -54,3 +54,5 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 - [Writing Assistant](writing-assistant.md) — optional selected-content AI with Original / Proposed / Diff / Apply.
 
 - [AI safety audit](ai-safety.md) — provider boundaries, imported context and credential handling.
+
+- [Workspace documents](workspace-documents.md) — multiple README sources, independent targets, switching and recovery.

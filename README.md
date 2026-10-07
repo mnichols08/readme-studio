@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.4.3 — AI Safety & Provider Abstraction.** Choose a compatible provider, a key-free local server, or no AI. Inspect the destination and selected context before sending; all proposals still require diff review. Credentials stay outside portable projects and backups. See the [Writing Assistant guide](docs/writing-assistant.md) and [safety audit](docs/ai-safety.md).
+**Version 1.5.0 — Multi-README Workspace.** Organize profile, repository and local documents, each with its own source, GitHub target, Health analysis and undo history while switching. Audit actions reopen matching local work without replacing edits. See the [workspace documents guide](docs/workspace-documents.md).
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

@@ -1,3 +1,4 @@
+import { documentTarget } from "../workspace/documents.js";
 import { sourceDiffMarkup, fillSourceDiff } from "./source-diff.js";
 import {
   generatedAssets,
@@ -124,6 +125,18 @@ export class PublishDialog extends HTMLElement {
     this.repositories = repositories;
     const area = this.querySelector("[data-target]");
     area.innerHTML = `<h2>Choose target</h2><p>Suggested profile repository: ${html(this.auth.identity.login)}/${html(this.auth.identity.login)}. Confirm your own selection. If missing, <a href="https://github.com/new" target="_blank" rel="noopener noreferrer">create it on GitHub</a> and install the app for it.</p><label>Target repository<select data-repo><option value="">Select repository</option>${repositories.map((r) => `<option value="${html(r.repository)}">${html(r.repository)} · ${html(r.visibility)} · ${(this.kind === "workflow" ? r.workflowsWritable : r.writable) ? "write access" : "read only"} · default ${html(r.branch)}</option>`).join("")}</select></label><label>Target branch<input data-branch autocomplete="off"></label><label>${this.kind === "workflow" ? "Workflow path" : "README path"}<input data-path value="${html(this.workflowPath || "README.md")}" ${this.kind === "workflow" ? "readonly" : ""} autocomplete="off"></label><fieldset data-assets-options ${this.kind !== "workflow" && this.draftSnapshot?.metadata?.bannerSettings ? "" : "hidden"}><legend>Generated banner assets</legend><label class="check"><input type="checkbox" data-include-assets> Include generated banner SVG files in this publishing plan</label><label>Asset directory<input data-asset-directory value="assets/readme"></label><label class="check"><input type="checkbox" data-rewrite-banner> Update only Studio-owned banner references in the prepared README</label></fieldset><button data-load>Load remote ${this.kind === "workflow" ? "workflow" : "README"}</button>`;
+    const destination =
+      this.kind === "workflow"
+        ? null
+        : documentTarget(this.draftSnapshot || {});
+    if (
+      destination &&
+      repositories.some((repo) => repo.repository === destination.repository)
+    ) {
+      area.querySelector("[data-repo]").value = destination.repository;
+      area.querySelector("[data-branch]").value = destination.branch;
+      area.querySelector("[data-path]").value = destination.path;
+    }
     area.querySelector("[data-repo]").onchange = () => {
       area.querySelector("[data-branch]").value =
         repositories.find(

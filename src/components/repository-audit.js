@@ -447,7 +447,7 @@ export class RepositoryAudit extends HTMLElement {
     this.status(
       builder
         ? "Opening a repository template with README source and metadata suggestions…"
-        : "Opening exact README source in a new local draft…",
+        : "Opening the repository document; existing local edits will be preserved…",
     );
     try {
       const readme = await auditClient.readme(repo, {
