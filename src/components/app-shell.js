@@ -1542,7 +1542,7 @@ export class AppShell extends HTMLElement {
     document.body.append(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
     this.notify(`${name} download started`);
   }
   notify(message, kind = "info") {
