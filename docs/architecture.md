@@ -219,3 +219,7 @@ The audit view applies session-only overrides to cached evidence; it does not re
 `readme-attention-queue` renders at most 25 candidates, keeps filters outside the replaced list, and returns focus after actions. Opening a candidate uses the audit's existing exact-source/new-draft event. The shared public fetch concurrency/cache/cancellation boundary is unchanged. The queue adds no network request and does not claim unavailable pinned/release metadata.
 
 See [repository audit hardening](audit-hardening.md) for conservative placeholder/history findings, optional link checks, retry policy and large-account limits.
+
+## Repository README templates
+
+`data/repository-templates.js` defines twelve project-type section profiles and pure suggestion/serialization functions. `repository-readme-builder` reviews metadata and selected sections before emitting a new-draft plan. The audit supplies its explicit override or suggested type; PWA maps to Web App and Experiment to Generic. Existing source remains an exact Custom Markdown block by default. Generated sections use editable Custom Markdown with explicit writing comments, not fabricated commands. `metadata.repositoryReadme` carries versioned reviewed context in Studio state only; normal README export remains plain source. The builder is loaded lazily, reuses the modal focus/dismissal boundary, and makes no network requests itself.

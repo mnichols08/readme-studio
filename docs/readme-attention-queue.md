@@ -39,7 +39,7 @@ Within each tier, ordering is deterministic: active first, then missing/stub/min
 
 Filters combine: High/Medium/Low, missing only, active only, archived exclude/include/only, language, project type, minimum stars and pushed within 30/90/180/365 days. The default queue excludes archived entries and hides deferred items. **Reset queue filters** restores those defaults. The queue renders 25 items per page and supports the audit's loaded repository set up to 1,000.
 
-- **Improve next** opens the first non-deferred candidate matching current filters.
+- **Improve next** opens the repository README builder for the first non-deferred candidate matching current filters. Each queue item also has **Improve README** for that same reviewed-template flow.
 - **Open in Studio** opens that repository's exact source in a new local draft. A missing README starts blank. Opening is not a completion signal and does not write to GitHub.
 - **Ignore for now** hides the item for seven days, or until a different known README revision is fetched.
 - **Mark intentionally minimal** hides that README revision without an expiry. It requires a valid GitHub blob SHA or confirmed missing root README; unavailable revisions need another audit.
@@ -62,3 +62,5 @@ Malformed/future-version preferences are left untouched. Queue review and source
 Unit fixtures cover deterministic order, explanations, all filters, unknown activity, archived/high-interest repositories, appropriate experiments, 1,000 candidates, SHA/missing transitions, ignore expiry, account scoping, corruption, duplicate identities and write failures. Browser fixtures cover keyboard/mobile controls, source-preserving actions, persisted suppression across reload, changed README reappearance, type overrides, recovery and bounded pages. Network responses are synthetic.
 
 See [repository audit hardening](audit-hardening.md) for conservative placeholder/history findings, optional link checks, retry policy and large-account limits.
+
+In v1.2.0, Improve README / Improve next opens the [repository README builder](repository-builder.md) with an appropriate template and reviewed metadata. Open in Studio still preserves the exact original source.
