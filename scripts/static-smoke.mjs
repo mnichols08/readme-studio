@@ -163,6 +163,8 @@ try {
         .focus();
       await page.keyboard.press("Escape");
       await page.evaluate(() => navigator.serviceWorker.ready);
+      if (await page.locator(".update-status").count())
+        throw Error("First service-worker installation offered an update");
       await page.reload();
       await page.waitForFunction(
         () => navigator.serviceWorker.controller !== null,

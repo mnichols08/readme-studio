@@ -17,7 +17,11 @@ export function installOfflineStatus() {
     .register(new URL("sw.js", document.baseURI), { updateViaCache: "none" })
     .then((registration) => {
       const offer = () => {
-        if (!registration.waiting || document.querySelector(".update-status"))
+        if (
+          !registration.active ||
+          !registration.waiting ||
+          document.querySelector(".update-status")
+        )
           return;
         const notice = document.createElement("div");
         notice.className = "update-status";
