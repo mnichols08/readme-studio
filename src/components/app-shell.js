@@ -1,3 +1,7 @@
+import {
+  documentationProfiles,
+  documentationProfile,
+} from "../documentation/project-types.js";
 import { saveProjectDialog, openProjectDialog } from "../studio-projects/ui.js";
 import { bindDialogDismissal } from "./dialog-dismissal.js";
 import { installWorkspace } from "../workspace/ui.js";
@@ -1329,16 +1333,61 @@ export class AppShell extends HTMLElement {
       return;
     }
     if (tab === "library") {
-      this.content.innerHTML = `<div class="section-title"><h2>Build your story</h2><p>Good sections. Ordinary Markdown.</p></div><div class="library-grid">${Object.entries(
-        blockTypes,
+      const metadata = this.store.draft.metadata;
+      const profile = documentationProfile(
+        metadata.documentationProjectType ||
+          metadata.repositoryReadme?.templateId,
+      );
+      const recommended = documentationProfiles[profile].types;
+      const icons = [
+        "H",
+        "≡",
+        "⌘",
+        "↗",
+        "▣",
+        "◈",
+        "⌁",
+        "✎",
+        "@",
+        "—",
+        "&lt;/&gt;",
+        "◇",
+        "▦",
+        "◐",
+        "!",
+        "▸",
+        "{}",
+        "▥",
+      ];
+      const buttons = (entries) =>
+        entries
+          .map(
+            ([type, name]) =>
+              `<button data-block-type="${type}"><span class="library-icon">${icons[Object.keys(blockTypes).indexOf(type)] || "¶"}</span><span>${html(name)}</span><span>+</span></button>`,
+          )
+          .join("");
+      this.content.innerHTML = `<div class="section-title"><h2>Build your story</h2><p>Good sections. Ordinary Markdown.</p></div><label>Documentation project type<select data-documentation-profile aria-label="Documentation project type">${Object.entries(
+        documentationProfiles,
       )
         .map(
-          ([type, name], i) =>
-            `<button data-block-type="${type}"><span class="library-icon">${["H", "≡", "⌘", "↗", "▣", "◈", "⌁", "✎", "@", "—", "&lt;/&gt;", "◇", "▦", "◐", "!", "▸", "{}", "▥"][i] || "¶"}</span><span>${name}</span><span>+</span></button>`,
+          ([id, p]) =>
+            `<option value="${id}" ${id === profile ? "selected" : ""}>${html(p.name)}</option>`,
         )
         .join(
           "",
-        )}</div><button class="wide" data-action="components">Browse Component Library</button><button class="wide" data-action="templates">Browse templates →</button><button class="wide" data-action="banner">Open Banner Builder</button>`;
+        )}</select></label><p class="hint">Recommendations follow your chosen project type. Changing this selection never rewrites existing sections.</p>${recommended.length ? `<section data-recommended><h3>Recommended for ${html(documentationProfiles[profile].name)}</h3><div class="library-grid">${buttons(recommended.map((type) => [type, blockTypes[type]]))}</div></section>` : ""}<h3>${recommended.length ? "All other sections" : "All sections"}</h3><div class="library-grid">${buttons(Object.entries(blockTypes).filter(([type]) => !recommended.includes(type)))}</div><button class="wide" data-action="components">Browse Component Library</button><button class="wide" data-action="templates">Browse templates →</button><button class="wide" data-action="banner">Open Banner Builder</button>`;
+      this.content.querySelector("[data-documentation-profile]").onchange = (
+        event,
+      ) => {
+        this.store.checkpoint();
+        this.store.draft.metadata = {
+          ...metadata,
+          documentationProjectType: event.target.value,
+        };
+        this.store.emit("metadata");
+        this.showTab("library");
+        this.content.querySelector("[data-documentation-profile]").focus();
+      };
       return;
     }
     const blocks = this.store.draft.blocks;

@@ -1,7 +1,10 @@
+import { projectSections } from "./project-types.js";
+import { safeUrl } from "../markdown/url-safety.js";
 import { mdText } from "../styling/presentation.js";
 
 const f = (key, label, kind = "markdown") => ({ key, label, kind });
 export const documentationSections = {
+  ...projectSections,
   "doc-overview": {
     name: "Overview",
     fields: [
@@ -178,7 +181,7 @@ export function documentationDefaults(type) {
     version: 1,
     title: definition.name,
     ...Object.fromEntries(definition.fields.map((field) => [field.key, ""])),
-    ...(definition.rows ? { items: [] } : {}),
+    ...(definition.rows || definition.rowFields ? { items: [] } : {}),
   };
 }
 export function documentationType(title) {
@@ -188,6 +191,8 @@ export function documentationType(title) {
   return (
     exact?.[0] ||
     {
+      controls: "doc-controls",
+      "save and data": "doc-save-data",
       setup: "doc-installation",
       purpose: "doc-overview",
       environment: "doc-environment",
@@ -245,14 +250,66 @@ export function serializeDocumentation(type, settings) {
             .join("\n"),
       );
   }
+  if (definition.rowFields) {
+    if (!Array.isArray(settings.items) || settings.items.length > 200)
+      throw Error("Use at most 200 documentation rows.");
+    const rows = settings.items.filter(
+      (row) =>
+        row &&
+        definition.rowFields.some(
+          (field) =>
+            field.type !== "checkbox" && String(row[field.key] || "").trim(),
+        ),
+    );
+    for (const row of rows) {
+      if (typeof row.name !== "string" || !row.name.trim())
+        throw Error(
+          `Enter ${definition.rowFields[0].label.toLowerCase()} for each row.`,
+        );
+      for (const field of definition.rowFields) {
+        if (field.type === "checkbox" && typeof row[field.key] !== "boolean")
+          throw Error(`Choose ${field.label.toLowerCase()} for each row.`);
+        if (field.type !== "checkbox" && typeof row[field.key] !== "string")
+          throw Error(`Enter text for ${field.label}.`);
+      }
+    }
+    if (definition.rowMode === "images") {
+      for (const row of rows) {
+        const url = safeUrl(row.name, { image: true });
+        if (!url) throw Error("Enter a safe image URL or repository path.");
+        if (!row.alt.trim()) throw Error("Add meaningful screenshot alt text.");
+        const destination = url.replace(/[()\s<>]/g, (character) =>
+          encodeURIComponent(character)
+            .replace(/\(/g, "%28")
+            .replace(/\)/g, "%29"),
+        );
+        parts.push(
+          `![${mdText(row.alt)}](${destination})${row.caption.trim() ? "\n\n" + mdText(row.caption) : ""}`,
+        );
+      }
+    } else if (rows.length) {
+      const columns = definition.rowFields;
+      parts.push(
+        `| ${columns.map((field) => mdText(field.label)).join(" | ")} |\n| ${columns.map(() => "---").join(" | ")} |\n` +
+          rows
+            .map(
+              (row) =>
+                `| ${columns.map((field) => (field.type === "checkbox" ? (row[field.key] ? "Yes" : "No") : mdText(row[field.key]))).join(" | ")} |`,
+            )
+            .join("\n"),
+      );
+    }
+  }
   for (const field of definition.fields) {
     const value = settings[field.key];
     if (value == null || value === "") continue;
     if (typeof value !== "string")
       throw Error(`Enter text for ${field.label}.`);
     if (!value.trim()) continue;
-    const language =
-      type === "doc-examples" && /^[\w+-]{1,30}$/.test(settings.language || "")
+    const language = field.language
+      ? field.language
+      : (type === "doc-examples" || definition.dynamicLanguage) &&
+          /^[\w+-]{1,30}$/.test(settings.language || "")
         ? settings.language
         : [
               "doc-installation",
@@ -265,18 +322,25 @@ export function serializeDocumentation(type, settings) {
             ].includes(type)
           ? "sh"
           : "text";
+    if (
+      field.kind === "link" &&
+      (!/^https?:\/\//i.test(value) || !safeUrl(value, { relative: false }))
+    )
+      throw Error(`Enter a safe HTTP(S) URL for ${field.label}.`);
     const content =
-      field.kind === "code"
-        ? fence(value, language)
-        : field.kind === "list"
-          ? value
-              .split(/\r?\n/)
-              .filter((line) => line.trim())
-              .map((line) => `- ${mdText(line.trim())}`)
-              .join("\n")
-          : field.kind === "text"
-            ? mdText(value)
-            : value;
+      field.kind === "link"
+        ? `[${mdText(field.label)}](${value.replace(/[()\s<>]/g, (character) => encodeURIComponent(character).replace(/\(/g, "%28").replace(/\)/g, "%29"))})`
+        : field.kind === "code"
+          ? fence(value, language)
+          : field.kind === "list"
+            ? value
+                .split(/\r?\n/)
+                .filter((line) => line.trim())
+                .map((line) => `- ${mdText(line.trim())}`)
+                .join("\n")
+            : field.kind === "text"
+              ? mdText(value)
+              : value;
     parts.push(
       `### ${mdText(field.label.replace(/ \(.*\)$/, ""))}\n\n${content}`,
     );

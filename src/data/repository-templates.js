@@ -1,3 +1,4 @@
+import { projectTemplateSections } from "../documentation/project-types.js";
 import {
   documentationType,
   documentationDefaults,
@@ -145,7 +146,10 @@ export const repositoryTemplates = [
     name: "Generic",
     sections: ["Overview", "Setup", "Usage", "Examples", "Support"],
   },
-];
+].map((template) => ({
+  ...template,
+  sections: projectTemplateSections[template.id] || template.sections,
+}));
 
 export function repositoryTemplateId(type) {
   if (type === "pwa") return "web-app";

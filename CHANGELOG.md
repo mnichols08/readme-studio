@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.2
+
+- Project-aware Library recommendations follow the repository template, with a draft-specific manual selector that never rewrites existing sections.
+- Structured CLI syntax/commands/flag rows, API endpoint authentication/parameters/request/response examples, and library imports/basic examples/API surface/compatibility.
+- Game gameplay, control rows, screenshots, local-running guidance and save/data behavior; Rust Cargo dependency/features/examples and docs.rs/crates.io links.
+- Web-app templates combine demo, screenshots, setup, environment, architecture, testing and deployment builders.
+- Safe URL validation, required screenshot alt text, literal code fences and portable settings; existing raw content and prior section types remain supported.
+
 ## 1.2.1
 
 - Eighteen structured repository documentation builders: Overview, Features, Installation, Quick Start, Usage, Configuration, Environment Variables, Commands, API, Examples, Architecture, Testing, Deployment, Troubleshooting, Contributing, Security, License and Roadmap.

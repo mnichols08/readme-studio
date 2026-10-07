@@ -151,7 +151,7 @@ export class BuilderForm extends HTMLElement {
     return this.value.settings.items
       .map(
         (item, i) =>
-          `<fieldset><legend>Entry ${i + 1}</legend>${this.fields(fields, item, `items.${i}.`)}${this.value.type === "projects" ? `<label>Custom links (Label | URL, one per line)<textarea data-links="${i}">${html((item.links || []).map((l) => `${l.name} | ${l.url}`).join("\n"))}</textarea></label>` : ""}<div class="row-actions"><button type="button" data-row="up" data-index="${i}" ${i === 0 ? "disabled" : ""} aria-label="Move entry ${i + 1} up">↑</button><button type="button" data-row="down" data-index="${i}" ${i === this.value.settings.items.length - 1 ? "disabled" : ""} aria-label="Move entry ${i + 1} down">↓</button><button type="button" data-row="duplicate" data-index="${i}" ${this.value.type === "doc-environment" && this.value.settings.items.length >= 200 ? "disabled" : ""}>Duplicate entry</button><button type="button" data-row="remove" data-index="${i}">Remove entry</button></div></fieldset>`,
+          `<fieldset><legend>Entry ${i + 1}</legend>${this.fields(fields, item, `items.${i}.`)}${this.value.type === "projects" ? `<label>Custom links (Label | URL, one per line)<textarea data-links="${i}">${html((item.links || []).map((l) => `${l.name} | ${l.url}`).join("\n"))}</textarea></label>` : ""}<div class="row-actions"><button type="button" data-row="up" data-index="${i}" ${i === 0 ? "disabled" : ""} aria-label="Move entry ${i + 1} up">↑</button><button type="button" data-row="down" data-index="${i}" ${i === this.value.settings.items.length - 1 ? "disabled" : ""} aria-label="Move entry ${i + 1} down">↓</button><button type="button" data-row="duplicate" data-index="${i}" ${(this.value.type === "doc-environment" || documentationSections[this.value.type]?.rowFields) && this.value.settings.items.length >= 200 ? "disabled" : ""}>Duplicate entry</button><button type="button" data-row="remove" data-index="${i}">Remove entry</button></div></fieldset>`,
       )
       .join("");
   }
@@ -162,7 +162,8 @@ export class BuilderForm extends HTMLElement {
       const definition = documentationSections[type];
       if (
         s.version !== 1 ||
-        (definition.rows && (!Array.isArray(s.items) || s.items.length > 200))
+        ((definition.rows || definition.rowFields) &&
+          (!Array.isArray(s.items) || s.items.length > 200))
       )
         throw Error("Unsupported documentation settings.");
       form =
@@ -171,11 +172,21 @@ export class BuilderForm extends HTMLElement {
           [
             field("title", "Section heading"),
             ...definition.fields.map((f) =>
-              field(f.key, f.label, f.kind === "text" ? "text" : "textarea"),
+              field(
+                f.key,
+                f.label,
+                ["text", "link"].includes(f.kind) ? "text" : "textarea",
+              ),
             ),
           ],
           s,
         );
+      if (definition.guidance)
+        form += `<p class="hint">${html(definition.guidance)}</p>`;
+      if (definition.rowFields)
+        form +=
+          this.rows(definition.rowFields) +
+          `<button type="button" data-add="documentation" ${s.items.length >= 200 ? "disabled" : ""}>${html(definition.addLabel)}</button>`;
       if (definition.rows)
         form +=
           '<p class="hint">Never paste real secrets here. Use placeholders such as YOUR_API_TOKEN in .env.example; keep real .env credentials outside version control.</p>' +
@@ -431,7 +442,17 @@ export class BuilderForm extends HTMLElement {
       }
       if (b.dataset.add) {
         const kind = b.dataset.add;
-        if (kind === "environment") {
+        if (kind === "documentation") {
+          if (s.items.length >= 200) return;
+          s.items.push(
+            Object.fromEntries(
+              documentationSections[type].rowFields.map((field) => [
+                field.key,
+                field.type === "checkbox" ? false : "",
+              ]),
+            ),
+          );
+        } else if (kind === "environment") {
           if (s.items.length >= 200) return;
           s.items.push(emptyEnvironmentRow());
         } else if (kind === "technology") {

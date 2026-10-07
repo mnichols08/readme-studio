@@ -18,9 +18,11 @@ it.each(Object.entries(documentationSections))(
     expect(settings.version).toBe(1);
     for (const field of definition.fields)
       settings[field.key] =
-        field.kind === "code"
-          ? "echo project-example"
-          : "Verified project detail";
+        field.kind === "link"
+          ? "https://example.com/docs"
+          : field.kind === "code"
+            ? "echo project-example"
+            : "Verified project detail";
     const block = createBlock(type, settings),
       source = serializeBlock(block);
     expect(source.startsWith(`## ${definition.name}`)).toBe(true);
@@ -119,15 +121,14 @@ it("uses structured sections for new templates without converting existing sourc
   const blocks = buildRepositoryTemplate({
     templateId: "library",
     values: { name: "Library" },
-    sections: ["Installation", "Usage", "API"],
+    sections: ["Installation", "Library guide"],
     existing: source,
   });
   expect(blocks[0].type).toBe("custom");
   expect(blocks[0].settings.markdown).toBe(source);
   expect(blocks.slice(2).map((b) => b.type)).toEqual([
     "doc-installation",
-    "doc-usage",
-    "doc-api",
+    "doc-library",
   ]);
   expect(documentationType("Setup")).toBe("doc-installation");
 });

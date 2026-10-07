@@ -56,7 +56,8 @@ it("preserves exact existing bytes and permits omitting sections", () => {
   expect(serializeBlocks(blocks).startsWith(source)).toBe(true);
   expect(serializeBlocks(blocks)).toContain("## Controls");
   expect(serializeBlocks(blocks)).not.toContain("## Build instructions");
-  expect(blocks.every((b) => b.type === "custom")).toBe(true);
+  expect(blocks[0].type).toBe("custom");
+  expect(blocks.at(-1).type).toBe("doc-controls");
 });
 it("escapes reviewed metadata and rejects unsafe homepage URLs", () => {
   const build = (homepage) =>

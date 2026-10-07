@@ -19,3 +19,5 @@ Select only useful sections and expand **Review generated Markdown** to inspect 
 The reviewed values and selected template are stored in Studio metadata and survive project/backup export. Exported README content is ordinary Markdown/HTML; internal template metadata is not included. No GitHub write occurs in this flow. Existing drafts and the remote repository are untouched.
 
 Text suggestions are escaped and homepage links must use safe HTTP(S) URLs. The generated source preview is a read-only text field, not arbitrary HTML execution. The shared dialog supports Escape, outside-click dismissal, keyboard focus handling and mobile scrolling.
+
+In v1.2.2, new templates select [project-specific documentation builders](project-documentation.md). The Library recommends sections from that template and provides a manual project-type selector without rewriting existing content.
