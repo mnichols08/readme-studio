@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0
+
+- Opt-in Stack Intelligence within Repository README Audit: read selected public repositories without changing drafts or profiles.
+- Root Node, Rust, Python and Go manifests expose declared dependencies with ecosystem, manifest, role and source evidence. Detection is not a developer skill assessment.
+- Bounded, cancellable GitHub-only reads, session caching, explicit refresh, partial results and shared rate-limit handling.
+- No dependency installation, script execution, repository code execution, package URL following or build-tool invocation.
+- Conservative declaration parsing, escaped evidence, keyboard controls, mobile results and documentation of unsupported/dynamic configuration.
+
 ## 1.2.3
 
 - Safe UTF-8 file, pasted Markdown and current-draft imports with exact file source preservation.
