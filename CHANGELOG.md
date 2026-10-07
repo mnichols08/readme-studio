@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.5
+
+- Suppress the new-version notice on first service-worker installation; offer updates only when a waiting worker can replace an active worker.
+- Add regression coverage for first installation and genuine updates, plus a production first-load check across browser engines and hosting paths.
+
 ## 1.5.4
 
 - Follow the operating system's light/dark preference by default and respond when it changes.
