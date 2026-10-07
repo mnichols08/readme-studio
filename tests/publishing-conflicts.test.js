@@ -80,3 +80,31 @@ it("preserves corrupt storage and refuses an unsaved pre-write checkpoint", () =
     }),
   ).toThrow("could not be saved");
 });
+it("cleans persisted history records and refuses malformed targets without writing", () => {
+  const value = {
+    version: 1,
+    token: "secret",
+    entries: [
+      {
+        repository: "example/readme",
+        branch: "main",
+        path: "README.md",
+        commitSha: "a".repeat(40),
+        timestamp: 1,
+        token: "secret",
+      },
+    ],
+    checkpoint: { draftId: "a", source: "# exact", token: "secret" },
+  };
+  const storage = {
+    getItem: () => JSON.stringify(value),
+    setItem: () => {
+      throw Error("must not write");
+    },
+  };
+  expect(JSON.stringify(readPublishingHistory(storage))).not.toContain(
+    "secret",
+  );
+  value.entries[0].path = "../README.md";
+  expect(() => readPublishingHistory(storage)).toThrow(/invalid target/);
+});

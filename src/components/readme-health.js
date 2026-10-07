@@ -3,6 +3,8 @@ import { html } from "../markdown/serialize.js";
 import { analyzeDocument } from "../analysis/analyze.js";
 export class ReadmeHealth extends HTMLElement {
   disconnectedCallback() {
+    clearTimeout(this.fallbackTimer);
+    this.fallbackId = (this.fallbackId || 0) + 1;
     this.worker?.terminate();
     this.worker = null;
   }
@@ -15,6 +17,10 @@ export class ReadmeHealth extends HTMLElement {
     if (identity === this.draftIdentity && this.worker) return;
     this.draftIdentity = identity;
     this.pending = structuredClone(draft);
+    if (this.workerFailed) {
+      this.fallback();
+      return;
+    }
     if (!this.querySelector("h2"))
       this.innerHTML =
         '<h2 tabindex="-1">README Health</h2><p role="status">Analyzing README…</p>';
@@ -48,14 +54,15 @@ export class ReadmeHealth extends HTMLElement {
               `<section class="health-group"><h3>Import suggestions</h3>${warnings.map((w) => `<p class="issue">${html(w)}</p>`).join("")}</section>`,
             );
         };
-        this.worker.onerror = () => {
+        this.worker.onerror = (event) => {
+          event.preventDefault();
           this.busy = false;
           this.worker?.terminate();
           this.worker = null;
-          this.failure();
+          this.fallback();
         };
       } catch {
-        this.failure();
+        this.fallback();
         return;
       }
     }
@@ -64,8 +71,39 @@ export class ReadmeHealth extends HTMLElement {
   run() {
     this.busy = true;
     this.analyzedSource = this.pending.markdown;
-    this.worker.postMessage(this.pending);
+    this.lastDraft = this.pending;
+    try {
+      this.worker.postMessage(this.pending);
+    } catch {
+      this.fallback();
+    }
     this.pending = null;
+  }
+  fallback() {
+    const id = (this.fallbackId = (this.fallbackId || 0) + 1);
+    this.workerFailed = true;
+    this.worker?.terminate();
+    this.worker = null;
+    this.busy = false;
+    const draft = this.pending || this.lastDraft;
+    this.pending = null;
+    clearTimeout(this.fallbackTimer);
+    this.fallbackTimer = setTimeout(async () => {
+      if (!this.isConnected || !draft) return;
+      try {
+        const { analyzeDraft } = await import("../markdown/health-analysis.js");
+        if (!this.isConnected || id !== this.fallbackId) return;
+        this.analyzedSource = draft.markdown;
+        this.dataset.engine = "JavaScript";
+        this.display(analyzeDraft(draft).analysis);
+        this.insertAdjacentHTML(
+          "beforeend",
+          '<p role="status">Worker unavailable. Analysis completed locally with JavaScript; large documents may pause briefly.</p>',
+        );
+      } catch {
+        this.failure();
+      }
+    }, 50);
   }
   failure() {
     this.innerHTML =

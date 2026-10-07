@@ -1,4 +1,28 @@
+import {
+  createBatch,
+  validateBatch,
+  decideBatch,
+  nextBatchIndex,
+} from "../workspace/batch-review.js";
+import {
+  validateShared,
+  checkSharedPlan,
+} from "../workspace/shared-components.js";
+import {
+  documentTarget,
+  documentGroup,
+  documentGroups,
+  findDocument,
+  DocumentHistories,
+} from "../workspace/documents.js";
+import { portableData } from "../state/portable-data.js";
+import {
+  documentationProfiles,
+  documentationProfile,
+} from "../documentation/project-types.js";
+import { saveProjectDialog, openProjectDialog } from "../studio-projects/ui.js";
 import { bindDialogDismissal } from "./dialog-dismissal.js";
+import { installWorkspace } from "../workspace/ui.js";
 import "./workflow-builder.js";
 import "./publish-dialog.js";
 import "./refactor-dialog.js";
@@ -89,20 +113,41 @@ export class AppShell extends HTMLElement {
       this.storageBlocked = true;
     }
     const draft = newDraft("My developer profile", template());
+    draft.metadata.workspaceDocument = {
+      version: 1,
+      kind: "profile",
+      target: null,
+    };
     this.data = saved || {
       version: 1,
       drafts: [draft],
       active: draft.id,
-      settings: { theme: "light", preview: "1012" },
+      settings: {
+        theme: "system",
+        themePreferenceVersion: 1,
+        preview: "1012",
+      },
     };
     this.data.settings = {
-      theme: "light",
+      theme: "system",
+      themePreferenceVersion: 1,
       preview: "1012",
       ...this.data.settings,
     };
+    if (this.data.settings.themePreferenceVersion !== 1) {
+      this.data.settings.theme =
+        this.data.settings.theme === "dark" ? "dark" : "system";
+      this.data.settings.themePreferenceVersion = 1;
+    }
+    this.systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    this.onSystemThemeChange ||= () => {
+      if (this.data.settings.theme === "system") this.applySettings();
+    };
+    this.systemThemeQuery.addEventListener("change", this.onSystemThemeChange);
     this.data.badgeCollections ||= { version: 1, items: [] };
     this.draw();
     this.load(this.data.active);
+    this.mobile(this.data.settings.pane || "build", false);
     window.addEventListener("pagehide", () => this.save());
     if (!saved) this.welcome();
     if (this.storageError) this.storageNotice(this.storageError);
@@ -113,19 +158,30 @@ export class AppShell extends HTMLElement {
       if (document.visibilityState === "hidden") this.save();
     });
   }
+  disconnectedCallback() {
+    document.removeEventListener("keydown", this.onWorkspaceKeydown);
+    window.removeEventListener("error", this.onRuntimeError);
+    window.removeEventListener("unhandledrejection", this.onRuntimeError);
+    this.systemThemeQuery?.removeEventListener(
+      "change",
+      this.onSystemThemeChange,
+    );
+  }
   draw() {
-    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="workflows">Workflows</button><button data-action="publish-github">Publish to GitHub</button><button data-action="refresh-github">Refresh GitHub data</button><button data-action="repository-health">Check links</button><button data-action="intelligence">Profile Intelligence</button><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
-  <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
+    this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="workflows">Workflows</button><button data-action="publish-github">Publish to GitHub</button><button data-action="refresh-github">Refresh GitHub data</button><button data-action="repository-health">Check links</button><button data-action="intelligence">Profile Intelligence</button><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button></div></header>
+  <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="documents">Documents</button><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
+  <section class="batch-bar" hidden aria-label="Active review batch"></section>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
   <main class="workspace" data-mobile="build"><aside class="builder-pane pane" id="build-panel" aria-label="Builder"><div class="pane-heading"><span>WORKSPACE</span><button data-action="collapse" aria-label="Collapse builder">‹</button></div><nav class="builder-tabs" aria-label="Builder tools"><button class="active" data-tab="sections">Sections</button><button data-tab="library">Library</button><button data-tab="health">Health</button></nav><div class="builder-content"></div><div class="builder-footer"><span>✦</span> Make it yours. Keep it Markdown.</div></aside>
-  <section class="editor-pane pane" id="markdown-panel" aria-label="Markdown editor panel"><div class="pane-heading"><span><span class="purple">M↓</span> README.md</span><div><button data-action="expand" aria-label="Show builder">☰</button><button data-action="undo" aria-label="Undo">↶</button><button data-action="redo" aria-label="Redo">↷</button><button data-action="copy-selection" title="Copy selected text">Copy selection</button></div></div><div class="editor-note">MARKDOWN <span>Editable. Portable. Always yours.</span></div><markdown-editor></markdown-editor><div class="editor-status"><span data-count></span><span>Markdown · UTF-8</span></div></section>
+  <section class="editor-pane pane" id="markdown-panel" aria-label="Markdown editor panel"><div class="pane-heading"><span><span class="purple">M↓</span> README.md</span><div><button data-action="expand" aria-label="Show builder">☰</button><button data-action="undo" aria-label="Undo">↶</button><button data-action="redo" aria-label="Redo">↷</button><button data-action="copy-selection" title="Copy selected text">Copy selection</button><button data-action="theme" aria-label="Toggle color theme" title="Override device color preference">◐</button></div></div><div class="editor-note">MARKDOWN <span>Editable. Portable. Always yours.</span></div><markdown-editor></markdown-editor><div class="editor-status"><span data-count></span><span>Markdown · UTF-8</span></div></section>
   <section class="preview-pane pane" id="preview-panel" aria-label="Preview panel"><div class="pane-heading"><span><i class="live-dot"></i> LIVE PREVIEW</span><span class="muted">GitHub style</span></div><div class="preview-toolbar"><label class="sr-only" for="preview-size">Preview size</label><select id="preview-size"><option value="1012">GitHub desktop</option><option value="760">Narrow README</option><option value="640">Tablet</option><option value="375">Mobile</option></select><span data-width>1012px max</span><button data-action="preview-theme" aria-label="Toggle preview color theme">◐</button></div><div class="preview-scroll"><div class="preview-paper"><div class="readme-label">▤ <strong>README</strong><span>.md</span></div><github-preview></github-preview></div></div><div class="preview-footer">Rendered locally <span>Approximate GitHub rendering</span></div></section></main>
   <div class="toast" role="status" hidden></div><dialog class="modal" aria-label="README Studio dialog"><button class="close-dialog" aria-label="Close dialog">×</button><div class="dialog-content"></div></dialog>`;
     this.editor = this.querySelector("markdown-editor");
     this.preview = this.querySelector("github-preview");
     this.content = this.querySelector(".builder-content");
     this.dialog = this.querySelector("dialog");
+    installWorkspace(this);
     this.querySelector(".close-dialog").onclick = () => this.closeDialog();
     bindDialogDismissal(this.dialog, () => this.closeDialog());
     this.dialog.addEventListener("close", () => {
@@ -133,12 +189,115 @@ export class AppShell extends HTMLElement {
       this.querySelector("import-dialog")?.cancel();
       this.querySelector("refresh-center")?.cancel();
       this.querySelector("refactor-dialog")?.cancel();
+      this.querySelector("writing-assistant")?.cancel();
+      this.querySelector("batch-review")?.controller?.abort();
       this.querySelector("repository-health")?.controller?.abort();
+      this.querySelector("repository-audit")?.cancel();
       this.querySelector("repository-authoring")?.controller?.abort();
       const target = this.afterDialogFocus || this.dialogTrigger;
       this.afterDialogFocus = null;
       if (target?.isConnected && target.getClientRects().length) target.focus();
       else this.querySelector("#draft-select").focus();
+    });
+    this.addEventListener("attention-download", (e) =>
+      this.download(e.detail.content, e.detail.name, e.detail.type),
+    );
+    this.addEventListener("stack-readme-review", async (e) => {
+      const record = structuredClone(e.detail);
+      const audit = e.target.closest("repository-audit");
+      await import("./stack-readme-review.js");
+      if (!audit?.isConnected || !this.dialog.open) return;
+      this.modal("<stack-readme-review></stack-readme-review>");
+      const reviewer = this.querySelector("stack-readme-review");
+      reviewer.configure(record, this.store.draft);
+      reviewer.addEventListener("stack-readme-apply", (event) => {
+        if (
+          !reviewer.canApply() ||
+          event.detail.snapshot !== draftSnapshot(this.store.draft)
+        ) {
+          reviewer.invalidate();
+          reviewer.querySelector("[data-status]").textContent =
+            "The draft changed. Close and reopen suggestions to review the current draft.";
+          return;
+        }
+        const { blocks, markdown } = event.detail.plan;
+        this.store.checkpoint();
+        this.store.draft.blocks = blocks;
+        this.store.draft.markdown = markdown;
+        this.store.emit("blocks");
+        this.closeDialog();
+        this.mobile("markdown", false);
+        this.focusDocument();
+        this.notify(
+          "Reviewed suggestions appended. Use Undo to restore the previous draft.",
+        );
+      });
+    });
+    this.addEventListener("batch-review-start", (event) => {
+      try {
+        if (
+          this.data.reviewBatch &&
+          !confirm(
+            "Replace the current local review batch? Documents remain unchanged.",
+          )
+        )
+          return;
+        this.setBatch(createBatch(event.detail));
+        this.batchReview(true);
+      } catch (error) {
+        this.notify(error.message, "warning");
+      }
+    });
+    this.addEventListener("audit-improve", (e) => {
+      const { repo, readme } = e.detail;
+      const existing = findDocument(this.data.drafts, {
+        repository: repo.full_name,
+        branch: repo.default_branch,
+        path: readme.path || "README.md",
+      });
+      if (existing) {
+        this.load(existing.id);
+        this.closeDialog();
+        this.mobile("markdown", false);
+        this.focusDocument();
+        this.notify(
+          "Opened the existing workspace document. Local edits were preserved.",
+        );
+        return;
+      }
+      if (e.detail.builder) {
+        this.repositoryReadme(e.detail);
+        return;
+      }
+      if (this.data.drafts.length >= 500) {
+        this.notify(
+          "Draft limit reached. Export and remove an unused draft first.",
+          "warning",
+        );
+        return;
+      }
+      const [owner, repository] = repo.full_name.split("/");
+      const source = {
+        type: "github",
+        owner,
+        repository,
+        ref: repo.default_branch,
+        readmePath: readme.path || "README.md",
+        sha: readme.sha,
+        fetchedAt: new Date().toISOString(),
+      };
+      const block = createBlock("custom", { markdown: readme.source ?? "" });
+      block.sourceContext = source;
+      this.addDraft(`${repo.name} README`, [block], {
+        repository: repo.full_name,
+        importSource: source,
+      });
+      this.closeDialog();
+      this.mobile("markdown", false);
+      this.focusDocument();
+      this.notify(
+        "README opened in a new local draft. No GitHub changes were made.",
+      );
     });
     this.addEventListener("import-apply", (e) => {
       const { plan, mode, name, snapshot } = e.detail;
@@ -200,6 +359,23 @@ export class AppShell extends HTMLElement {
       this.closeDialog();
       this.focusDocument();
       this.notify("Checkpoint restored as a new draft.");
+    });
+    this.addEventListener("publish-complete", ({ detail }) => {
+      const draft = this.data.drafts.find((d) => d.id === detail.draftId);
+      if (!draft) return;
+      const { repository, branch, path, commitSha, sha } = detail.result;
+      draft.metadata.publishing = {
+        ...draft.metadata.publishing,
+        [detail.kind === "workflow" ? "workflow" : "readme"]: {
+          repository,
+          branch,
+          path,
+          commitSha,
+          ...(sha ? { sha } : {}),
+        },
+      };
+      this.draftOptions();
+      this.save();
     });
     this.addEventListener("publish-download", (e) =>
       this.download(e.detail.content, e.detail.name, e.detail.type),
@@ -591,7 +767,27 @@ export class AppShell extends HTMLElement {
       this.applySettings();
       this.save();
     };
-    this.addEventListener("keydown", (e) => {
+    this.onWorkspaceKeydown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        this.openCommandPalette();
+        return;
+      }
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        ["p", "e"].includes(e.key.toLowerCase())
+      ) {
+        e.preventDefault();
+        if (this.dialog.open) {
+          this.closeDialog();
+          if (this.dialog.open) return;
+        }
+        this.action(
+          e.key.toLowerCase() === "p" ? "publish-github" : "download",
+        );
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         this.save();
@@ -602,7 +798,8 @@ export class AppShell extends HTMLElement {
           ["build", "markdown", "preview", "health"][Number(e.key) - 1],
         );
       }
-    });
+    };
+    document.addEventListener("keydown", this.onWorkspaceKeydown);
     this.querySelector('[data-pane="build"]').setAttribute(
       "aria-pressed",
       "true",
@@ -610,18 +807,36 @@ export class AppShell extends HTMLElement {
     this.applySettings();
   }
   applySettings() {
-    document.documentElement.dataset.theme = this.data.settings.theme;
+    this.querySelectorAll("[data-tool-group]").forEach((el) => {
+      el.open = !this.data.settings.closedGroups?.includes(
+        el.dataset.toolGroup,
+      );
+    });
+    this.querySelector(".workspace").classList.toggle(
+      "collapsed",
+      !!this.data.settings.collapsed,
+    );
+    this.editor.style.setProperty(
+      "--editor-font",
+      `${this.data.settings.editorFont || 13}px`,
+    );
+    document.documentElement.classList.toggle(
+      "reduce-motion",
+      !!this.data.settings.reduceMotion,
+    );
+    const theme = this.effectiveTheme();
+    document.documentElement.dataset.theme = theme;
     this.querySelector("#preview-size").value = this.data.settings.preview;
     this.querySelector(".preview-paper").style.maxWidth =
       this.data.settings.preview + "px";
     this.querySelector("[data-width]").textContent =
       this.data.settings.preview + "px max";
     this.querySelector(".preview-paper").dataset.theme =
-      this.data.settings.previewTheme || this.data.settings.theme;
+      this.data.settings.previewTheme || theme;
     this.preview?.applyTheme();
     this.querySelector('[data-action="theme"]').setAttribute(
       "aria-pressed",
-      String(this.data.settings.theme === "dark"),
+      String(theme === "dark"),
     );
     this.querySelector('[data-action="preview-theme"]').setAttribute(
       "aria-pressed",
@@ -631,17 +846,33 @@ export class AppShell extends HTMLElement {
       ),
     );
   }
+  effectiveTheme() {
+    return this.data.settings.theme === "system"
+      ? this.systemThemeQuery.matches
+        ? "dark"
+        : "light"
+      : this.data.settings.theme;
+  }
   load(id) {
-    if (this.store) this.save();
+    const draft = this.data.drafts.find((d) => d.id === id);
+    if (!draft) return;
+    if (this.store?.draft.id === id && this.store.draft === draft) return;
+    this.documentHistories ||= new DocumentHistories();
+    if (this.store) {
+      this.save();
+      this.documentHistories.remember(this.store);
+    }
     clearTimeout(this.saveTimer);
     clearTimeout(this.healthTimer);
     clearTimeout(this.updateTimer);
-    this.store = new Store(this.data.drafts.find((d) => d.id === id));
+    this.store = new Store(draft);
+    this.documentHistories.restore(this.store, this.data.drafts);
     this.data.active = id;
     this.store.addEventListener("change", (e) => {
       this.data.drafts[this.data.drafts.findIndex((d) => d.id === id)] =
         this.store.draft;
       this.editor.value = this.store.draft.markdown;
+      if (e.detail !== "raw") this.draftOptions();
       this.querySelector(".save-status").textContent = "Saving…";
       clearTimeout(this.updateTimer);
       this.updateTimer = setTimeout(() => {
@@ -662,14 +893,14 @@ export class AppShell extends HTMLElement {
     });
     this.editor.value = this.store.draft.markdown;
     this.refreshDocument();
-    this.showTab("sections");
+    this.showTab(this.tab === "health" ? "health" : "sections");
     this.draftOptions();
     this.save();
   }
   focusDocument() {
     const target = this.editor.getClientRects().length
       ? this.editor.input
-      : this.querySelector('.header-actions [data-action="import"]');
+      : this.querySelector('[data-action="command-palette"]');
     this.afterDialogFocus = target;
     target.focus();
   }
@@ -683,6 +914,7 @@ export class AppShell extends HTMLElement {
       this.content.querySelector("readme-health").draft = this.store.draft;
   }
   save() {
+    this.batchBar();
     clearTimeout(this.saveTimer);
     if (this.storageBlocked) {
       this.querySelector(".save-status").textContent =
@@ -728,7 +960,8 @@ export class AppShell extends HTMLElement {
   }
   closeDialog(target) {
     if (
-      (this.querySelector("badge-collection-editor")?.isDirty() ||
+      (this.querySelector("shared-components")?.isDirty() ||
+        this.querySelector("badge-collection-editor")?.isDirty() ||
         this.querySelector("project-studio")?.isDirty() ||
         this.querySelector("theme-studio")?.isDirty() ||
         this.querySelector("banner-builder")?.isDirty() ||
@@ -745,13 +978,322 @@ export class AppShell extends HTMLElement {
     this.dialog.close();
   }
   draftOptions() {
-    this.querySelector("#draft-select").innerHTML = this.data.drafts
-      .map(
-        (d) =>
-          `<option value="${html(d.id)}" ${d.id === this.data.active ? "selected" : ""}>${html(d.name)}</option>`,
-      )
+    this.querySelector("#draft-select").innerHTML = Object.entries(
+      documentGroups,
+    )
+      .map(([group, label]) => {
+        const drafts = this.data.drafts.filter(
+          (draft) => documentGroup(draft) === group,
+        );
+        return drafts.length
+          ? `<optgroup label="${label}">${drafts
+              .map((draft) => {
+                const destination = documentTarget(draft);
+                return `<option value="${html(draft.id)}" ${draft.id === this.data.active ? "selected" : ""}>${html(draft.name)}${destination ? ` · ${html(destination.repository)}/${html(destination.path)}` : ""}</option>`;
+              })
+              .join("")}</optgroup>`
+          : "";
+      })
       .join("");
   }
+  setBatch(batch) {
+    if (this.storageBlocked)
+      throw Error(
+        "Restore workspace storage before starting or changing a batch.",
+      );
+    const reviewBatch = validateBatch(batch);
+    saveDrafts({ ...this.data, reviewBatch });
+    this.data.reviewBatch = reviewBatch;
+    this.batchBar();
+  }
+  batchBar() {
+    const bar = this.querySelector(".batch-bar"),
+      batch = this.data.reviewBatch;
+    if (!bar) return;
+    bar.hidden = !batch;
+    if (!batch) return;
+    const pending = batch.items.filter(
+      (item) => item.state === "pending",
+    ).length;
+    bar.innerHTML = `<span>${pending} READMEs pending · Current: ${html(batch.items[batch.current].repository)}</span><button data-action="batch-review">Review batch</button><button data-batch-continue>Mark reviewed &amp; improve next</button>`;
+    bar.querySelector("[data-batch-continue]").onclick = () =>
+      this.batchReview(false, "reviewed");
+  }
+  async batchReview(openNext = false, decision = null) {
+    await import("./batch-review.js");
+    this.modal("<batch-review></batch-review>");
+    const panel = this.querySelector("batch-review");
+    panel.configure(this.data);
+    panel.addEventListener("batch-action", ({ detail }) =>
+      this.batchAction(panel, detail.action, detail.value),
+    );
+    if (decision) await this.batchAction(panel, decision);
+    else if (openNext) await this.batchAction(panel, "next");
+  }
+  async batchDocument(item, signal) {
+    const existing = findDocument(this.data.drafts, item);
+    if (existing) return existing;
+    if (this.data.drafts.length >= 500)
+      throw Error(
+        "Document limit reached. Back up and remove unused documents first.",
+      );
+    const { auditClient } = await import("../repository-audit/github.js");
+    signal.throwIfAborted();
+    const readme = await auditClient.readme(
+      {
+        full_name: item.repository,
+        name: item.repository.split("/")[1],
+        default_branch: item.branch,
+      },
+      { signal },
+    );
+    signal.throwIfAborted();
+    const [owner, repository] = item.repository.split("/");
+    const path = readme.path || item.path;
+    const matched = findDocument(this.data.drafts, { ...item, path });
+    if (matched) {
+      item.path = path;
+      return matched;
+    }
+    const source = {
+      type: "github",
+      owner,
+      repository,
+      ref: item.branch,
+      readmePath: path,
+      sha: readme.sha,
+      fetchedAt: new Date().toISOString(),
+    };
+    const block = createBlock("custom", { markdown: readme.source ?? "" });
+    block.sourceContext = source;
+    const draft = newDraft(
+      uniqueName(`${repository} README`, this.data.drafts),
+      [block],
+    );
+    draft.metadata = { repository: item.repository, importSource: source };
+    saveDrafts({ ...this.data, drafts: [...this.data.drafts, draft] });
+    this.data.drafts.push(draft);
+    item.path = path;
+    this.draftOptions();
+    return draft;
+  }
+  async batchAction(panel, action, value) {
+    if (panel.working || !this.data.reviewBatch) return;
+    try {
+      if (this.storageBlocked)
+        throw Error(
+          "Restore workspace storage before changing this review batch.",
+        );
+      let batch = validateBatch(this.data.reviewBatch);
+      if (action === "end") {
+        this.setBatch(null);
+        panel.configure(this.data);
+        return;
+      }
+      if (["reviewed", "skipped", "pending"].includes(action)) {
+        const index = action === "pending" ? value : batch.current;
+        if (
+          action === "reviewed" &&
+          findDocument(this.data.drafts, batch.items[index])?.id !==
+            this.store.draft.id
+        )
+          throw Error(
+            "Open the current batch document before marking it reviewed.",
+          );
+        batch = decideBatch(batch, index, action);
+        this.setBatch(batch);
+        if (action === "pending") {
+          panel.configure(this.data);
+          return;
+        }
+      }
+      const indexes =
+        action === "common"
+          ? value
+          : [action === "open" ? value : nextBatchIndex(batch)];
+      if (!indexes.length)
+        throw Error("Select repositories for the common section first.");
+      if (indexes[0] === -1) {
+        panel.configure(this.data);
+        panel.status(
+          "Batch review complete locally. No remote README was published or marked resolved.",
+        );
+        return;
+      }
+      if (
+        indexes.some((index) => !Number.isInteger(index) || !batch.items[index])
+      )
+        throw Error("Choose valid batch repositories.");
+      if (action !== "common") this.setBatch({ ...batch, current: indexes[0] });
+      panel.working = true;
+      panel.busy(true);
+      panel.controller = new AbortController();
+      const documents = [];
+      for (const index of indexes) {
+        panel.status(
+          `Opening ${documents.length + 1} of ${indexes.length}: ${batch.items[index].repository}. Existing local edits are preserved.`,
+        );
+        documents.push(
+          await this.batchDocument(batch.items[index], panel.controller.signal),
+        );
+      }
+      panel.controller.signal.throwIfAborted();
+      this.setBatch({
+        ...batch,
+        current: action === "common" ? batch.current : indexes[0],
+      });
+      panel.controller = null;
+      if (action === "common") {
+        await this.sharedComponents(
+          false,
+          documents.map((draft) => draft.id),
+        );
+        return;
+      }
+      this.load(documents[0].id);
+      this.closeDialog();
+      this.mobile("markdown", false);
+      this.focusDocument();
+      this.notify(
+        "Batch document opened locally. Review/edit it, then explicitly mark reviewed to continue.",
+      );
+    } catch (error) {
+      panel.status(
+        error.name === "AbortError"
+          ? "Opening cancelled. Previously opened sources remain in the workspace; no content edits were applied."
+          : `${error.message} Previously opened sources remain available. Retry or skip this item.`,
+      );
+    } finally {
+      panel.working = false;
+      if (panel.isConnected) panel.busy(false);
+    }
+  }
+  async sharedComponents(cross = false, selectedDocuments = null) {
+    await import("./shared-components.js");
+    this.modal("<shared-components></shared-components>");
+    const panel = this.querySelector("shared-components");
+    panel.documentSelection = selectedDocuments;
+    panel.configure(this.data, cross);
+    if (selectedDocuments) {
+      panel.querySelector("[data-starter]").value = "Contributing footer";
+      panel.querySelector("[data-starter]").onchange();
+    }
+    panel.addEventListener("shared-library-save", ({ detail }) => {
+      try {
+        if (this.storageBlocked)
+          throw Error(
+            "Storage recovery is active. Back up and restore your workspace first.",
+          );
+        if (
+          JSON.stringify(validateShared(this.data.sharedComponents)) !==
+          JSON.stringify(panel.library)
+        )
+          throw Error(
+            "The shared library changed. Reopen this tool before saving.",
+          );
+        const library = validateShared(detail.library);
+        saveDrafts({ ...this.data, sharedComponents: library });
+        const id =
+          panel.querySelector("[data-component]").value ||
+          library.items.at(-1)?.id;
+        this.data.sharedComponents = library;
+        panel.configure(this.data);
+        panel.querySelector("[data-component]").value = library.items.some(
+          (item) => item.id === id,
+        )
+          ? id
+          : "";
+        panel.select();
+        panel.status(
+          "Shared definition saved. No README was changed. Preview linked updates to review changes.",
+        );
+      } catch (error) {
+        panel.status(`Could not save: ${error.message}`);
+      }
+    });
+    panel.addEventListener("shared-apply", ({ detail: plan }) => {
+      try {
+        if (!panel.canApply() || panel.plan !== plan)
+          throw Error("Review and approve the current preview first.");
+        checkSharedPlan(plan, this.data.drafts, this.data.sharedComponents);
+        if (this.storageBlocked)
+          throw Error(
+            "Storage recovery is active. Back up and restore your workspace first.",
+          );
+        const replacements = new Map(
+          plan.entries.map((entry) => [entry.id, entry]),
+        );
+        const drafts = this.data.drafts.map((draft) => {
+          const entry = replacements.get(draft.id);
+          return entry
+            ? {
+                ...draft,
+                blocks: entry.blocks,
+                markdown: entry.markdown,
+                updated: Date.now(),
+              }
+            : draft;
+        });
+        // Validate/persist the whole reviewed result before changing any Store.
+        saveDrafts({ ...this.data, drafts });
+        this.documentHistories ||= new DocumentHistories();
+        for (const draft of drafts) {
+          if (!replacements.has(draft.id)) continue;
+          if (draft.id === this.store.draft.id) {
+            this.store.checkpoint();
+            this.store.draft = draft;
+          } else {
+            const store = new Store(
+              this.data.drafts.find((item) => item.id === draft.id),
+            );
+            this.documentHistories.restore(store, this.data.drafts);
+            store.checkpoint();
+            store.draft = draft;
+            this.documentHistories.remember(store);
+          }
+        }
+        this.data.drafts = drafts;
+        if (replacements.has(this.store.draft.id)) this.store.emit("blocks");
+        this.save();
+        panel.configure(this.data);
+        panel.status(
+          `Applied reviewed changes to ${plan.entries.length} document(s). Undo is available separately in each document.`,
+        );
+      } catch (error) {
+        panel.invalidate();
+        panel.status(error.message);
+      }
+    });
+  }
+  async documents() {
+    await import("./workspace-documents.js");
+    this.modal("<workspace-documents></workspace-documents>");
+    const panel = this.querySelector("workspace-documents");
+    panel.configure(this.data.drafts, this.data.active);
+    panel.addEventListener("document-open", (event) => {
+      this.load(event.detail);
+      this.closeDialog(this.querySelector("#draft-select"));
+      this.notify(`Opened ${this.store.draft.name}.`);
+    });
+    panel.addEventListener("document-new", () => {
+      this.addDraft("Untitled document", []);
+      this.closeDialog();
+      this.focusDocument();
+    });
+    panel.addEventListener("document-settings", ({ detail }) => {
+      if (detail.id !== this.store.draft.id) return;
+      this.store.checkpoint();
+      this.store.draft.metadata.workspaceDocument = detail.settings;
+      this.store.emit("metadata");
+      this.draftOptions();
+      this.save();
+      this.closeDialog();
+      this.notify(
+        "Document settings saved locally. No GitHub changes were made.",
+      );
+    });
+  }
+
   saveCollections(items) {
     try {
       const collections = validateCollections({ version: 1, items });
@@ -1226,20 +1768,65 @@ export class AppShell extends HTMLElement {
       return;
     }
     if (tab === "library") {
-      this.content.innerHTML = `<div class="section-title"><h2>Build your story</h2><p>Good sections. Ordinary Markdown.</p></div><div class="library-grid">${Object.entries(
-        blockTypes,
+      const metadata = this.store.draft.metadata;
+      const profile = documentationProfile(
+        metadata.documentationProjectType ||
+          metadata.repositoryReadme?.templateId,
+      );
+      const recommended = documentationProfiles[profile].types;
+      const icons = [
+        "H",
+        "≡",
+        "⌘",
+        "↗",
+        "▣",
+        "◈",
+        "⌁",
+        "✎",
+        "@",
+        "—",
+        "&lt;/&gt;",
+        "◇",
+        "▦",
+        "◐",
+        "!",
+        "▸",
+        "{}",
+        "▥",
+      ];
+      const buttons = (entries) =>
+        entries
+          .map(
+            ([type, name]) =>
+              `<button data-block-type="${type}"><span class="library-icon">${icons[Object.keys(blockTypes).indexOf(type)] || "¶"}</span><span>${html(name)}</span><span>+</span></button>`,
+          )
+          .join("");
+      this.content.innerHTML = `<div class="section-title"><h2>Build your story</h2><p>Good sections. Ordinary Markdown.</p></div><label>Documentation project type<select data-documentation-profile aria-label="Documentation project type">${Object.entries(
+        documentationProfiles,
       )
         .map(
-          ([type, name], i) =>
-            `<button data-block-type="${type}"><span class="library-icon">${["H", "≡", "⌘", "↗", "▣", "◈", "⌁", "✎", "@", "—", "&lt;/&gt;", "◇", "▦", "◐", "!", "▸", "{}", "▥"][i]}</span><span>${name}</span><span>+</span></button>`,
+          ([id, p]) =>
+            `<option value="${id}" ${id === profile ? "selected" : ""}>${html(p.name)}</option>`,
         )
         .join(
           "",
-        )}</div><button class="wide" data-action="components">Browse Component Library</button><button class="wide" data-action="templates">Browse templates →</button><button class="wide" data-action="banner">Open Banner Builder</button>`;
+        )}</select></label><p class="hint">Recommendations follow your chosen project type. Changing this selection never rewrites existing sections.</p>${recommended.length ? `<section data-recommended><h3>Recommended for ${html(documentationProfiles[profile].name)}</h3><div class="library-grid">${buttons(recommended.map((type) => [type, blockTypes[type]]))}</div></section>` : ""}<h3>${recommended.length ? "All other sections" : "All sections"}</h3><div class="library-grid">${buttons(Object.entries(blockTypes).filter(([type]) => !recommended.includes(type)))}</div><button class="wide" data-action="components">Browse Component Library</button><button class="wide" data-action="templates">Browse templates →</button><button class="wide" data-action="banner">Open Banner Builder</button>`;
+      this.content.querySelector("[data-documentation-profile]").onchange = (
+        event,
+      ) => {
+        this.store.checkpoint();
+        this.store.draft.metadata = {
+          ...metadata,
+          documentationProjectType: event.target.value,
+        };
+        this.store.emit("metadata");
+        this.showTab("library");
+        this.content.querySelector("[data-documentation-profile]").focus();
+      };
       return;
     }
     const blocks = this.store.draft.blocks;
-    this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button>${this.store.draft.metadata.importSource?.type === "github" ? '<button class="wide" data-action="reimport">Re-import current GitHub README</button>' : ""}<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(b.section?.title || (b.type === "component" ? "Edit visually: " + b.settings.name : blockTypes[b.type]) || "Section")}</strong><small>${html((b.section ? `Suggested ${b.section.kind} · Custom Markdown` : "") || b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small></span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p>' : ""}${this.store.draft.markdown ? '<button class="wide" data-action="split">Split into sections</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for your GitHub profile</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
+    this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button>${this.store.draft.metadata.importSource?.type === "github" ? '<button class="wide" data-action="reimport">Re-import current GitHub README</button>' : ""}<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(b.type.startsWith("doc-") ? b.settings.title || blockTypes[b.type] : b.section?.title || (b.type === "component" ? "Edit visually: " + b.settings.name : blockTypes[b.type]) || "Section")}</strong><small>${html((b.type.startsWith("doc-") ? "Structured documentation" : b.section ? `Suggested ${b.section.kind} · Custom Markdown` : "") || b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small></span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p>' : ""}${this.store.draft.markdown ? '<button class="wide" data-action="split">Split into sections</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for GitHub READMEs</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
   }
   edit(block) {
     if (block.type === "component") {
@@ -1309,7 +1896,8 @@ export class AppShell extends HTMLElement {
           : "Section moved.",
     );
   }
-  mobile(pane) {
+  mobile(pane, focus = true) {
+    this.data.settings.pane = pane;
     this.querySelector(".workspace").dataset.mobile = pane;
     this.querySelectorAll("[data-pane]").forEach(
       (b) => (
@@ -1319,6 +1907,8 @@ export class AppShell extends HTMLElement {
     );
     if (pane === "health") this.showTab("health");
     if (pane === "build" && this.tab === "health") this.showTab("sections");
+    if (focus) this.save();
+    if (!focus) return;
     if (pane === "markdown") this.editor.input.focus();
     else {
       const heading = this.querySelector(
@@ -1355,12 +1945,15 @@ export class AppShell extends HTMLElement {
     document.body.append(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
     this.notify(`${name} download started`);
   }
-  notify(message) {
+  notify(message, kind = "info") {
     const el = this.querySelector(".toast");
     el.textContent = message;
+    el.dataset.kind = ["success", "info", "warning", "error"].includes(kind)
+      ? kind
+      : "info";
     el.hidden = false;
     clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => (el.hidden = true), 6500);
@@ -1370,6 +1963,12 @@ export class AppShell extends HTMLElement {
     this.afterDialogFocus = null;
     this.dialog.classList.remove("import-modal");
     this.querySelector(".dialog-content").innerHTML = content;
+    const context = document.createElement("p");
+    context.className = "dialog-context";
+    context.textContent = this.store?.draft.name
+      ? `Workspace / ${this.store.draft.name}`
+      : "Workspace";
+    this.querySelector(".dialog-content").prepend(context);
     if (!this.dialog.open) this.dialog.showModal();
     requestAnimationFrame(() => {
       if (!this.dialog.open) return;
@@ -1392,7 +1991,7 @@ export class AppShell extends HTMLElement {
   }
   welcome() {
     this.modal(
-      `<div class="eyebrow">WELCOME TO YOUR WORKSPACE</div><h1>A README that feels like you.</h1><p>Start with a little structure. Make every line your own.</p><div class="welcome-options"><button class="primary" data-start="templates">Start from a template <span>→</span></button><button data-action="profile">Autofill from GitHub <span>↗</span></button><button data-start="import">Import GitHub README <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button></div><p class="hint">Your drafts stay in this browser. No sign-in required.</p><button class="text-button" data-start="sample">Explore the sample profile →</button>`,
+      `<div class="eyebrow">WELCOME TO YOUR WORKSPACE</div><h1>A README that feels like you.</h1><p>Start with a little structure. Make every line your own.</p><div class="welcome-options"><button class="primary" data-start="templates">Start from a template <span>→</span></button><button data-action="profile">Autofill from GitHub <span>↗</span></button><button data-start="import">Import GitHub README <span>↥</span></button><button data-action="open-project">Open Studio project <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button></div><p class="hint">Your drafts stay in this browser. No sign-in required.</p><button class="text-button" data-start="sample">Explore the sample profile →</button>`,
     );
     this.querySelectorAll("[data-start]").forEach(
       (b) =>
@@ -1407,15 +2006,65 @@ export class AppShell extends HTMLElement {
     );
   }
   addDraft(name, blocks, metadata = {}) {
+    if (this.data.drafts.length >= 500) {
+      this.notify(
+        "Document limit reached. Back up and remove unused documents first.",
+        "warning",
+      );
+      return;
+    }
     const d = newDraft(uniqueName(name, this.data.drafts), blocks);
     d.metadata = metadata;
     this.data.drafts.push(d);
     this.load(d.id);
   }
+  async repositoryReadme(context = {}) {
+    await import("./repository-readme-builder.js");
+    this.modal("<repository-readme-builder></repository-readme-builder>");
+    const builder = this.querySelector("repository-readme-builder");
+    builder.configure({
+      currentMarkdown: this.store.draft.markdown,
+      previewTheme: this.data.settings.previewTheme || this.data.settings.theme,
+      ...context,
+    });
+    const create = (event, original = false) => {
+      if (!original && !builder.canCreate(event.detail)) {
+        builder.status(
+          "Review and approve the current diff before creating this README.",
+        );
+        return;
+      }
+      if (this.data.drafts.length >= 500) {
+        builder.status(
+          "Draft limit reached. Export and remove an unused draft first.",
+        );
+        return;
+      }
+      const { name, blocks, metadata } = event.detail;
+      this.addDraft(name, blocks, metadata);
+      this.closeDialog();
+      this.mobile(original ? "markdown" : "build", false);
+      if (original) this.focusDocument();
+      this.notify(
+        original
+          ? "Existing README opened unchanged in a new local draft."
+          : "Repository README created as a new local draft. Edit the selected sections to replace writing prompts.",
+      );
+    };
+    builder.addEventListener("repository-readme-original", (event) =>
+      create(event, true),
+    );
+    builder.addEventListener("repository-readme-create", (event) =>
+      create(event),
+    );
+    builder.querySelector("select").focus();
+  }
   templates() {
     this.modal(
-      `<div class="eyebrow">A STARTING POINT, NOT A BOX</div><h1>Choose your structure.</h1><p>Each template opens as a new draft. Every section is editable.</p><div class="template-grid">${templateNames.map((name, i) => `<button data-template="${name}"><span class="template-art">${["# Hello, world.", "## Built to share.", "$ git contribute", "> Always learning.", "~/hello_world"][i]}</span><strong>${name}</strong><small>${["Simple, clear, and to the point.", "Projects, tools, writing, and you.", "Put your contributions first.", "Your learning journey, in public.", "For those who feel at home in a shell."][i]}</small></button>`).join("")}</div>`,
+      `<div class="eyebrow">A STARTING POINT, NOT A BOX</div><h1>Choose your structure.</h1><p>Each template opens as a new draft. Every section is editable.</p><h2>Repository READMEs</h2><p>Web App, Library, CLI, API, npm Package, Rust Crate, Python Package, Game, Open Source, Tutorial, Documentation and Generic.</p><button data-repository-template>Build a repository README</button><h2>Profile READMEs</h2><div class="template-grid">${templateNames.map((name, i) => `<button data-template="${name}"><span class="template-art">${["# Hello, world.", "## Built to share.", "$ git contribute", "> Always learning.", "~/hello_world"][i]}</span><strong>${name}</strong><small>${["Simple, clear, and to the point.", "Projects, tools, writing, and you.", "Put your contributions first.", "Your learning journey, in public.", "For those who feel at home in a shell."][i]}</small></button>`).join("")}</div>`,
     );
+    this.querySelector("[data-repository-template]").onclick = () =>
+      this.repositoryReadme();
     this.querySelectorAll("[data-template]").forEach(
       (b) =>
         (b.onclick = () => {
@@ -1487,7 +2136,7 @@ export class AppShell extends HTMLElement {
             );
           if (action === "backup") {
             this.download(
-              JSON.stringify(this.store.draft, null, 2),
+              JSON.stringify(portableData(this.store.draft), null, 2),
               "readme-studio-draft.json",
               "application/json",
             );
@@ -1532,7 +2181,7 @@ export class AppShell extends HTMLElement {
         if (ticket !== generation || !input.isConnected) return;
         const snapshot = JSON.stringify(this.data);
         this.querySelector("#restore-status").textContent =
-          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.badgeCollections.items.length} badge collections · ${backup.visualLibrary.themes.length} themes · ${backup.visualLibrary.banners.length} banner presets · ${backup.visualLibrary.bundles.length} visual bundles · ${backup.componentLibrary.snippets.length} reusable snippets`;
+          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.badgeCollections.items.length} badge collections · ${backup.visualLibrary.themes.length} themes · ${backup.visualLibrary.banners.length} banner presets · ${backup.visualLibrary.bundles.length} visual bundles · ${backup.componentLibrary.snippets.length} reusable snippets · ${backup.sharedComponents.items.length} shared components`;
         this.querySelector("#restore-review").innerHTML =
           '<label>Restore mode<select id="restore-mode" aria-label="Restore mode"><option value="merge">Merge with local drafts</option><option value="replace">Replace local drafts</option></select></label><label class="check"><input id="restore-confirm" type="checkbox"> I confirm replacing local drafts, collections, or original recovery data</label><button id="apply-restore" class="primary">Restore backup</button>';
         this.querySelector("#restore-mode").focus();
@@ -1556,6 +2205,7 @@ export class AppShell extends HTMLElement {
             this.storageBlocked = false;
             this.recoveryRaw = undefined;
             this.store = null;
+            this.documentHistories = new DocumentHistories();
             this.load(plan.active);
             this.applySettings();
             this.closeDialog(this.querySelector("#draft-select"));
@@ -1574,11 +2224,53 @@ export class AppShell extends HTMLElement {
     };
   }
   action(action) {
+    if (this.workspaceAction?.(action)) return;
+    if (action === "save-project") return saveProjectDialog(this);
+    if (action === "open-project") return openProjectDialog(this);
     if (action === "workflows")
       this.modal("<workflow-builder></workflow-builder>");
     if (action === "publish-github") {
       this.modal("<publish-dialog></publish-dialog>");
       this.querySelector("publish-dialog").configure(this.store.draft);
+    }
+    if (action === "writing-assistant") {
+      const start = this.editor.input.selectionStart,
+        end = this.editor.input.selectionEnd;
+      this.modal(
+        "<writing-assistant><p role='status'>Loading writing assistant…</p></writing-assistant>",
+      );
+      const panel = this.querySelector("writing-assistant");
+      import("./writing-assistant.js")
+        .then(() => {
+          if (!panel.isConnected || !this.dialog.open) return;
+          panel.configure(this.store.draft, start, end);
+          panel.querySelector("select").focus();
+          panel.addEventListener("writing-apply", (event) => {
+            if (
+              !panel.canApply() ||
+              event.detail.snapshot !== draftSnapshot(this.store.draft)
+            ) {
+              panel.invalidate();
+              panel.status(
+                "The draft changed. Close and reopen the writing assistant before applying.",
+              );
+              return;
+            }
+            this.store.raw(event.detail.markdown);
+            this.closeDialog();
+            this.mobile("markdown", false);
+            this.focusDocument();
+            this.notify(
+              "Reviewed writing applied. Undo restores the previous source and builder ownership.",
+            );
+          });
+        })
+        .catch(() => {
+          if (panel.isConnected)
+            panel.textContent =
+              "Writing assistant could not load. Your draft is preserved; reload and try again.";
+        });
+      return;
     }
     if (action === "refactors") {
       this.modal("<refactor-dialog></refactor-dialog>");
@@ -1593,6 +2285,23 @@ export class AppShell extends HTMLElement {
     if (action === "repository-health") this.openRepositoryHealth();
     if (action === "intelligence") this.openIntelligence();
     if (action === "repositories") this.openRepositories();
+    if (action === "repository-audit" || action === "readme-attention") {
+      this.modal(
+        `<repository-audit data-start-view="${action === "readme-attention" ? "queue" : "audit"}"><p role="status">Loading README audit…</p></repository-audit>`,
+      );
+      this.dialog.classList.add("import-modal");
+      const panel = this.querySelector("repository-audit");
+      import("./repository-audit.js")
+        .then(() => {
+          if (panel.isConnected && this.dialog.open)
+            panel.querySelector("input")?.focus();
+        })
+        .catch(() => {
+          if (panel.isConnected)
+            panel.textContent =
+              "README audit could not load. Reload the app and try again; your draft is preserved.";
+        });
+    }
     if (action === "widgets") this.openWidgets();
     if (action === "components") this.openComponents();
     if (action === "visual-presets") this.openVisualPresets();
@@ -1603,6 +2312,18 @@ export class AppShell extends HTMLElement {
     if (action === "collections") this.openCollections();
     if (action === "badges") this.openBadges();
     switch (action) {
+      case "batch-review":
+        this.batchReview();
+        break;
+      case "cross-readme-updates":
+        this.sharedComponents(true);
+        break;
+      case "shared-components":
+        this.sharedComponents();
+        break;
+      case "documents":
+        this.documents();
+        break;
       case "backup-all":
         this.download(
           JSON.stringify(createBackup(this.data), null, 2),
@@ -1637,19 +2358,22 @@ export class AppShell extends HTMLElement {
         break;
       case "theme":
         this.data.settings.theme =
-          this.data.settings.theme === "dark" ? "light" : "dark";
+          this.effectiveTheme() === "dark" ? "light" : "dark";
+        this.data.settings.themePreferenceVersion = 1;
         this.data.settings.previewTheme = this.data.settings.theme;
         this.applySettings();
         this.save();
         break;
       case "preview-theme":
         this.data.settings.previewTheme =
-          (this.data.settings.previewTheme || this.data.settings.theme) ===
-          "dark"
+          (this.data.settings.previewTheme || this.effectiveTheme()) === "dark"
             ? "light"
             : "dark";
         this.applySettings();
         this.save();
+        break;
+      case "repository-readme":
+        this.repositoryReadme();
         break;
       case "templates":
         this.templates();
@@ -1669,10 +2393,14 @@ export class AppShell extends HTMLElement {
         break;
       }
       case "collapse":
+        this.data.settings.collapsed = true;
         this.querySelector(".workspace").classList.add("collapsed");
+        this.save();
         break;
       case "expand":
+        this.data.settings.collapsed = false;
         this.querySelector(".workspace").classList.remove("collapsed");
+        this.save();
         break;
       case "reimport":
         this.importDialog(true);

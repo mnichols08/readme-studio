@@ -9,12 +9,14 @@ export const newDraft = (name, blocks = []) => ({
   metadata: {},
   updated: Date.now(),
 });
-export function validateDraft(d) {
+export function validateDraft(d, { preserveBlockIds = false } = {}) {
   if (!d || typeof d.markdown !== "string" || typeof d.name !== "string")
     throw new Error("Invalid draft file. Expected a README Studio draft.");
   const copy = newDraft(d.name, [
     createBlock("custom", { markdown: d.markdown }),
   ]);
+  const blockIds = new Map(),
+    used = new Set();
   if (
     Array.isArray(d.blocks) &&
     d.blocks.every(
@@ -27,14 +29,34 @@ export function validateDraft(d) {
   ) {
     try {
       if (serializeBlocks(d.blocks) === d.markdown)
-        copy.blocks = d.blocks.map((b) => ({ ...b, id: crypto.randomUUID() }));
+        copy.blocks = d.blocks.map((b) => {
+          const id =
+            preserveBlockIds &&
+            typeof b.id === "string" &&
+            b.id &&
+            !used.has(b.id)
+              ? b.id
+              : crypto.randomUUID();
+          used.add(id);
+          if (!blockIds.has(b.id)) blockIds.set(b.id, id);
+          return { ...structuredClone(b), id };
+        });
     } catch {
       /* Preserve raw Markdown if blocks are incompatible. */
     }
   }
   copy.markdown = d.markdown;
   copy.metadata =
-    d.metadata && typeof d.metadata === "object" ? d.metadata : {};
+    d.metadata && typeof d.metadata === "object"
+      ? structuredClone(d.metadata)
+      : {};
+  if (copy.metadata.bannerReference) {
+    const ref = copy.metadata.bannerReference;
+    const mapped = blockIds.get(ref.blockId);
+    if (mapped && d.blocks.filter((b) => b.id === ref.blockId).length === 1)
+      ref.blockId = mapped;
+    else delete copy.metadata.bannerReference;
+  }
   return copy;
 }
 export function readDrafts(storage = localStorage) {

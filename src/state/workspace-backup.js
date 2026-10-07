@@ -1,3 +1,10 @@
+import { validateBatch, recoverBatch } from "../workspace/batch-review.js";
+import {
+  validateShared,
+  recoverShared,
+  mergeShared,
+} from "../workspace/shared-components.js";
+import { portableData } from "./portable-data.js";
 import {
   validateComponents,
   mergeComponents,
@@ -13,8 +20,26 @@ import {
   recoverCollections,
 } from "../badges/collections.js";
 import { validateDraft } from "./drafts.js";
+import { validateActivity } from "../workspace/commands.js";
 export const BACKUP_LIMIT = 50_000_000;
 export const workspaceSettings = (s = {}) => ({
+  pane: ["build", "markdown", "preview", "health"].includes(s?.pane)
+    ? s.pane
+    : "build",
+  collapsed: s?.collapsed === true,
+  editorFont: ["13", "15", "18"].includes(String(s?.editorFont))
+    ? String(s.editorFont)
+    : "13",
+  reduceMotion: s?.reduceMotion === true,
+  closedGroups: Array.isArray(s?.closedGroups)
+    ? [
+        ...new Set(
+          s.closedGroups.filter((g) =>
+            ["Create", "Design", "Review", "GitHub", "Save"].includes(g),
+          ),
+        ),
+      ]
+    : [],
   theme: s?.theme === "dark" ? "dark" : "light",
   preview: ["1012", "760", "640", "375"].includes(String(s?.preview))
     ? String(s.preview)
@@ -46,7 +71,7 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     drafts = [];
   let active;
   for (const original of data.drafts) {
-    const d = validateDraft(original);
+    const d = validateDraft(original, { preserveBlockIds: preserveIds });
     d.name = uniqueName(d.name, drafts);
     if (
       preserveIds &&
@@ -64,21 +89,33 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     drafts,
     active: active || drafts[0].id,
     settings: workspaceSettings(data.settings),
+    activity: validateActivity(data.activity),
     badgeCollections: validateCollections(data.badgeCollections),
     visualLibrary: validateVisualLibrary(data.visualLibrary),
     componentLibrary: validateComponents(data.componentLibrary),
+    sharedComponents: validateShared(data.sharedComponents),
+    reviewBatch: validateBatch(data.reviewBatch),
     ...(typeof data.createdAt === "string"
       ? { createdAt: data.createdAt }
       : {}),
   };
 }
 export function createBackup(data) {
-  return { ...data, version: 1, createdAt: new Date().toISOString() };
+  return {
+    ...portableData(data),
+    version: 1,
+    createdAt: new Date().toISOString(),
+  };
 }
 export function restoreWorkspace(current, backup, mode) {
   const incoming = validateWorkspace(backup);
   if (mode === "replace") return incoming;
   if (mode !== "merge") throw new Error("Choose replace or merge.");
+  const sharedComponents = mergeShared(
+    current.sharedComponents,
+    incoming.sharedComponents,
+    incoming.drafts,
+  );
   const drafts = structuredClone(current.drafts);
   for (const d of incoming.drafts) {
     d.name = uniqueName(d.name, drafts);
@@ -91,6 +128,7 @@ export function restoreWorkspace(current, backup, mode) {
   return {
     ...current,
     drafts,
+    sharedComponents,
     componentLibrary: mergeComponents(
       current.componentLibrary,
       incoming.componentLibrary,
@@ -132,6 +170,8 @@ export function recoverWorkspace(raw) {
           badgeCollections: recoverCollections(data.badgeCollections),
           visualLibrary: recoverVisualLibrary(data.visualLibrary),
           componentLibrary: recoverComponents(data.componentLibrary),
+          sharedComponents: recoverShared(data.sharedComponents),
+          reviewBatch: recoverBatch(data.reviewBatch),
         })
       : null;
   } catch {

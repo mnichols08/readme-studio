@@ -1,3 +1,4 @@
+import { sourceDiffMarkup, fillSourceDiff } from "./source-diff.js";
 import { generatedRegistry, refreshedAge } from "../generated/registry.js";
 import {
   fetchRefresh,
@@ -105,11 +106,8 @@ export class RefreshCenter extends HTMLElement {
           const container = detail.querySelector("div");
           if (!detail.open || container.childElementCount) return;
           const row = rows[Number(detail.dataset.fullDiff)];
-          container.innerHTML =
-            "<label>Current Markdown<textarea readonly></textarea></label><label>Generated Markdown<textarea readonly></textarea></label>";
-          const fields = container.querySelectorAll("textarea");
-          fields[0].value = row.before;
-          fields[1].value = row.after;
+          container.innerHTML = sourceDiffMarkup();
+          fillSourceDiff(container, row.before, row.after);
         }),
     );
     el.querySelector("[data-skip]").onclick = () => {

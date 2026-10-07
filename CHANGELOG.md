@@ -1,5 +1,191 @@
 # Changelog
 
+## 1.5.4
+
+- Follow the operating system's light/dark preference by default and respond when it changes.
+- Move the app theme override from the header into the editor toolbar; retain the separate README preview theme control.
+- Migrate legacy default-light workspaces to system preference while preserving an existing dark preference.
+
+## 1.5.3
+
+- Connect attention-queue Improve next to a persistent local review batch, with explicit reviewed/skip decisions, return-to-pending and next-document navigation.
+- Preserve existing workspace edits; open missing local documents using one read-only GitHub request at a time, with cancellation and partial-result recovery.
+- Prepare a common Contributing section for explicitly selected repositories, then require shared-component per-document diff review before insertion. No batch publishing action.
+- Include review progress in workspace backup/recovery and clarify that local review does not mark remote audit findings resolved.
+
+## 1.5.2
+
+- Add Cross-README updates and a workspace-wide preview of pending shared changes, with affected and selected README counts.
+- Select recipients beside each document diff; workspace-wide previews start with none selected. Select all/clear are explicit actions, and every selection change invalidates approval.
+- Apply only the chosen preview entries, preserving unselected sources and checking selected document snapshots plus the shared definition before local persistence.
+
+## 1.5.1
+
+- Add versioned shared Markdown definitions for contributing, testing, security, contact, badges and community links, with editable starting examples.
+- Preview exact insertion/update diffs for selected documents and require approval before applying. Saving or deleting a definition never changes README source.
+- Protect local edits, reject stale reviews, and keep independent document Undo/Redo for reviewed updates. Failed persistence prevents partial document application.
+- Include shared definitions and linked copies in workspace backup/recovery; merge collisions remap incoming references without overwriting local definitions.
+
+## 1.5.0
+
+- Add searchable workspace documents grouped into Profile, Repositories and Local documents, with keyboard navigation and a grouped quick switcher.
+- Configure an independent repository, branch and README path for each document; publishing suggests that target without skipping review.
+- Preserve separate, bounded Undo/Redo histories across document switches in the current tab. Health follows the active document and cancels obsolete work.
+- Reopen matching audit documents without replacing local edits; preserve targets and exact sources in workspace recovery and portable projects.
+
+## 1.4.3
+
+- Separate writing provider adapters from document editing and bounded network transport; offer compatible endpoints, key-free loopback servers and explicit no-AI mode.
+- Show provider, destination, key policy and transmitted context. Provider changes clear credentials/consent and cancel pending work; manual diff review stays available offline.
+- Harden prompts against instructions embedded in imported repository content and reject legacy function-call responses alongside tool calls.
+- Strip credential fields from portable project metadata, draft JSON and workspace backups without changing Markdown source. Document prompt-injection boundaries and residual model risks.
+
+## 1.4.2
+
+- Optional comparison mode generates Concise, Technical and Friendly alternatives with distinct style instructions and the same reviewed source/context.
+- Side-by-side source cards on desktop, stacked cards on mobile; choosing a version copies it into editable Proposed without changing the draft.
+- Exact preview of all three messages and explicit notice of up to three sequential provider requests. Failure/cancellation stops remaining requests and preserves completed versions; no automatic retries.
+- Warns when the provider returns identical alternatives. Choosing another version invalidates diff approval; context/action/mode changes clear stale alternatives.
+- Explicit long-to-short, paragraph/notes-to-bullets, bullets-to-paragraph and technical-notes-to-README-summary transformations. Existing grounding and diff-reviewed Apply remain mandatory.
+
+## 1.4.1
+
+- Seven explicit, editable writing-context sources: GitHub profile, one selected repository, project type, that repository's Stack DNA, draft project metadata, one selected section and current writing style.
+- All sources start unchecked. Allowlisted facts from existing local/session data only; no background fetch, whole-workspace upload or account-wide stack summary.
+- Exact outbound message preview includes Original, notes, selected context and grounding instructions. Context changes cancel pending generation and invalidate consent and diff approval.
+- Grounding instructions require supplied factual support and omission of unsupported claims. Style samples are not factual evidence; detected technology is not proficiency.
+- Context validation and combined request limits fail visibly without silent truncation. Existing Original / Proposed / Diff / Apply and offline manual review remain intact.
+
+## 1.4.0
+
+- Optional Writing Assistant with nine actions: draft section, improve wording, shorten, expand, technical/casual tone, notes to bullets, bullets to paragraph and grammar cleanup.
+- Operates on exact selected text, a chosen Markdown section or a new section at the cursor. Only Original and optional notes are sent after explicit consent and Generate.
+- Editable Proposed source, Original and full README Diff, explicit approval and Apply. Edits invalidate approval; stale drafts cannot be overwritten. Undo restores source and builder ownership.
+- Configurable OpenAI-compatible chat endpoint and model, including local models. Connection settings and keys stay in tab memory and out of storage, drafts and backups.
+- Cancel/timeout, bounded inputs/responses, safe error reporting and no automatic retries. Manual proposals and core editing remain usable without AI.
+
+## 1.3.3
+
+- Reviewed stack-to-README suggestions for technology badges, grouped stack sections, package managers, installation, testing/build commands and package/crate links.
+- Allowlisted manifest metadata retains recognized manager names, test/build script presence and bounded package identities; script bodies and arbitrary configuration are discarded.
+- Every suggestion starts unselected, shows evidence and inference limits, and allows Markdown editing. Exact diff approval is invalidated by edits; stale draft snapshots cannot be overwritten.
+- Append-only application preserves existing source, builder ownership and metadata, supports Undo/Redo and autosave, and performs no repository writes or command execution.
+- Conventional commands and publication links remain unverified suggestions; remote badge rendering contacts Shields.io. No skill claims, automatic insertion or new dependencies.
+
+## 1.3.2
+
+- Stack DNA workspace summary groups selected repository evidence into meaningful technology categories using a versioned curated catalog.
+- Exact ecosystem/package mappings; no AI, substring guessing, skill claims or quality scores. Unmapped dependencies remain Unknown.
+- Core combines Language, Framework and Runtime; Data contains Database. All thirteen categories are filterable with keyboard-accessible source evidence.
+- Preserves package, dependency kind and repository associations across merged technology identities. GitHub primary-language metadata and explicit runtime engine declarations remain labeled evidence sources.
+- Bounded evidence details and summary rendering, deterministic ordering, mobile coverage and no additional network requests or dependencies.
+
+## 1.3.1
+
+- Normalized direct dependency records from package.json, Cargo.toml, pyproject.toml, requirements.txt and go.mod: name, ecosystem, kind and repository association.
+- Runtime, development, peer, build and optional kinds remain distinct; matching records merge source evidence across manifests.
+- Excludes Go indirect requirements and unused/unresolved Cargo workspace entries; resolves referenced workspace aliases from the same manifest only.
+- Session caching retains normalized records with branch/repository isolation, bounded storage and explicit refresh. No installs, code execution or transitive graph resolution.
+
+## 1.3.0
+
+- Opt-in Stack Intelligence within Repository README Audit: read selected public repositories without changing drafts or profiles.
+- Root Node, Rust, Python and Go manifests expose declared dependencies with ecosystem, manifest, role and source evidence. Detection is not a developer skill assessment.
+- Bounded, cancellable GitHub-only reads, session caching, explicit refresh, partial results and shared rate-limit handling.
+- No dependency installation, script execution, repository code execution, package URL following or build-tool invocation.
+- Conservative declaration parsing, escaped evidence, keyboard controls, mobile results and documentation of unsupported/dynamic configuration.
+
+## 1.2.3
+
+- Safe UTF-8 file, pasted Markdown and current-draft imports with exact file source preservation.
+- Conservative section matching, aliases and related-section guidance; empty headings and badge-only sections are not treated as complete.
+- Additive merges preserve the original source. Changed imports and replacements require an exact diff review and approval, invalidated by subsequent edits.
+- Optional reviewed context, unchanged-source escape hatch, keyboard review focus and sanitized light/dark previews at narrow widths.
+- Repository fixtures and cross-browser regression coverage for source preservation, false positives, review gating and mobile usability.
+
+## 1.2.2
+
+- Project-aware Library recommendations follow the repository template, with a draft-specific manual selector that never rewrites existing sections.
+- Structured CLI syntax/commands/flag rows, API endpoint authentication/parameters/request/response examples, and library imports/basic examples/API surface/compatibility.
+- Game gameplay, control rows, screenshots, local-running guidance and save/data behavior; Rust Cargo dependency/features/examples and docs.rs/crates.io links.
+- Web-app templates combine demo, screenshots, setup, environment, architecture, testing and deployment builders.
+- Safe URL validation, required screenshot alt text, literal code fences and portable settings; existing raw content and prior section types remain supported.
+
+## 1.2.1
+
+- Eighteen structured repository documentation builders: Overview, Features, Installation, Quick Start, Usage, Configuration, Environment Variables, Commands, API, Examples, Architecture, Testing, Deployment, Troubleshooting, Contributing, Security, License and Roadmap.
+- Installation fields for package manager, command, prerequisites and notes; Testing fields for commands, test types and coverage notes.
+- Environment-variable rows with required flags, descriptions, example placeholders, keyboard reorder/duplicate/remove controls and explicit guidance against committing real secrets.
+- New repository templates use structured builders for supported sections. Existing source and older Custom Markdown templates are not converted or rewritten.
+- Ordinary Markdown serialization, safe command fences/table cells, portable settings, undo/redo and raw-edit source preservation.
+
+## 1.2.0
+
+- First-class repository README builder with 12 templates: Web App, Library, CLI, API, npm Package, Rust Crate, Python Package, Game, Open Source, Tutorial, Documentation and Generic.
+- Audit Improve README and queue Improve next preselect the reviewed project type and carry public name, description, homepage, language and topic suggestions.
+- Editable suggestions, selectable sections, generated-source preview and explicit new-draft creation; existing README source is preserved by default.
+- Unknown setup, usage, compatibility and license information stays as writing prompts, never invented facts. Open in Studio still opens exact original source.
+- Separate editable sections, portable reviewed metadata, safe URL/Markdown handling, mobile and cross-browser coverage.
+
+## 1.1.3
+
+- Conservative TODO, project-name and combined framework-template signals, excluding code examples and comments.
+- Optional per-repository history/link review using GitHub commit observations and existing link-health checks; unknown/CORS results are not broken links.
+- History review requires an old observed README update and sustained recent activity; activity alone never implies stale documentation.
+- One bounded retry for transient gateway/network errors, shared GitHub rate-limit cooldown, explicit partial-result counts and retained assessments.
+- Synthetic 100/500/1,000-repository coverage, three concurrent README requests, bounded caches and advisory findings in the attention queue.
+
+## 1.1.2
+
+- README Attention Queue with explainable High/Medium/Low priorities from audited documentation, project-type gaps, recent pushes and public-interest signals; no scores or developer rankings.
+- Combined priority, missing, active, archived, language, project type, minimum stars and recent-push filters, with bounded 25-item pages.
+- Improve next and Open in Studio preserve exact source in a new local draft.
+- Seven-day ignore and persistent intentionally-minimal decisions bound to the README revision, with deferred-item review and explicit return to queue.
+- Safe attention-settings recovery and visible storage failures; deterministic ordering, 1,000-record, browser, source-preservation and revision-change regression coverage.
+
+## 1.1.1
+
+- Explainable project-type suggestions for 14 types, from public topics, repository names and README prose; ambiguous signals remain visible.
+- Per-repository manual overrides, retained in the audit session and applied immediately from cached evidence without additional requests or source changes.
+- Type-specific documentation profiles and classifications, including appropriate short experiments. Missing topics are advisory: commonly useful for this project type, never universal requirements.
+- Keyboard/mobile controls, Worker/fallback parity and regression coverage for deterministic suggestions, profile evidence and override recovery.
+
+## 1.1.0
+
+- Repository README audit workspace with public owned-repository pagination to 1,000, explicit selection, and fork/archive filters.
+- Evidence-based missing/stub/minimal/basic/detailed/documentation-heavy classifications using the existing analyzer; no scores or developer rankings.
+- Three concurrent README fetches, bounded session cache, cancel/partial/rate-limit recovery and local Worker analysis with JavaScript fallback.
+- Root README verification, repository/source links, and exact-source improvement in a new local draft.
+- Classification, 100-repository browser, 1,000-repository pagination, keyboard/mobile and failure-handling coverage.
+
+## 0.9.3
+
+- Feature freeze for 1.0: representative 0.1–0.9 migration and source-recovery regression fixtures.
+- Seven fictional, portable example projects with exact README round-trip checks.
+- Concise onboarding, task tutorials, public format compatibility policy and documented limitations.
+- MIT license, bundled third-party notices and unpublished stable-release notes.
+
+## 0.9.2
+
+- Production offline reload with an explicit static-file cache, credential/API exclusions and save-before-update activation.
+- JavaScript fallback when Health/refactor Workers fail; stale fallback work is ignored.
+- 500 KB/1 MB source and 100-project/200-badge smoke coverage, 360px keyboard checks and faster duplicate heading anchors.
+- Markdown dependency chunk split, bundle reporting and stricter publishing-history recovery.
+
+## 0.9.1
+
+- Versioned portable Studio projects with exact Markdown, supported builder/ownership metadata, preferences and verified SVG asset manifests.
+- Explicit save/open review, opt-in reusable libraries, collision-safe new drafts and Markdown-only recovery for future or damaged schemas.
+- Deterministic legacy draft migration and authentication-free publishing references.
+- Stable block IDs on reload and remapped banner ownership when importing backups.
+
+## 0.9.0
+
+- Grouped task navigation and searchable command palette with keyboard shortcuts and direct section/library destinations.
+- Persistent pane, builder, tool-group and accessibility preferences; unified settings, draft context and bounded local activity.
+- Shared current/generated source review across imports, refreshes, refactors, assets and GitHub publishing; existing confirmations remain required.
+- Browser coverage for command execution, restoration, focus and source preservation.
+
 ## 0.8.3
 
 - Consistent Escape and click-outside modal dismissal with unsaved-edit protection and predictable focus return.

@@ -1,6 +1,8 @@
+import { sourceDiffMarkup, fillSourceDiff } from "./source-diff.js";
 import { html } from "../markdown/serialize.js";
 export class RefactorDialog extends HTMLElement {
   configure(draft) {
+    this.cancelled = false;
     this.source = draft.markdown;
     this.snapshot = JSON.stringify(draft);
     this.requestId = 0;
@@ -11,24 +13,34 @@ export class RefactorDialog extends HTMLElement {
         { type: "module" },
       );
       this.worker.onmessage = ({ data }) => this.receive(data);
-      this.worker.onerror = () =>
-        this.fail(
-          "Refactor analysis is unavailable. Your source is unchanged.",
-        );
+      this.worker.onerror = (event) => {
+        event.preventDefault();
+        this.useFallback();
+      };
       this.request();
     } catch {
-      this.fail("Refactor analysis is unavailable. Your source is unchanged.");
+      this.useFallback();
     }
   }
   disconnectedCallback() {
     this.cancel();
   }
   cancel() {
+    this.cancelled = true;
+    this.requestId++;
     this.worker?.terminate();
     this.worker = null;
   }
+  useFallback() {
+    if (this.cancelled) return;
+    this.worker?.terminate();
+    this.worker = null;
+    this.fallback = true;
+    this.dataset.engine = "JavaScript";
+    this.request();
+  }
   draw() {
-    this.innerHTML = `<h1>Safe refactors</h1><p>Choose deterministic source changes, then review Before, After and Diff. Nothing changes until you apply.</p><p class="issue">Applying converts this draft to Custom Markdown so stale builder settings cannot overwrite your changes. Undo restores the original source and ownership.</p><div data-choices><p role="status">Finding conservative matches…</p></div><label>Badge row output<select data-badge-mode><option value="spacing">Normalize spacing</option><option value="paragraph">Plain HTML row</option><option value="center">Centered HTML row</option></select></label><div class="row-actions"><button data-review disabled>Review selected refactors</button><button data-cancel>Cancel</button></div><p data-status role="status"></p><section data-review-panel hidden><h2>Review source changes</h2><label>Before<textarea data-before aria-label="Before refactor" rows="7" readonly></textarea></label><label>After<textarea data-after aria-label="After refactor" rows="7" readonly></textarea></label><h3>Diff</h3><pre data-diff tabindex="0" aria-label="Refactor diff"></pre><button data-apply class="primary" disabled>Apply reviewed refactors</button></section>`;
+    this.innerHTML = `<h1>Safe refactors</h1><p>Choose deterministic source changes, then review Before, After and Diff. Nothing changes until you apply.</p><p class="issue">Applying converts this draft to Custom Markdown so stale builder settings cannot overwrite your changes. Undo restores the original source and ownership.</p><div data-choices><p role="status">Finding conservative matches…</p></div><label>Badge row output<select data-badge-mode><option value="spacing">Normalize spacing</option><option value="paragraph">Plain HTML row</option><option value="center">Centered HTML row</option></select></label><div class="row-actions"><button data-review disabled>Review selected refactors</button><button data-cancel>Cancel</button></div><p data-status role="status"></p><section data-review-panel hidden><h2>Review source changes</h2>${sourceDiffMarkup({ beforeLabel: "Before refactor", afterLabel: "After refactor", label: "Refactor diff" })}<button data-apply class="primary" disabled>Apply reviewed refactors</button></section>`;
     this.querySelector("[data-badge-mode]").onchange = () => {
       this.invalidate();
       this.request();
@@ -62,7 +74,7 @@ export class RefactorDialog extends HTMLElement {
       "Selections changed. Review again before applying.";
   }
   request(review = false) {
-    if (!this.worker) return;
+    if (!this.worker && !this.fallback) return;
     if (!review) {
       this.querySelector("[data-review]").disabled = true;
       this.querySelectorAll("[data-refactor]").forEach(
@@ -83,12 +95,42 @@ export class RefactorDialog extends HTMLElement {
     this.querySelector("[data-status]").textContent = review
       ? "Preparing combined diff…"
       : "Analyzing locally…";
-    this.worker.postMessage({
+    const message = {
       id: ++this.requestId,
       source: this.source,
       selected,
       options: { badgeMode: this.querySelector("[data-badge-mode]").value },
-    });
+    };
+    if (this.worker) this.worker.postMessage(message);
+    else
+      setTimeout(async () => {
+        if (!this.isConnected || message.id !== this.requestId) return;
+        try {
+          const core = await import("../refactors/registry.js");
+          if (!this.isConnected || message.id !== this.requestId) return;
+          if (message.selected) {
+            const plan = core.planRefactors(
+              message.source,
+              message.selected,
+              message.options,
+            );
+            this.receive({
+              id: message.id,
+              plan,
+              diff: core.refactorDiff(plan),
+            });
+          } else
+            this.receive({
+              id: message.id,
+              catalog: core.refactorCatalog(message.source, message.options),
+            });
+        } catch {
+          if (message.id === this.requestId)
+            this.fail(
+              "Local refactor analysis failed. Source is preserved; edit manually or download your README.",
+            );
+        }
+      }, 50);
   }
   receive(data) {
     if (data.id !== this.requestId) return;

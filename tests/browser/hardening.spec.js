@@ -134,7 +134,7 @@ test("quota and unavailable storage show recovery without losing editor state", 
   await expect(editor(page)).toHaveValue("# Keep me");
   await expect(page.locator(".save-status")).not.toHaveText("Saved locally");
   const download = page.waitForEvent("download");
-  await page.locator(".header-actions [data-action=download]").click();
+  await page.locator(".workspace-tools [data-action=download]").click();
   expect(readFileSync(await (await download).path(), "utf8")).toBe("# Keep me");
 });
 test("unavailable storage reads open a temporary usable workspace", async ({
@@ -252,11 +252,11 @@ test("clipboard denial exposes selectable fallback; offline edit and export work
   await editor(page).fill("# Still editing");
   await expect(page.locator("github-preview h1")).toHaveText("Still editing");
   const event = page.waitForEvent("download");
-  await page.locator(".header-actions [data-action=download]").click();
+  await page.locator(".workspace-tools [data-action=download]").click();
   expect(readFileSync(await (await event).path(), "utf8")).toBe(
     "# Still editing",
   );
-  await page.locator(".header-actions [data-action=import]").click();
+  await page.locator(".workspace-tools [data-action=import]").click();
   await page.getByLabel("GitHub username or owner/repository").fill("ada");
   await page
     .getByRole("button", { name: "Preview import", exact: true })
@@ -314,7 +314,7 @@ test("malicious preview cannot execute and export remains exact", async ({
       .count(),
   ).toBe(0);
   const event = page.waitForEvent("download");
-  await page.locator(".header-actions [data-action=download]").click();
+  await page.locator(".workspace-tools [data-action=download]").click();
   expect(readFileSync(await (await event).path(), "utf8")).toBe(
     source.replace(/\r\n/g, "\n"),
   );
@@ -353,7 +353,7 @@ for (const [width, height] of [
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(width);
     const event = page.waitForEvent("download");
-    await page.locator(".header-actions [data-action=download]").click();
+    await page.locator(".workspace-tools [data-action=download]").click();
     await event;
     await page.getByRole("button", { name: "Manage drafts" }).click();
     expect(

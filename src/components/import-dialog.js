@@ -1,3 +1,4 @@
+import { sourceDiffMarkup, fillSourceDiff } from "./source-diff.js";
 import { html } from "../markdown/serialize.js";
 import { importSummary } from "../markdown/import-summary.js";
 import { compareSections, duplicateWarnings } from "../markdown/merge.js";
@@ -134,6 +135,16 @@ export class ImportDialog extends HTMLElement {
     else {
       const body = this.querySelector(".merge-body");
       body.innerHTML = `${this.mode === "replace" ? '<label class="check"><input type="checkbox" id="confirm-replace"> I confirm replacing the current draft</label>' : ""}<details><summary>Original Markdown</summary><pre class="source-review">${html(p.markdown)}</pre></details><button class="primary" id="apply-import">${{ new: "Import as new draft", replace: "Replace current draft", append: "Append to current draft" }[this.mode]}</button>`;
+      const planned = importPlan(this.current, p, this.mode);
+      const difference = document.createElement("details");
+      difference.innerHTML =
+        "<summary>Review source changes</summary>" + sourceDiffMarkup();
+      body.prepend(difference);
+      fillSourceDiff(
+        difference,
+        this.mode === "new" ? "" : this.current.markdown,
+        planned.markdown,
+      );
       body.querySelector("button").onclick = () => {
         if (
           this.mode === "replace" &&
@@ -191,7 +202,8 @@ export class ImportDialog extends HTMLElement {
             this.payload.metadata?.importSource,
           ) || "Merge ready for review",
         );
-        body.innerHTML = `<h3 tabindex="-1">Resulting Markdown</h3><pre class="source-review">${html(plan.markdown)}</pre><button id="merge-back">Back</button><button id="merge-apply" class="primary">Apply merge</button>`;
+        body.innerHTML = `<h3 tabindex="-1">Resulting Markdown</h3><pre class="source-review">${html(plan.markdown)}</pre>${sourceDiffMarkup()}<button id="merge-back">Back</button><button id="merge-apply" class="primary">Apply merge</button>`;
+        fillSourceDiff(body, this.current.markdown, plan.markdown);
         body.querySelector("h3").focus();
         body.querySelector("#merge-back").onclick = () => {
           this.choices();
