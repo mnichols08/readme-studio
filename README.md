@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.3.2 — Stack DNA.** A curated, deterministic technology model groups selected repository evidence into Core, Testing, Build, Data and more. Inspect every mapping, keep unmapped dependencies as Unknown, and filter by category without AI classification. See the [Stack DNA guide](docs/stack-dna.md).
+**Version 1.3.3 — Stack-to-README.** Turn detected repository evidence into reviewed badges, stack sections, package-manager guidance, commands and package links. Select suggestions individually, edit their Markdown, and approve an exact diff before appending. Detection never means proficiency. See the [Stack-to-README guide](docs/stack-to-readme.md).
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

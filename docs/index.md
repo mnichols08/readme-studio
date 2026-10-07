@@ -48,3 +48,5 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 [Documentation section builders](documentation-sections.md): structured repository sections, command examples, environment-variable placeholders and ordinary Markdown output.
 
 [Project-specific documentation](project-documentation.md): CLI, API, packages, games, Rust crates and web-app recommendations and forms.
+
+- [Stack-to-README suggestions](stack-to-readme.md) — review detected stack, commands and links before inserting.
