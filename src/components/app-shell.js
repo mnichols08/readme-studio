@@ -1,4 +1,10 @@
 import {
+  createBatch,
+  validateBatch,
+  decideBatch,
+  nextBatchIndex,
+} from "../workspace/batch-review.js";
+import {
   validateShared,
   checkSharedPlan,
 } from "../workspace/shared-components.js";
@@ -145,6 +151,7 @@ export class AppShell extends HTMLElement {
   draw() {
     this.innerHTML = `<header class="app-header"><a class="brand" href="#" aria-label="README Studio home"><span class="brand-mark">M<span>↓</span></span><span>README <b>Studio</b><small>YOUR PROFILE, IN YOUR WORDS.</small></span></a><span class="version">v${version}</span><div class="header-actions"><button data-action="workflows">Workflows</button><button data-action="publish-github">Publish to GitHub</button><button data-action="refresh-github">Refresh GitHub data</button><button data-action="repository-health">Check links</button><button data-action="intelligence">Profile Intelligence</button><button data-action="repositories">Repositories</button><button data-action="snippet-packs">Snippet packs</button><button data-action="widgets">Widget Hub</button><button data-action="components">Components</button><button data-action="visual-presets">Visual presets</button><button data-action="section-style">Section style</button><button data-action="banner">Banner Builder</button><button data-action="visual-theme">Visual theme</button><button data-action="projects">Project Studio</button><button data-action="badges">Badge Studio</button><button data-action="collections">Collections</button><button data-action="import">↥ Import</button><button data-action="copy">Copy Markdown</button><button class="primary" data-action="download">↓ Export README</button><button data-action="theme" aria-label="Toggle color theme">◐</button></div></header>
   <div class="workspace-bar"><div class="draft-control"><span class="file-icon">▤</span><label class="sr-only" for="draft-select">Current draft</label><select id="draft-select"></select><button data-action="documents">Documents</button><button data-action="drafts" title="Manage drafts" aria-label="Manage drafts">···</button><span class="save-status">Not saved yet</span><span class="sr-only save-announcement" role="status" aria-atomic="true"></span></div><span class="local-label"><i></i> Local workspace <span>· No account needed</span></span></div>
+  <section class="batch-bar" hidden aria-label="Active review batch"></section>
   <nav class="mobile-nav" aria-label="Workspace panes"><button data-pane="build">Build</button><button data-pane="markdown">Markdown</button><button data-pane="preview">Preview</button><button data-pane="health">Health</button></nav>
   <div class="recovery-notice" hidden></div><div class="runtime-notice" hidden></div>
   <main class="workspace" data-mobile="build"><aside class="builder-pane pane" id="build-panel" aria-label="Builder"><div class="pane-heading"><span>WORKSPACE</span><button data-action="collapse" aria-label="Collapse builder">‹</button></div><nav class="builder-tabs" aria-label="Builder tools"><button class="active" data-tab="sections">Sections</button><button data-tab="library">Library</button><button data-tab="health">Health</button></nav><div class="builder-content"></div><div class="builder-footer"><span>✦</span> Make it yours. Keep it Markdown.</div></aside>
@@ -164,6 +171,7 @@ export class AppShell extends HTMLElement {
       this.querySelector("refresh-center")?.cancel();
       this.querySelector("refactor-dialog")?.cancel();
       this.querySelector("writing-assistant")?.cancel();
+      this.querySelector("batch-review")?.controller?.abort();
       this.querySelector("repository-health")?.controller?.abort();
       this.querySelector("repository-audit")?.cancel();
       this.querySelector("repository-authoring")?.controller?.abort();
@@ -205,6 +213,21 @@ export class AppShell extends HTMLElement {
           "Reviewed suggestions appended. Use Undo to restore the previous draft.",
         );
       });
+    });
+    this.addEventListener("batch-review-start", (event) => {
+      try {
+        if (
+          this.data.reviewBatch &&
+          !confirm(
+            "Replace the current local review batch? Documents remain unchanged.",
+          )
+        )
+          return;
+        this.setBatch(createBatch(event.detail));
+        this.batchReview(true);
+      } catch (error) {
+        this.notify(error.message, "warning");
+      }
     });
     this.addEventListener("audit-improve", (e) => {
       const { repo, readme } = e.detail;
@@ -864,6 +887,7 @@ export class AppShell extends HTMLElement {
       this.content.querySelector("readme-health").draft = this.store.draft;
   }
   save() {
+    this.batchBar();
     clearTimeout(this.saveTimer);
     if (this.storageBlocked) {
       this.querySelector(".save-status").textContent =
@@ -945,11 +969,188 @@ export class AppShell extends HTMLElement {
       })
       .join("");
   }
-  async sharedComponents(cross = false) {
+  setBatch(batch) {
+    if (this.storageBlocked)
+      throw Error(
+        "Restore workspace storage before starting or changing a batch.",
+      );
+    const reviewBatch = validateBatch(batch);
+    saveDrafts({ ...this.data, reviewBatch });
+    this.data.reviewBatch = reviewBatch;
+    this.batchBar();
+  }
+  batchBar() {
+    const bar = this.querySelector(".batch-bar"),
+      batch = this.data.reviewBatch;
+    if (!bar) return;
+    bar.hidden = !batch;
+    if (!batch) return;
+    const pending = batch.items.filter(
+      (item) => item.state === "pending",
+    ).length;
+    bar.innerHTML = `<span>${pending} READMEs pending · Current: ${html(batch.items[batch.current].repository)}</span><button data-action="batch-review">Review batch</button><button data-batch-continue>Mark reviewed &amp; improve next</button>`;
+    bar.querySelector("[data-batch-continue]").onclick = () =>
+      this.batchReview(false, "reviewed");
+  }
+  async batchReview(openNext = false, decision = null) {
+    await import("./batch-review.js");
+    this.modal("<batch-review></batch-review>");
+    const panel = this.querySelector("batch-review");
+    panel.configure(this.data);
+    panel.addEventListener("batch-action", ({ detail }) =>
+      this.batchAction(panel, detail.action, detail.value),
+    );
+    if (decision) await this.batchAction(panel, decision);
+    else if (openNext) await this.batchAction(panel, "next");
+  }
+  async batchDocument(item, signal) {
+    const existing = findDocument(this.data.drafts, item);
+    if (existing) return existing;
+    if (this.data.drafts.length >= 500)
+      throw Error(
+        "Document limit reached. Back up and remove unused documents first.",
+      );
+    const { auditClient } = await import("../repository-audit/github.js");
+    signal.throwIfAborted();
+    const readme = await auditClient.readme(
+      {
+        full_name: item.repository,
+        name: item.repository.split("/")[1],
+        default_branch: item.branch,
+      },
+      { signal },
+    );
+    signal.throwIfAborted();
+    const [owner, repository] = item.repository.split("/");
+    const path = readme.path || item.path;
+    const matched = findDocument(this.data.drafts, { ...item, path });
+    if (matched) {
+      item.path = path;
+      return matched;
+    }
+    const source = {
+      type: "github",
+      owner,
+      repository,
+      ref: item.branch,
+      readmePath: path,
+      sha: readme.sha,
+      fetchedAt: new Date().toISOString(),
+    };
+    const block = createBlock("custom", { markdown: readme.source ?? "" });
+    block.sourceContext = source;
+    const draft = newDraft(
+      uniqueName(`${repository} README`, this.data.drafts),
+      [block],
+    );
+    draft.metadata = { repository: item.repository, importSource: source };
+    saveDrafts({ ...this.data, drafts: [...this.data.drafts, draft] });
+    this.data.drafts.push(draft);
+    item.path = path;
+    this.draftOptions();
+    return draft;
+  }
+  async batchAction(panel, action, value) {
+    if (panel.working || !this.data.reviewBatch) return;
+    try {
+      if (this.storageBlocked)
+        throw Error(
+          "Restore workspace storage before changing this review batch.",
+        );
+      let batch = validateBatch(this.data.reviewBatch);
+      if (action === "end") {
+        this.setBatch(null);
+        panel.configure(this.data);
+        return;
+      }
+      if (["reviewed", "skipped", "pending"].includes(action)) {
+        const index = action === "pending" ? value : batch.current;
+        if (
+          action === "reviewed" &&
+          findDocument(this.data.drafts, batch.items[index])?.id !==
+            this.store.draft.id
+        )
+          throw Error(
+            "Open the current batch document before marking it reviewed.",
+          );
+        batch = decideBatch(batch, index, action);
+        this.setBatch(batch);
+        if (action === "pending") {
+          panel.configure(this.data);
+          return;
+        }
+      }
+      const indexes =
+        action === "common"
+          ? value
+          : [action === "open" ? value : nextBatchIndex(batch)];
+      if (!indexes.length)
+        throw Error("Select repositories for the common section first.");
+      if (indexes[0] === -1) {
+        panel.configure(this.data);
+        panel.status(
+          "Batch review complete locally. No remote README was published or marked resolved.",
+        );
+        return;
+      }
+      if (
+        indexes.some((index) => !Number.isInteger(index) || !batch.items[index])
+      )
+        throw Error("Choose valid batch repositories.");
+      if (action !== "common") this.setBatch({ ...batch, current: indexes[0] });
+      panel.working = true;
+      panel.busy(true);
+      panel.controller = new AbortController();
+      const documents = [];
+      for (const index of indexes) {
+        panel.status(
+          `Opening ${documents.length + 1} of ${indexes.length}: ${batch.items[index].repository}. Existing local edits are preserved.`,
+        );
+        documents.push(
+          await this.batchDocument(batch.items[index], panel.controller.signal),
+        );
+      }
+      panel.controller.signal.throwIfAborted();
+      this.setBatch({
+        ...batch,
+        current: action === "common" ? batch.current : indexes[0],
+      });
+      panel.controller = null;
+      if (action === "common") {
+        await this.sharedComponents(
+          false,
+          documents.map((draft) => draft.id),
+        );
+        return;
+      }
+      this.load(documents[0].id);
+      this.closeDialog();
+      this.mobile("markdown", false);
+      this.focusDocument();
+      this.notify(
+        "Batch document opened locally. Review/edit it, then explicitly mark reviewed to continue.",
+      );
+    } catch (error) {
+      panel.status(
+        error.name === "AbortError"
+          ? "Opening cancelled. Previously opened sources remain in the workspace; no content edits were applied."
+          : `${error.message} Previously opened sources remain available. Retry or skip this item.`,
+      );
+    } finally {
+      panel.working = false;
+      if (panel.isConnected) panel.busy(false);
+    }
+  }
+  async sharedComponents(cross = false, selectedDocuments = null) {
     await import("./shared-components.js");
     this.modal("<shared-components></shared-components>");
     const panel = this.querySelector("shared-components");
+    panel.documentSelection = selectedDocuments;
     panel.configure(this.data, cross);
+    if (selectedDocuments) {
+      panel.querySelector("[data-starter]").value = "Contributing footer";
+      panel.querySelector("[data-starter]").onchange();
+    }
     panel.addEventListener("shared-library-save", ({ detail }) => {
       try {
         if (this.storageBlocked)
@@ -1717,7 +1918,7 @@ export class AppShell extends HTMLElement {
     document.body.append(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
     this.notify(`${name} download started`);
   }
   notify(message, kind = "info") {
@@ -2084,6 +2285,9 @@ export class AppShell extends HTMLElement {
     if (action === "collections") this.openCollections();
     if (action === "badges") this.openBadges();
     switch (action) {
+      case "batch-review":
+        this.batchReview();
+        break;
       case "cross-readme-updates":
         this.sharedComponents(true);
         break;

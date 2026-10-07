@@ -1,3 +1,4 @@
+import { validateBatch, recoverBatch } from "../workspace/batch-review.js";
 import {
   validateShared,
   recoverShared,
@@ -93,6 +94,7 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     visualLibrary: validateVisualLibrary(data.visualLibrary),
     componentLibrary: validateComponents(data.componentLibrary),
     sharedComponents: validateShared(data.sharedComponents),
+    reviewBatch: validateBatch(data.reviewBatch),
     ...(typeof data.createdAt === "string"
       ? { createdAt: data.createdAt }
       : {}),
@@ -169,6 +171,7 @@ export function recoverWorkspace(raw) {
           visualLibrary: recoverVisualLibrary(data.visualLibrary),
           componentLibrary: recoverComponents(data.componentLibrary),
           sharedComponents: recoverShared(data.sharedComponents),
+          reviewBatch: recoverBatch(data.reviewBatch),
         })
       : null;
   } catch {

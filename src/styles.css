@@ -2438,3 +2438,20 @@ shared-components [data-diffs] {
   overflow-wrap: anywhere;
   min-width: 0;
 }
+
+.batch-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.batch-bar[hidden] {
+  display: none;
+}
+batch-review li {
+  margin-block: 12px;
+  overflow-wrap: anywhere;
+}

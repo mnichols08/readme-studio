@@ -17,6 +17,7 @@ export const commandGroups = {
     ["visual-presets", "Visual presets"],
   ],
   Review: [
+    ["batch-review", "Batch review"],
     ["cross-readme-updates", "Cross-README updates"],
     ["show-preview", "Preview README"],
     ["show-health", "README Health"],

@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.5.2 — Cross-README Updates.** Preview shared changes across the workspace, see the affected README count, and select recipients beside each document diff. Only explicitly approved documents receive updates. See the [cross-README updates guide](docs/cross-readme-updates.md).
+**Version 1.5.3 — Batch Review.** Turn the attention queue into a resumable local review batch, improve READMEs one by one, and prepare a common section for selected repositories with per-document diffs. Publishing remains a separate reviewed action. See the [batch review guide](docs/batch-review.md).
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.3
+
+- Connect attention-queue Improve next to a persistent local review batch, with explicit reviewed/skip decisions, return-to-pending and next-document navigation.
+- Preserve existing workspace edits; open missing local documents using one read-only GitHub request at a time, with cancellation and partial-result recovery.
+- Prepare a common Contributing section for explicitly selected repositories, then require shared-component per-document diff review before insertion. No batch publishing action.
+- Include review progress in workspace backup/recovery and clarify that local review does not mark remote audit findings resolved.
+
 ## 1.5.2
 
 - Add Cross-README updates and a workspace-wide preview of pending shared changes, with affected and selected README counts.

@@ -315,3 +315,11 @@ Workspace backup validation/recovery includes shared definitions. Merge remaps i
 Workspace-wide shared preview scans only documents linked to the chosen definition. `planShared` produces immutable before/after snapshots for safe changes; `selectSharedPlan` narrows those entries without regenerating source, preserving workspace order and rejecting unknown recipients. The dialog keeps the full preview separate from its selected apply plan. Every recipient change resets approval and updates affected/selected counts.
 
 The existing persistence boundary accepts only the dialog's approved selected plan, validates its definition and selected document snapshots, and writes only those entries. Unselected document changes are irrelevant to this transaction and remain intact. There is no background propagation, GitHub write, or new persistence schema.
+
+### Review batches (1.5.3)
+
+`workspace/batch-review.js` validates versioned review targets and explicit pending/reviewed/skipped transitions. Queue Improve next snapshots filtered, non-deferred repository order into workspace `reviewBatch`, capped at 200 items. No source content or credentials are duplicated in progress metadata. Normal workspace validation/recovery includes it; replace restore restores it and merge preserves the current batch.
+
+App-shell opens targets through the existing document identity matcher and read-only AuditClient. Requests are sequential and cancellable; fetched source is persisted before joining the workspace. Current target is recorded before fetching so errors/skip refer to the failed item. Completed sources survive partial failure. A reviewed decision requires the matching active local document; no automatic Health-based resolution occurs.
+
+The lazy `batch-review` dialog can prepare selected repositories for common-section insertion. It passes explicit document IDs to Shared components, which preserves that selection through definition save and uses the existing per-document diff/approval transaction. Batch actions never invoke publishing. Dialog close/replacement aborts in-flight fetching.
