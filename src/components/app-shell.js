@@ -1,3 +1,4 @@
+import { portableData } from "../state/portable-data.js";
 import {
   documentationProfiles,
   documentationProfile,
@@ -1726,7 +1727,7 @@ export class AppShell extends HTMLElement {
             );
           if (action === "backup") {
             this.download(
-              JSON.stringify(this.store.draft, null, 2),
+              JSON.stringify(portableData(this.store.draft), null, 2),
               "readme-studio-draft.json",
               "application/json",
             );

@@ -285,3 +285,11 @@ The pure context validator rejects unknown/duplicate/empty/oversized entries and
 `writing/alternatives.js` defines fixed style instructions and a sequential three-request orchestrator. It reuses the same input/context and provider boundary for each independent output, stops on failure/abort, and keeps completed versions. No alternative is fed into another request. The preview and provider share `writingMessages` with a validated style identifier, so all three previewed message sets match transmitted messages.
 
 The inert `writing-comparison` component renders at most three bounded text outputs. Selecting a ready card stages Proposed and invalidates diff approval; it never mutates a draft. Input/context/mode changes clear comparisons and consent. Request identities suppress late results. Identical-output detection is exact after trimming, not a semantic quality assessment. Desktop grid becomes a single column on narrow screens.
+
+### Writing provider boundary (1.4.3)
+
+`writing/providers.js` owns the adapter registry, endpoint/key validation, request serialization and response parsing. An adapter exposes name/key policy, connect, request and parse; extending a protocol does not require changing document operations. Compatible and loopback-only adapters share the same wire protocol; disabled mode rejects before network access. Only explicitly registered adapters are selectable. No remote plugin code is loaded.
+
+`writing/client.js` owns bounded transport, timeout/cancellation and safe HTTP errors. `writing/model.js` continues to own action/grounding instructions and exact source replacement without provider selection. The UI shows adapter metadata and destination, cancels requests and clears keys/consent when destinations or adapters change. Keys remain module memory only.
+
+`state/portable-data.js` removes credential-shaped object fields recursively at project, single-draft JSON and workspace-backup boundaries. Source strings remain exact. This is defense in depth, not a scanner that can find secrets pasted into arbitrary prose. The [AI safety audit](ai-safety.md) documents prompt injection and output-review boundaries.

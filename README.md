@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.4.2 — Rewrite & Compare.** Compare Concise, Technical and Friendly alternatives side by side, choose and edit Proposed, then review the exact diff before Apply. Transform long text, paragraphs, bullets and technical notes while keeping explicit context and grounding controls. See the [Writing Assistant guide](docs/writing-assistant.md).
+**Version 1.4.3 — AI Safety & Provider Abstraction.** Choose a compatible provider, a key-free local server, or no AI. Inspect the destination and selected context before sending; all proposals still require diff review. Credentials stay outside portable projects and backups. See the [Writing Assistant guide](docs/writing-assistant.md) and [safety audit](docs/ai-safety.md).
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

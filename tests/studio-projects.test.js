@@ -20,6 +20,22 @@ import {
 const draft = (source = "\ufeff# Héllo 🌍\r\n\n<script>sample</script>\n") =>
   newDraft("Portable", [createBlock("custom", { markdown: source })]);
 describe("portable Studio project schema 1", () => {
+  it("excludes provider credentials from portable projects without rewriting source", () => {
+    const d = draft();
+    d.metadata.repository = {
+      name: "demo",
+      apiKey: "credential-sentinel",
+      config: {
+        api_key: "credential-sentinel",
+        password: "credential-sentinel",
+      },
+    };
+    d.blocks[0].apiKey = "credential-sentinel";
+    const exported = createProject(d);
+    expect(JSON.stringify(exported)).not.toContain("credential-sentinel");
+    expect(exported.document.markdown).toBe(d.markdown);
+    expect(d.metadata.repository.apiKey).toBe("credential-sentinel");
+  });
   it("round-trips exact source, blocks, theme, ownership and preferences", () => {
     const d = draft();
     d.blocks[0].githubGenerated = {

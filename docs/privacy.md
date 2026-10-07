@@ -28,3 +28,7 @@ Writing assistance is off until you configure an endpoint/model, confirm the dis
 Provider processing, retention and billing depend on your chosen service. The request asks not to store the completion, but Studio cannot guarantee provider policy. Browser network tools and extensions can still access a key used by the page. Use a trusted local endpoint or an operator-controlled gateway for shared deployments; never bundle an operator secret into a public site. No connection test, model-list fetch, background generation or automatic retry occurs. See [Writing Assistant](writing-assistant.md).
 
 Comparison mode explicitly requests up to three sequential alternatives from the same provider using the same reviewed content/context. All three message sets are previewed; each may incur provider charges. A failure or cancellation stops remaining requests. Completed responses stay in dialog memory and do not become draft content until reviewed Apply.
+
+### Provider choice (1.4.3)
+
+The writing assistant displays the selected adapter, destination, key policy and exact messages before consent. The local adapter only accepts loopback destinations and never sends an API key. No-AI mode makes no writing requests; manual editing and review remain usable. Switching providers clears the key and consent and cancels pending work. Provider settings are never imported from a repository or project file. Portable JSON and backups also strip recognized credential fields recursively; Markdown source remains verbatim, including any secrets a user manually types into it.

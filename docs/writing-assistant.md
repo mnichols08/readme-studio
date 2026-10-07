@@ -1,6 +1,6 @@
 # Writing Assistant
 
-Version 1.4.2 adds rewrite comparison to optional, context-aware AI editing. README Studio's editor, builders, preview, exports and local recovery still work without an AI account, connection or model.
+Version 1.4.3 adds provider selection and safety hardening to optional, context-aware AI editing. README Studio's editor, builders, preview, exports and local recovery still work without an AI account, connection or model.
 
 ## Original → Proposed → Diff → Apply
 
@@ -16,6 +16,10 @@ Changing the proposal or inputs invalidates approval. A draft changed elsewhere 
 The assistant requests fact-preserving edits but cannot guarantee correctness. Review claims, URLs, commands, code and placeholders. Expansion is not permission to invent project capabilities or developer proficiency.
 
 ## Optional connection
+
+Select **Provider**: **Chat completions compatible provider**, **Local chat completions server**, or **No AI — manual writing**. The compatible adapter may require a key depending on the chosen server; Studio cannot determine a remote server's authentication policy without contacting it. The local adapter permits only loopback hosts and never sends a key. No-AI mode disables transmission while leaving manual Proposed/diff/Apply available. Switching providers cancels pending requests and clears the key and consent. The selected mode remains in tab memory until reload.
+
+The destination summary names the adapter, endpoint and key policy. The exact message preview lists all transmitted content, including selected context. Nothing is sent just by opening or configuring the assistant. **Forget connection** also selects no-AI mode.
 
 Provide the **full endpoint ending in `/chat/completions`**, such as a local server's `http://localhost:1234/v1/chat/completions`, and a model that server actually provides. No model or paid provider is selected automatically. HTTPS remote endpoints and HTTP loopback endpoints are supported. Browser CORS access must be enabled by the endpoint operator; Studio cannot bypass it.
 
@@ -74,3 +78,7 @@ Transformations are available from **Writing action** in either mode:
 - **Technical notes → README summary** explains purpose clearly from supplied technical facts, omitting unsupported claims.
 
 Factual grounding, request limits and Original / Proposed / Diff / Apply apply equally to every alternative. Nothing depends on AI for ordinary editing or exporting.
+
+## Imported content and safety
+
+Repository descriptions, README text, comments and style samples are untrusted data even when selected by you. They cannot configure a provider, authorize transmission or invoke tools. Prompt instructions explicitly reject embedded attempts to reveal secrets, expand scope or follow URLs. Models can still follow malicious instructions or produce misleading text: review every proposal. See the [safety audit](ai-safety.md) for boundaries, tests and limitations.
