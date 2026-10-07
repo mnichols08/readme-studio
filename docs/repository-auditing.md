@@ -8,6 +8,10 @@ Select repositories individually or select all currently filtered repositories, 
 
 ![Repository README audit with synthetic data](screenshots/repository-audit.png)
 
+## Choosing the next README (1.1.2)
+
+Switch to **README Attention Queue** after auditing. It uses these assessments to offer descriptive priorities, combined filters, new-draft actions and revision-bound local dismissals. The [queue guide](readme-attention-queue.md) documents the rules and recovery behavior. Audit results remain in repository-name order; the queue is a separate view.
+
 ## Project types (1.1.1)
 
 Each repository shows **Suggested type: CLI** (or another type), a reason, and an explicit uncertainty note. Select **Project type for owner/repository** to override the suggestion before or after scanning. Select **Automatic suggestion** to reset. Changes reassess cached evidence immediately without requesting source again. Overrides survive closing/reopening the audit and fresh scans in this tab; changing accounts or reloading the app clears them. They do not change draft metadata or exported Markdown.

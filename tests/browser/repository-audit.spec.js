@@ -27,6 +27,7 @@ async function open(page) {
   await expect(
     page.getByRole("heading", { name: "Repository README audit" }),
   ).toBeVisible();
+  await expect(page.locator("readme-attention-queue")).not.toBeVisible();
   await page.getByLabel("GitHub username", { exact: true }).fill("example");
   await page
     .getByRole("button", { name: "Load repositories", exact: true })
@@ -218,6 +219,22 @@ test("100 repositories use bounded rendering and survive partial/rate-limit fail
     "100 of 100 checked; 0 not assessed",
   );
   expect(reads).toBe(101); // Only the failed row is retried even after source-cache expiry.
+  await page
+    .locator("repository-audit")
+    .getByRole("button", { name: "README Attention Queue", exact: true })
+    .click();
+  const queue = page.locator("readme-attention-queue");
+  await expect(queue.locator("[data-item]")).toHaveCount(25);
+  await expect(queue).toContainText("100 matching");
+  await queue
+    .getByRole("button", { name: "Next queue page", exact: true })
+    .click();
+  await expect(queue.locator("[data-queue-page]")).toContainText("Page 2 of 4");
+  expect(reads).toBe(101);
+  await page
+    .locator("repository-audit")
+    .getByRole("button", { name: "Audit results", exact: true })
+    .click();
   await page.getByRole("button", { name: "Next results", exact: true }).click();
   await expect(page.locator("repository-audit [data-page]")).toContainText(
     "Page 2 of 4",

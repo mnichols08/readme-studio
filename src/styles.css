@@ -2248,3 +2248,45 @@ repository-audit form label {
   min-width: 0;
   max-width: 100%;
 }
+
+.attention-filters,
+.attention-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+.attention-filters label {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.attention-filters select,
+.attention-filters input[type="number"] {
+  width: 100%;
+  min-width: 0;
+}
+.attention-items {
+  padding-left: 24px;
+}
+.attention-items > li {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+readme-attention-queue {
+  display: block;
+  min-width: 0;
+}
+@media (max-width: 600px) {
+  readme-attention-queue button,
+  readme-attention-queue select,
+  readme-attention-queue input[type="number"] {
+    min-height: 44px;
+    max-width: 100%;
+  }
+}
+
+repository-audit [data-audit-results][hidden],
+readme-attention-queue[hidden] {
+  display: none;
+}
