@@ -56,3 +56,5 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 - [AI safety audit](ai-safety.md) — provider boundaries, imported context and credential handling.
 
 - [Workspace documents](workspace-documents.md) — multiple README sources, independent targets, switching and recovery.
+
+- [Shared components](shared-components.md) — reusable Markdown definitions and explicit multi-document update previews.

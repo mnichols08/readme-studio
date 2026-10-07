@@ -301,3 +301,11 @@ Documents remain entries in the existing version-1 drafts envelope. `workspace/d
 `DocumentHistories` retains inactive Store histories by draft ID in session memory, with a 32 MB aggregate cap in addition to the Store's own 8 MB / 80-checkpoint cap. Load creates a fresh Store/listener and restores only matching source history; deleted entries are pruned and workspace restore clears the cache. Neither history nor credential state is serialized. Active Markdown remains authoritative and survives history eviction.
 
 The lazy `workspace-documents` component supplies grouped search and target settings. App-shell flushes saves before switching, cancels scheduled updates and recreates the active Health panel, terminating its old worker. Audit actions look for an existing target before opening a template or adding a draft, preserving local edits. Publish dialog may prefill an authorized saved target but does not fetch/write it automatically.
+
+### Shared documentation (1.5.1)
+
+`workspace/shared-components.js` validates a version-1 workspace library, revisions, safe update plans and restore collision remapping. Each inserted Custom Markdown block retains a `sharedComponent` reference with definition ID, applied revision and exact inserted source. Serialization ignores this metadata. Save/delete touches only definitions. Update planning replaces only source-matching custom copies and preserves all other blocks/separators; mismatched source is reported and skipped.
+
+The lazy `shared-components` dialog renders inert per-document source diffs. Editing fields or selections invalidates approval. Apply checks definition identity and every affected full draft snapshot, then persists the complete result before changing any Store. Active/inactive document Stores receive independent history checkpoints; inactive history is returned to the workspace cache. Raw edits remove shared ownership; Undo restores it. Existing preview sanitization remains separate from source export.
+
+Workspace backup validation/recovery includes shared definitions. Merge remaps incoming definition IDs and block references, suffixes name collisions, and detaches orphan incoming references without touching their Markdown. No remote fetch, dynamic include resolution or automatic propagation occurs.
