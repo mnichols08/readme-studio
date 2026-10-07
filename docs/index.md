@@ -60,3 +60,5 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 - [Shared components](shared-components.md) — reusable Markdown definitions and explicit multi-document update previews.
 
 - [Cross-README updates](cross-readme-updates.md) — affected counts and recipient selection beside document diffs.
+
+- [Batch review](batch-review.md) — attention-queue progression and reviewed common sections for selected repositories.

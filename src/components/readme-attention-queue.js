@@ -13,7 +13,7 @@ export class ReadmeAttentionQueue extends HTMLElement {
   connectedCallback() {
     this.preferences = new AttentionPreferences();
     this.page = 0;
-    this.innerHTML = `<h2 tabindex="-1">README Attention Queue</h2><p>Choose the next README to improve using descriptive signals, not a quality score. Load repositories and audit selected READMEs above first. Only successful assessments enter this queue.</p><p class="hint">High: recently active with missing or thin documentation. Medium: documentation needs attention or commonly useful project-type topics were not detected. Low: archived or no push in over 180 days. Within a tier: active first, README state, public-interest signals, then recent push and repository name. Pinned status and releases are not fetched.</p><div class="attention-filters"><label>Attention priority<select name="priority" aria-label="Attention priority"><option value="all">All priorities</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label><label><input type="checkbox" name="missing"> Missing only</label><label><input type="checkbox" name="active"> Active only (pushed within 30 days)</label><label>Archived repositories<select name="archived" aria-label="Archived repositories"><option value="exclude">Exclude archived</option><option value="include">Include archived</option><option value="only">Archived only</option></select></label><label>Queue language<select name="language" aria-label="Queue language"><option value="all">All languages</option></select></label><label>Queue project type<select name="type" aria-label="Queue project type"><option value="all">All project types</option>${projectTypes.map((t) => `<option value="${t.id}">${h(t.name)}</option>`).join("")}</select></label><label>Minimum stars<input name="stars" aria-label="Minimum stars" type="number" min="0" max="1000000000" step="1" value="0"></label><label>Pushed recently<select name="pushed" aria-label="Pushed recently"><option value="">Any push date</option><option value="30">Within 30 days</option><option value="90">Within 90 days</option><option value="180">Within 180 days</option><option value="365">Within 365 days</option></select></label><label>Queue visibility<select name="deferred" aria-label="Queue visibility"><option value="">Active queue</option><option value="only">Deferred items</option><option value="all">All attention items</option></select></label><button data-reset-filters>Reset queue filters</button></div><p class="hint">Filters combine. Archived/forked repositories must have been included in an audit to have evidence. “Ignore for now” lasts seven days. “Intentionally minimal” lasts until a newly fetched README revision differs. Opening a draft does not mark its remote README complete.</p><div data-storage></div><p data-queue-status role="status" aria-live="polite"></p><p data-queue-count></p><button data-improve-next>Improve next</button><ol class="attention-items" data-items></ol><div class="audit-pagination"><button data-previous>Previous queue page</button><span data-queue-page></span><button data-next>Next queue page</button></div>`;
+    this.innerHTML = `<h2 tabindex="-1">README Attention Queue</h2><p>Choose the next README to improve using descriptive signals, not a quality score. Load repositories and audit selected READMEs above first. Only successful assessments enter this queue.</p><p class="hint">High: recently active with missing or thin documentation. Medium: documentation needs attention or commonly useful project-type topics were not detected. Low: archived or no push in over 180 days. Within a tier: active first, README state, public-interest signals, then recent push and repository name. Pinned status and releases are not fetched.</p><div class="attention-filters"><label>Attention priority<select name="priority" aria-label="Attention priority"><option value="all">All priorities</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label><label><input type="checkbox" name="missing"> Missing only</label><label><input type="checkbox" name="active"> Active only (pushed within 30 days)</label><label>Archived repositories<select name="archived" aria-label="Archived repositories"><option value="exclude">Exclude archived</option><option value="include">Include archived</option><option value="only">Archived only</option></select></label><label>Queue language<select name="language" aria-label="Queue language"><option value="all">All languages</option></select></label><label>Queue project type<select name="type" aria-label="Queue project type"><option value="all">All project types</option>${projectTypes.map((t) => `<option value="${t.id}">${h(t.name)}</option>`).join("")}</select></label><label>Minimum stars<input name="stars" aria-label="Minimum stars" type="number" min="0" max="1000000000" step="1" value="0"></label><label>Pushed recently<select name="pushed" aria-label="Pushed recently"><option value="">Any push date</option><option value="30">Within 30 days</option><option value="90">Within 90 days</option><option value="180">Within 180 days</option><option value="365">Within 365 days</option></select></label><label>Queue visibility<select name="deferred" aria-label="Queue visibility"><option value="">Active queue</option><option value="only">Deferred items</option><option value="all">All attention items</option></select></label><button data-reset-filters>Reset queue filters</button></div><p class="hint">Filters combine. Archived/forked repositories must have been included in an audit to have evidence. “Ignore for now” lasts seven days. “Intentionally minimal” lasts until a newly fetched README revision differs. Improve next starts a local review batch from the current filtered, non-deferred queue (up to 200). Opening or reviewing a draft does not mark its remote README complete.</p><div data-storage></div><p data-queue-status role="status" aria-live="polite"></p><p data-queue-count></p><button data-improve-next>Improve next</button><ol class="attention-items" data-items></ol><div class="audit-pagination"><button data-previous>Previous queue page</button><span data-queue-page></span><button data-next>Next queue page</button></div>`;
     this.querySelectorAll(
       ".attention-filters input, .attention-filters select",
     ).forEach((input) =>
@@ -39,11 +39,24 @@ export class ReadmeAttentionQueue extends HTMLElement {
       this.draw();
       this.status("Queue filters reset.");
     };
-    this.querySelector("[data-improve-next]").onclick = () =>
-      this.open(
-        this.filtered.find((item) => !item.suppressed),
-        true,
+    this.querySelector("[data-improve-next]").onclick = () => {
+      if (this.busy) return;
+      const repositories = this.filtered
+        .filter((item) => !item.suppressed)
+        .map((item) => item.repo);
+      if (repositories.length > 200) {
+        this.status(
+          "Narrow queue filters to at most 200 repositories for one review batch.",
+        );
+        return;
+      }
+      this.dispatchEvent(
+        new CustomEvent("batch-review-start", {
+          bubbles: true,
+          detail: repositories,
+        }),
       );
+    };
     this.querySelector("[data-previous]").onclick = () => {
       this.page--;
       this.draw();
