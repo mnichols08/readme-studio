@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1
+
+- Explainable project-type suggestions for 14 types, from public topics, repository names and README prose; ambiguous signals remain visible.
+- Per-repository manual overrides, retained in the audit session and applied immediately from cached evidence without additional requests or source changes.
+- Type-specific documentation profiles and classifications, including appropriate short experiments. Missing topics are advisory: commonly useful for this project type, never universal requirements.
+- Keyboard/mobile controls, Worker/fallback parity and regression coverage for deterministic suggestions, profile evidence and override recovery.
+
 ## 1.1.0
 
 - Repository README audit workspace with public owned-repository pagination to 1,000, explicit selection, and fork/archive filters.

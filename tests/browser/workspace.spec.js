@@ -91,6 +91,16 @@ test("mobile pane, tool groups and settings restore without capturing secrets", 
     .click();
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   await page.locator('[data-tool-group="Design"] summary').click();
+  // Native details emits toggle in a later task; wait for its save before reload.
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        JSON.parse(
+          localStorage.getItem("readme-studio:v1"),
+        )?.settings?.closedGroups?.includes("Design"),
+      ),
+    )
+    .toBe(true);
   await page.reload();
   await expect(
     page.getByRole("button", { name: "Markdown", exact: true }),

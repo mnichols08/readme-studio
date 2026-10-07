@@ -1,7 +1,7 @@
 import { classifyReadme } from "./classify.js";
-self.onmessage = ({ data: { id, source } }) => {
+self.onmessage = ({ data: { id, source, repo } }) => {
   try {
-    self.postMessage({ id, result: classifyReadme(source) });
+    self.postMessage({ id, result: classifyReadme(source, repo) });
   } catch {
     self.postMessage({
       id,

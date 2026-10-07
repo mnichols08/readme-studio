@@ -2242,3 +2242,9 @@ repository-audit form label {
   min-height: 44px;
   font-size: 14px;
 }
+
+.audit-table select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}

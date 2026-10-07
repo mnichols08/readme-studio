@@ -8,11 +8,45 @@ Select repositories individually or select all currently filtered repositories, 
 
 ![Repository README audit with synthetic data](screenshots/repository-audit.png)
 
-## Evidence and rules (version 1)
+## Project types (1.1.1)
+
+Each repository shows **Suggested type: CLI** (or another type), a reason, and an explicit uncertainty note. Select **Project type for owner/repository** to override the suggestion before or after scanning. Select **Automatic suggestion** to reset. Changes reassess cached evidence immediately without requesting source again. Overrides survive closing/reopening the audit and fresh scans in this tab; changing accounts or reloading the app clears them. They do not change draft metadata or exported Markdown.
+
+Suggestions use public repository topics, explicit English README prose and weak name hints. Topic matches take precedence over prose, then names; ties use a stable specificity order: PWA, CLI, API, Game, package ecosystems, Web App, Library, Documentation, Tutorial, Experiment, Open Source Project. Other matching types are shown. No specific signal means Generic Repository. Primary language and homepage alone do not establish a package or application. This release does not fetch package manifests or inspect dependencies, and cannot confirm a package was published. Suggestions may be wrong, especially for monorepos, multilingual documents or prose discussing another project: the manual choice always wins.
+
+| Type                                      | Commonly useful documentation topics                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Web App                                   | Overview, screenshot/demo, setup, environment/configuration, testing, deployment           |
+| Library                                   | Purpose, installation, usage, API, compatibility, examples, contributing                   |
+| CLI                                       | Installation, commands, flags/options, examples, configuration                             |
+| API                                       | Setup, authentication, endpoints, environment/configuration, sample requests/responses     |
+| npm Package / Rust Crate / Python Package | Purpose, installation, usage, API, compatibility, examples                                 |
+| Game                                      | Overview, controls, how to run, screenshots, gameplay, build instructions                  |
+| PWA                                       | Overview, screenshot/demo, setup, configuration, offline/installation behavior, deployment |
+| Documentation                             | Purpose, navigation, examples, contributing                                                |
+| Open Source Project                       | Overview, setup, usage, contributing, license                                              |
+| Tutorial                                  | Purpose, prerequisites, learning steps, examples                                           |
+| Experiment                                | Purpose, optional findings/limitations; a short README may be entirely appropriate         |
+| Generic Repository                        | Overview, setup, usage, project/documentation links                                        |
+
+Evidence says **not detected. Commonly useful for this project type.** It does not claim a section is mandatory or actually absent. For example, API authentication may not apply to a public unauthenticated API. A link to extensive external documentation may be a deliberate alternative to in-README instructions. There are no quality percentages, scores or developer rankings.
+
+## Evidence and rules (version 2)
 
 Analysis reuses the existing Markdown analyzer. A leading BOM is ignored for analysis only; original source and byte counts are preserved. Meaningful words count prose rather than headings, images/badge labels, fenced/inline code, comments or executable HTML. A substantive passage has at least 12 words and six distinct words. Images, badges, code examples, non-anchor/non-mailto links and headings are reported separately. Activity is independent of documentation classification.
 
-Rules are evaluated from documentation-heavy down to basic after the stub check:
+For a specific project type, the label includes context, for example **Minimal for a Web App**. Classification uses these combinations:
+
+- Missing stays missing regardless of type. Fetch failures stay **Not assessed**.
+- Stub: fewer than 20 meaningful prose words or no substantive passage; code-only and badge-only READMEs remain stubs.
+- Basic: at least 40 prose words, one substantive passage and evidence for at least two topics in the selected profile. An Experiment with a substantive overview is Basic even when shorter, without needing setup or usage.
+- Detailed: at least 250 prose words, three substantive passages, three headings and evidence for at least four profile topics (all topics for smaller profiles), plus a code example, supporting image or project/documentation link.
+- Documentation-heavy: Detailed plus at least 1,200 prose words, eight headings, six substantive passages, and four code examples, four supporting images or four links.
+- Minimal: substantive prose but none of the broader combinations. Length alone cannot establish broad coverage.
+
+A topic is detected from a matching populated heading (six prose words or a nonempty code block). Overview also uses substantive prose; examples use code blocks; screenshot/demo uses non-badge/non-widget images; links use safe project/documentation links. Existing explanatory setup/usage phrase detection is reused. These are approximate signals, not a semantic proof that a demo works, API reference is complete, or instructions are correct. Code/comment text cannot suggest a project type or masquerade as actual headings. A real code block under a matching heading can support that section.
+
+Generic Repository retains the baseline combinations below, while displaying advisory generic topics. Rules are evaluated from documentation-heavy down to basic after the stub check:
 
 | State               | Required combination                                                                                                                                                                         |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -41,4 +75,4 @@ API references: [public user repositories](https://docs.github.com/en/rest/repos
 
 ## Verification
 
-`tests/repository-audit.test.js` covers deterministic states, meaningful content, archive/fork handling, 1,000-repository pagination, bounded concurrency/cache, missing vs failure, root fallback, partial failures, rate limits, cancellation and malformed responses. `tests/browser/repository-audit.spec.js` covers the 100-repository workflow, session reuse, exact-source new drafts, 320px keyboard controls, cancellation and Worker fallback across Chromium, Firefox and WebKit. Network fixtures are synthetic; tests do not scan a real developer or publish anything.
+`tests/project-types.test.js` covers all type suggestions, ambiguous/fallback evidence, all profiles, short experiments, type-dependent classifications, empty/example headings, source preservation and invalid overrides. Browser coverage includes type selection before scanning, keyboard focus, 320px layout, fresh scan/session retention, automatic reset and account isolation. `tests/repository-audit.test.js` covers deterministic states, meaningful content, archive/fork handling, 1,000-repository pagination, bounded concurrency/cache, missing vs failure, root fallback, partial failures, rate limits, cancellation and malformed responses. `tests/browser/repository-audit.spec.js` covers the 100-repository workflow, session reuse, exact-source new drafts, 320px keyboard controls, cancellation and Worker fallback across Chromium, Firefox and WebKit. Network fixtures are synthetic; tests do not scan a real developer or publish anything.
