@@ -39,3 +39,11 @@ _Avoid_: Incomplete, corrupt
 **Eligible document**:
 A workspace document that has a repository, branch and path target, and so can be captured.
 _Avoid_: Linked document
+
+**Change check**:
+A read-only comparison of a chosen Evidence Snapshot against the repository's current state. Saves nothing and reports each Evidence file as `unchanged`, `changed`, `added`, `removed` or `unknown`.
+_Avoid_: Diff, sync, refresh
+
+**Different target**:
+The label on an Evidence Snapshot whose repository, branch or path no longer matches its document's current target. Such a snapshot cannot be used as a Baseline for comparison.
+_Avoid_: Stale, orphaned
