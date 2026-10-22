@@ -1,4 +1,8 @@
-import { createBlock, serializeBlocks } from "../markdown/serialize.js";
+import {
+  createBlock,
+  serializeBlock,
+  serializeBlocks,
+} from "../markdown/serialize.js";
 import { validateWorkspace, recoverWorkspace } from "./workspace-backup.js";
 export const STORAGE_KEY = "readme-studio:v1";
 export const newDraft = (name, blocks = []) => ({
@@ -80,11 +84,14 @@ export function validateDraft(d, { preserveBlockIds = false } = {}) {
     });
   return copy;
 }
-// Downloads (Studio projects, draft and workspace backups) leave out each
-// Detachment record's copy of the detached Block, records whose Block is gone,
-// and any section name that no longer appears in the Markdown (a generic name
-// takes its place), so text the author removed with a raw edit never travels
-// in a file. Undo and autosave in this browser keep it.
+// Downloads (Studio projects, draft and workspace backups) never carry text
+// the author removed with a raw edit. They leave out each Detachment record's
+// copy of the detached Block, records whose Block is gone, and any section name
+// that no longer appears in the Markdown (a generic name takes its place). A
+// detached generated source keeps only what recreating it needs, and only
+// while its sources are still named in the Markdown. A split section whose
+// heading was edited away loses its stale name. Undo and autosave in this
+// browser keep everything.
 const GENERIC_LABELS = {
   builder: "Builder section",
   component: "Component",
@@ -93,38 +100,107 @@ const GENERIC_LABELS = {
   profile: "Profile section",
   banner: "Banner",
 };
+const plain = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+function portableRecords(records, ids, markdown) {
+  return records.flatMap((r) => {
+    if (!plain(r)) return [r];
+    if (typeof r.blockId === "string" && !ids.has(r.blockId)) return [];
+    return [
+      {
+        ...r,
+        ...("previous" in r ? { previous: null } : {}),
+        ...(Array.isArray(r.labels)
+          ? {
+              labels: r.labels.map((label, i) =>
+                typeof label === "string" && label && markdown.includes(label)
+                  ? label
+                  : GENERIC_LABELS[r.kinds?.[i]] || "Section",
+              ),
+            }
+          : {}),
+      },
+    ];
+  });
+}
+// A repository is named in the Markdown when its name (after "owner/") is.
+const named = (markdown, source) =>
+  typeof source === "string" &&
+  !!source.trim() &&
+  markdown.toLowerCase().includes(source.split("/").pop().toLowerCase());
+function portableGenerated(units, markdown, login) {
+  return units.flatMap((u) => {
+    if (!plain(u)) return [u];
+    const sources = Array.isArray(u.source) ? u.source : [u.source];
+    const present =
+      u.kind === "profile"
+        ? typeof u.source === "string" &&
+          (u.source === login || named(markdown, u.source))
+        : sources.length > 0 && sources.every((x) => named(markdown, x));
+    if (!present) return [];
+    // The generated text, the fetched snapshot and the label (which names the
+    // sources and project titles) can hold text removed since; recreating a
+    // detached source fetches fresh data and needs none of them.
+    const { generatedValue, snapshot: _snapshot, label, ...rest } = u;
+    return [
+      {
+        ...rest,
+        ...(typeof generatedValue === "string" &&
+        generatedValue &&
+        markdown.includes(generatedValue)
+          ? { generatedValue }
+          : {}),
+        ...(typeof label === "string" && label && markdown.includes(label)
+          ? { label }
+          : {}),
+      },
+    ];
+  });
+}
+function blockText(block) {
+  try {
+    return serializeBlock(block);
+  } catch {
+    return "";
+  }
+}
+function portableBlocks(blocks) {
+  return blocks.map((block) => {
+    const title = block?.section?.title;
+    if (
+      !plain(block) ||
+      block.type !== "custom" ||
+      !plain(block.section) ||
+      !(block.section.level > 0) ||
+      typeof title !== "string" ||
+      blockText(block).includes(title)
+    )
+      return block;
+    const { section: _section, ...rest } = block;
+    return rest;
+  });
+}
 export function withoutDetachedCopies(draft) {
-  const records = draft?.metadata?.detachments;
-  if (!Array.isArray(records)) return draft;
-  const ids = new Set((draft.blocks || []).map((b) => b?.id));
+  if (!plain(draft)) return draft;
   const markdown = typeof draft.markdown === "string" ? draft.markdown : "";
-  return {
-    ...draft,
-    metadata: {
-      ...draft.metadata,
-      detachments: records.flatMap((r) => {
-        if (!r || typeof r !== "object" || Array.isArray(r)) return [r];
-        if (typeof r.blockId === "string" && !ids.has(r.blockId)) return [];
-        return [
-          {
-            ...r,
-            ...("previous" in r ? { previous: null } : {}),
-            ...(Array.isArray(r.labels)
-              ? {
-                  labels: r.labels.map((label, i) =>
-                    typeof label === "string" &&
-                    label &&
-                    markdown.includes(label)
-                      ? label
-                      : GENERIC_LABELS[r.kinds?.[i]] || "Section",
-                  ),
-                }
-              : {}),
-          },
-        ];
-      }),
-    },
-  };
+  const metadata = plain(draft.metadata) ? { ...draft.metadata } : null;
+  const copy = { ...draft };
+  if (Array.isArray(draft.blocks)) copy.blocks = portableBlocks(draft.blocks);
+  if (metadata) {
+    if (Array.isArray(metadata.detachments))
+      metadata.detachments = portableRecords(
+        metadata.detachments,
+        new Set((draft.blocks || []).map((b) => b?.id)),
+        markdown,
+      );
+    if (Array.isArray(metadata.detachedGenerated))
+      metadata.detachedGenerated = portableGenerated(
+        metadata.detachedGenerated,
+        markdown,
+        metadata.githubProfile?.login,
+      );
+    copy.metadata = metadata;
+  }
+  return copy;
 }
 export function readDrafts(storage = localStorage) {
   const raw = storage.getItem(STORAGE_KEY);

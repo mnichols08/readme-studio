@@ -66,7 +66,8 @@ export function createProject(
   embedded,
   now = new Date().toISOString(),
 ) {
-  const meta = metadata(withoutDetachedCopies(draft).metadata),
+  const portable = withoutDetachedCopies(draft);
+  const meta = metadata(portable.metadata),
     createdAt = meta.studioProject?.createdAt || now;
   meta.studioProject = { createdAt };
   const project = {
@@ -78,7 +79,7 @@ export function createProject(
     updatedAt: now,
     document: {
       markdown: draft.markdown,
-      blocks: portableData(draft.blocks),
+      blocks: portableData(portable.blocks),
       metadata: meta,
     },
     settings: workspaceSettings(settings),

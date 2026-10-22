@@ -11,6 +11,7 @@ import {
   uniformContext,
 } from "./source-context.js";
 import { detachGenerated, generatedRegistry } from "../generated/registry.js";
+import { classifySection, detectSections } from "./sections.js";
 
 export const DETACHMENT_LIMIT = 20;
 export const RESTORABLE_BYTES = 32 * 1024;
@@ -278,14 +279,188 @@ function alignDeletion(before, range, segments) {
 // { blocks, metadata, detachments, fallback }. serializeBlocks(blocks) is
 // always exactly `markdown`; anything else falls back to wholeDraftPatch.
 export function patchBlocks(draft, markdown, now = new Date()) {
+  let result = null;
   try {
-    const result =
+    const patched =
       splitPatch(draft, markdown, now) || sourcePatch(draft, markdown, now);
-    if (result && serializeBlocks(result.blocks) === markdown) return result;
+    const settled = patched && settleLines(draft, patched, markdown, now);
+    if (settled && serializeBlocks(settled.blocks) === markdown)
+      result = settled;
   } catch {
     /* Fall through: raw editing is never blocked. */
   }
-  return wholeDraftPatch(draft, markdown, now);
+  result ||= wholeDraftPatch(draft, markdown, now);
+  return { ...result, blocks: refreshSections(draft, result.blocks) };
+}
+
+// The text on the first and last line of a Block's text that is not its own:
+// what runs on before it on its first line (head) and after it on its last
+// line (tail). A Block whose text starts (ends) with a line break owns that
+// whole line, so its head (tail) is empty.
+const BREAK = /[\r\n]/;
+function lineEdges(markdown, start, end) {
+  let lineStart = start,
+    lineEnd = end;
+  if (start < end && !BREAK.test(markdown[start]))
+    while (lineStart > 0 && !BREAK.test(markdown[lineStart - 1])) lineStart--;
+  if (start < end && !BREAK.test(markdown[end - 1]))
+    while (lineEnd < markdown.length && !BREAK.test(markdown[lineEnd]))
+      lineEnd++;
+  return {
+    head: markdown.slice(lineStart, start).trim(),
+    tail: markdown.slice(end, lineEnd).trim(),
+    lineStart,
+    lineEnd,
+  };
+}
+// An Owned block stays Owned only while the rendered lines its text is on are
+// unchanged. Typing character by character can put text on an Owned block's
+// first or last line without touching its own bytes (the first space lands in
+// the Seam, the next letters after it; or text typed at the very start or end
+// of the document). Such a Block is merged with every Block that now shares
+// that line into one Custom Markdown block, with a Detachment record, exactly
+// as if the same text had been pasted in one edit. Whitespace-only Seam edits
+// leave every line's text unchanged and so detach nothing.
+function settleLines(draft, patched, markdown, now) {
+  const before = draft.markdown;
+  const original = new Map(
+    documentSegments(draft).map((s, i) => [draft.blocks[i].id, s]),
+  );
+  let result = patched;
+  for (let guard = 0; guard <= draft.blocks.length; guard++) {
+    const { blocks, metadata } = result;
+    const segments = documentSegments({ blocks, metadata });
+    const generatedIds = generatedBlockIds({ blocks, metadata });
+    let k = -1,
+      edges;
+    for (let n = 0; n < blocks.length && k < 0; n++) {
+      const was = original.get(blocks[n].id);
+      if (!was || !ownershipKind(blocks[n], metadata, generatedIds)) continue;
+      const a = lineEdges(before, was.contentStart, was.end);
+      edges = lineEdges(markdown, segments[n].contentStart, segments[n].end);
+      if (a.head !== edges.head || a.tail !== edges.tail) k = n;
+    }
+    if (k < 0) return result;
+    let i = k,
+      j = k;
+    while (i > 0 && segments[i].start > edges.lineStart) i--;
+    while (
+      j + 1 < blocks.length &&
+      segments[j + 1].contentStart < edges.lineEnd
+    )
+      j++;
+    result = mergeRun(draft, result, segments, i, j, now, original);
+    if (!result) return null;
+  }
+  return null;
+}
+// Merge Blocks i..j of a patch result into one new Custom Markdown block that
+// holds exactly their text. Records already made by this patch for a merged
+// Block move to the new Block and stop being Restorable.
+function mergeRun(draft, result, segments, i, j, now, original) {
+  const { blocks, metadata } = result;
+  const generatedIds = generatedBlockIds({ blocks, metadata });
+  const run = blocks.slice(i, j + 1);
+  const ids = new Set(run.map((b) => b.id));
+  const owned = run.filter((b) => ownershipKind(b, metadata, generatedIds));
+  const contexts = run.map((b) => contextForBlock(b, metadata));
+  const text = serializeBlocks(run);
+  const block = {
+    ...createBlock("custom", { markdown: text }),
+    ...(run.length === 1 && run[0].section
+      ? { section: structuredClone(run[0].section) }
+      : {}),
+    sourceContext: contexts.every(
+      (c) => contextKey(c) === contextKey(contexts[0]),
+    )
+      ? contexts[0] || null
+      : { type: "mixed" },
+  };
+  if (run[0].separator !== undefined) block.separator = run[0].separator;
+  if (text !== serializeBlock(block)) return null;
+  const retarget = new Map(
+    result.detachments
+      .filter((r) => ids.has(r.blockId))
+      .map((r) => [r.id, { ...r, blockId: block.id, previous: null }]),
+  );
+  const spanned = run.filter(
+    (b) =>
+      original.has(b.id) || result.detachments.some((r) => r.blockId === b.id),
+  ).length;
+  const record = detachmentRecord(
+    block.id,
+    owned,
+    owned.map((b) => ownershipKind(b, metadata, generatedIds)),
+    now,
+    spanned,
+  );
+  let nextMetadata = mergeGenerated(
+    { ...metadata },
+    scopedGenerated(draft, new Set(owned.map((b) => b.id))),
+  );
+  if (ids.has(nextMetadata.bannerReference?.blockId))
+    delete nextMetadata.bannerReference;
+  if (Array.isArray(nextMetadata.detachments))
+    nextMetadata.detachments = nextMetadata.detachments.map(
+      (r) => retarget.get(r?.id) || r,
+    );
+  nextMetadata = appendDetachments(nextMetadata, [record]);
+  return {
+    blocks: [...blocks.slice(0, i), block, ...blocks.slice(j + 1)],
+    metadata: nextMetadata,
+    detachments: [
+      ...result.detachments.map((r) => retarget.get(r.id) || r),
+      record,
+    ],
+    fallback: false,
+  };
+}
+
+// A split section's name follows its heading. When a raw edit changes a
+// Custom Markdown block's first heading, its section takes the new heading's
+// text; when the heading is gone, the section name is dropped, so an
+// edited-away heading is never shown or saved again.
+function refreshSections(draft, blocks) {
+  const original = new Map(
+    (draft.blocks || []).map((b) => [b.id, safeSerialize(b)]),
+  );
+  return blocks.map((block) => {
+    const section = block.section;
+    if (
+      block.type !== "custom" ||
+      !section ||
+      typeof section !== "object" ||
+      !(section.level > 0)
+    )
+      return block;
+    const text = safeSerialize(block);
+    if (original.get(block.id) === text) return block;
+    const next = sectionFor(text, section);
+    if (next === section) return block;
+    const { section: _old, ...rest } = block;
+    return next ? { ...rest, section: next } : rest;
+  });
+}
+// The section for a split block's current text: unchanged while its first
+// heading still reads the same, renamed after a changed first heading, kept
+// while a block with no heading still holds the name, otherwise null.
+const ATX = /^ {0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/m;
+function sectionFor(text, section) {
+  if (ATX.exec(text)?.[1] === section.title) return section;
+  const heading = detectSections(text, {
+    levels: [1, 2, 3, 4, 5, 6],
+  }).find((s) => s.level > 0);
+  if (heading?.title === section.title) return section;
+  if (!heading)
+    return typeof section.title === "string" && text.includes(section.title)
+      ? section
+      : null;
+  return {
+    ...section,
+    title: heading.title,
+    level: heading.level,
+    kind: classifySection(heading.title, heading.level),
+  };
 }
 
 // The separate places a raw edit changed. One changed range is split around
@@ -347,7 +522,8 @@ function splitPatch(draft, markdown, now) {
       markdown: target,
     };
   }
-  const moved = movedDetachments(draft, current, detachments, now);
+  const moved = movedDetachments(draft, current, markdown, detachments, now);
+  if (!moved) return null;
   detachments.push(...moved);
   return {
     blocks: current.blocks,
@@ -357,10 +533,28 @@ function splitPatch(draft, markdown, now) {
   };
 }
 // One step's deletion plus another step's insertion can move an Owned Block's
-// text (reordering sections in one edit). The deletion step drops that Block
-// without a record, so record it here, on the Custom Markdown block that now
-// holds its text. A Detachment is never silent.
-function movedDetachments(draft, result, recorded, now) {
+// text (reordering sections in one edit), possibly editing it on the way. The
+// deletion step drops that Block without a record, so record it here, on the
+// Custom Markdown block that now holds its text: the one that gained an exact
+// copy of it, else the one that gained most of its lines, else (its every line
+// was edited too) the one that gained most text. A move cannot be told apart
+// from deleting a section and typing elsewhere in the same change, so both are
+// recorded. Only when no Custom Markdown block gained anything was the Block
+// simply deleted, which leaves no record, as a one-place deletion does. Null if
+// its text is still in the document but no host gained anything: the caller
+// then patches the edit as one range, which records every Owned block it
+// touches. A Detachment is never silent.
+const lines = (text) =>
+  text
+    .split(/\r\n|\r|\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+const tally = (text) => {
+  const counts = new Map();
+  for (const l of lines(text)) counts.set(l, (counts.get(l) || 0) + 1);
+  return counts;
+};
+function movedDetachments(draft, result, markdown, recorded, now) {
   const generatedIds = generatedBlockIds(draft);
   const kept = new Set(result.blocks.map((b) => b.id));
   const listed = new Set(recorded.flatMap((r) => r.previousBlockIds));
@@ -378,12 +572,40 @@ function movedDetachments(draft, result, recorded, now) {
     if (!kind || kept.has(block.id) || listed.has(block.id)) continue;
     if (!content.trim()) continue;
     // The host gained a copy of the dropped Block's text with this edit.
-    const host = hosts.find(
-      (h) => count(h.now, content) > count(h.was, content),
-    );
+    let host = hosts.find((h) => count(h.now, content) > count(h.was, content));
+    if (!host) {
+      // A moved and edited Block: the host that gained most of its lines.
+      let best = 0;
+      for (const h of hosts) {
+        const now = tally(h.now),
+          was = tally(h.was || "");
+        let gained = 0;
+        for (const [l, n] of tally(content))
+          gained += Math.min(
+            n,
+            Math.max(0, (now.get(l) || 0) - (was.get(l) || 0)),
+          );
+        if (gained > best) [best, host] = [gained, h];
+      }
+    }
+    if (!host) {
+      let grew = 0;
+      for (const h of hosts) {
+        const gained = h.now.length - (h.was || "").length;
+        if (gained > grew) [grew, host] = [gained, h];
+      }
+    }
     if (host)
       // Never Restorable: the host also holds text that was not this Block's.
       records.push(detachmentRecord(host.id, [block], [kind], now, 2));
+    else {
+      const after = tally(markdown),
+        before = tally(draft.markdown);
+      const deleted = [...tally(content).keys()].every(
+        (l) => (after.get(l) || 0) < (before.get(l) || 0),
+      );
+      if (!deleted) return null;
+    }
   }
   return records;
 }
@@ -401,6 +623,7 @@ function sourcePatch(draft, markdown, now) {
   const generatedIds = generatedBlockIds(draft);
   const kindOf = (b) => ownershipKind(b, metadata, generatedIds);
   const isCustomMarkdown = (b) => b.type === "custom" && !kindOf(b);
+  const ctx = { draft, markdown, segments, kindOf, now };
 
   // An edit inside one Seam that leaves only whitespace changes that Seam alone.
   const seam = segments.findIndex(
@@ -423,10 +646,23 @@ function sourcePatch(draft, markdown, now) {
       return { blocks: next, metadata, detachments: [], fallback: false };
     }
     if (s.start < start && end < s.contentStart) {
-      // Text typed or pasted inside a Seam goes into an adjacent Custom Markdown
-      // block, or a new one, and never detaches a neighbour.
       const prev = next[seam - 1],
         following = next[seam];
+      // Text that runs on from an Owned block's last line changes that line:
+      // typing " more" after it, one key at a time, puts the space in the Seam
+      // and the letters after it. That edits the Block, exactly as pasting
+      // " more" there would.
+      if (
+        kindOf(prev) &&
+        !BREAK.test(left) &&
+        /\S/.test(text.split(BREAK)[0]) &&
+        !BREAK.test(serializeBlock(prev).at(-1) ?? "\n")
+      ) {
+        const edited = replaceRun(ctx, start, seam - 1, seam - 1, true);
+        if (edited) return edited;
+      }
+      // Other text typed or pasted inside a Seam goes into an adjacent Custom
+      // Markdown block, or a new one, and never detaches a neighbour.
       if (isCustomMarkdown(prev)) {
         next[seam - 1] = {
           ...prev,
@@ -519,7 +755,6 @@ function sourcePatch(draft, markdown, now) {
   if (i < 0) return null;
   let j = i;
   while (j + 1 < segments.length && segments[j + 1].start < end) j++;
-  const ctx = { draft, markdown, segments, kindOf, now };
   // An edit that ends inside the next Block's Seam leaves that Block's text,
   // and so its ownership, alone. An edit that starts right after a Block's
   // text and stays inside the following Seam continues that Block's last line.

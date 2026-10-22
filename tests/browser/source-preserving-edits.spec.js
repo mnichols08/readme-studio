@@ -131,3 +131,45 @@ test("saving a builder form keeps blank lines typed before its section", async (
   await expect(page.locator(".toast")).toHaveText("Section saved to README");
   await expect(editor(page)).toHaveValue(built.slice(0, -3) + "\n---");
 });
+test("typing after the sample hero subtitle by keyboard detaches the hero", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Explore the sample profile" })
+    .click();
+  const subtitle = "Building thoughtful software, one commit at a time.";
+  const before = await editor(page).inputValue();
+  const end = before.indexOf(subtitle) + subtitle.length;
+  expect(before).toContain(subtitle);
+  const hero = await page.evaluate(
+    () => document.querySelector("app-shell").store.draft.blocks[0],
+  );
+  expect(hero.type).toBe("hero");
+  // The editor runs a raw edit per key: the space lands in the Seam after the
+  // hero, the letters after it, on the hero's last line.
+  await typeAt(page, end, " more");
+  await expect(editor(page)).toHaveValue(
+    before.slice(0, end) + " more" + before.slice(end),
+  );
+  await expect(editor(page)).toBeFocused();
+  await expect(page.locator(".toast")).toHaveText(
+    "Raw edit detached: Your Name (builder). Undo restores visual ownership.",
+  );
+  await expect(page.locator(".block-row").first()).toContainText(
+    "Detached from Your Name",
+  );
+  const state = await page.evaluate((id) => {
+    const { draft } = document.querySelector("app-shell").store;
+    return {
+      owned: draft.blocks.some((b) => b.id === id),
+      records: draft.metadata.detachments.map((r) => r.previousBlockIds),
+      first: draft.blocks[0].type,
+    };
+  }, hero.id);
+  expect(state).toEqual({
+    owned: false,
+    records: [[hero.id]],
+    first: "custom",
+  });
+});
