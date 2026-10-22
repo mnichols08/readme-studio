@@ -365,7 +365,12 @@ describe("import state and ownership", () => {
     ).toBe(null);
     const store = new Store(combined);
     // An edit that spans both origins merges them into one mixed-origin block.
-    store.raw("X" + combined.markdown.slice(1) + "\n");
+    store.raw(
+      combined.markdown.replace(
+        /a\.png\)(\s+)## Remote/,
+        "b.png)$1## Remote 2",
+      ),
+    );
     expect(store.draft.blocks).toHaveLength(1);
     expect(store.draft.blocks[0].sourceContext).toEqual({ type: "mixed" });
   });

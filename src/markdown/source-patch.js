@@ -1,6 +1,7 @@
 // Source-preserving raw edits (ADR epic63-01 and epic63-02). A raw edit is
-// reduced to one changed range, mapped onto the Blocks' source ranges, and only
-// the Blocks inside that Edited scope are replaced. Untouched Blocks keep their
+// reduced to its changed ranges (one per place that changed), each mapped onto
+// the Blocks' source ranges, and only the Blocks inside that Edited scope are
+// replaced. Untouched Blocks keep their
 // ID, settings and ownership. Text is never parsed back into settings.
 import { createBlock, serializeBlock, serializeBlocks } from "./serialize.js";
 import {
@@ -278,12 +279,80 @@ function alignDeletion(before, range, segments) {
 // always exactly `markdown`; anything else falls back to wholeDraftPatch.
 export function patchBlocks(draft, markdown, now = new Date()) {
   try {
-    const result = sourcePatch(draft, markdown, now);
+    const result =
+      splitPatch(draft, markdown, now) || sourcePatch(draft, markdown, now);
     if (result && serializeBlocks(result.blocks) === markdown) return result;
   } catch {
     /* Fall through: raw editing is never blocked. */
   }
   return wholeDraftPatch(draft, markdown, now);
+}
+
+// The separate places a raw edit changed. One changed range is split around
+// every Block whose text reappears unchanged inside the replacement, so edits
+// in several places (drift fixes, reviewed refactors) never sweep up the
+// untouched Blocks between them.
+export function editRanges(before, after, segments) {
+  const range = changedRange(before, after);
+  return range ? splitRange(before, range, segments, 0) : [];
+}
+function subRange(before, start, end, text) {
+  const m = changedRange(before.slice(start, end), text);
+  return m && { start: start + m.start, end: start + m.end, text: m.text };
+}
+function splitRange(before, range, segments, depth) {
+  const { start, end, text } = range;
+  let best = null;
+  for (const s of segments) {
+    const content = before.slice(s.contentStart, s.end);
+    if (s.contentStart < start || s.end > end || !content.trim()) continue;
+    if (best && best.content.length >= content.length) continue;
+    const expected = s.contentStart - start;
+    let at = -1;
+    for (
+      let p = text.indexOf(content);
+      p >= 0;
+      p = text.indexOf(content, p + 1)
+    )
+      if (at < 0 || Math.abs(p - expected) < Math.abs(at - expected)) at = p;
+    if (at >= 0) best = { s, content, at };
+  }
+  if (!best || depth > 64) return [range];
+  const { s, content, at } = best;
+  const left = subRange(before, start, s.contentStart, text.slice(0, at));
+  const right = subRange(before, s.end, end, text.slice(at + content.length));
+  return [
+    ...(left ? splitRange(before, left, segments, depth + 1) : []),
+    ...(right ? splitRange(before, right, segments, depth + 1) : []),
+  ];
+}
+// Apply a multi-place edit one range at a time, right to left, so each step is
+// an ordinary single-range patch. Null for a single range, or when any step
+// cannot stay exact.
+function splitPatch(draft, markdown, now) {
+  const ranges = editRanges(draft.markdown, markdown, documentSegments(draft));
+  if (ranges.length < 2) return null;
+  let current = draft;
+  const detachments = [];
+  for (const r of ranges.reverse()) {
+    const source = current.markdown;
+    const target = source.slice(0, r.start) + r.text + source.slice(r.end);
+    const step = sourcePatch(current, target, now);
+    if (!step || serializeBlocks(step.blocks) !== target) return null;
+    detachments.unshift(...step.detachments);
+    current = {
+      ...current,
+      blocks: step.blocks,
+      metadata: step.metadata,
+      markdown: target,
+    };
+  }
+  return {
+    blocks: current.blocks,
+    metadata: current.metadata,
+    detachments,
+    fallback: false,
+  };
 }
 
 function sourcePatch(draft, markdown, now) {
@@ -313,8 +382,8 @@ function sourcePatch(draft, markdown, now) {
       next[seam] = { ...next[seam], separator: left + text + right };
       return { blocks: next, metadata, detachments: [], fallback: false };
     }
-    if (start === end && s.start < start && start < s.contentStart) {
-      // Pure insertion inside a Seam goes into an adjacent Custom Markdown
+    if (s.start < start && end < s.contentStart) {
+      // Text typed or pasted inside a Seam goes into an adjacent Custom Markdown
       // block, or a new one, and never detaches a neighbour.
       const prev = next[seam - 1],
         following = next[seam];
@@ -397,16 +466,50 @@ function sourcePatch(draft, markdown, now) {
       else i = serializeBlock(prev).endsWith("\n") ? k : k - 1;
     }
   }
+  if (i < 0) return null;
   let j = i;
   while (j + 1 < segments.length && segments[j + 1].start < end) j++;
-  if (i < 0) return null;
-  const run = blocks.slice(i, j + 1);
+  const ctx = { draft, markdown, segments, kindOf, now };
+  // An edit that ends inside the next Block's Seam leaves that Block's text,
+  // and so its ownership, alone. An edit that starts right after a Block's
+  // text and stays inside the following Seam continues that Block's last line.
+  return (
+    (j > i &&
+      end <= segments[j].contentStart &&
+      replaceRun(ctx, start, i, j - 1, true)) ||
+    (i > 0 &&
+      i === j &&
+      start < end &&
+      start === segments[i].start &&
+      end <= segments[i].contentStart &&
+      replaceRun(ctx, start, i - 1, i - 1, true)) ||
+    replaceRun(ctx, start, i, j, false)
+  );
+}
+
+// Replace Blocks i..last with one Block. With `kept`, the edit reached only
+// the Seam of Block last + 1: that Block keeps its text and ownership, and its
+// Seam becomes the whitespace before its text. Returns null when that cannot
+// reproduce `markdown` exactly.
+function replaceRun(ctx, start, i, last, kept) {
+  const { draft, markdown, segments, kindOf, now } = ctx;
+  const blocks = draft.blocks,
+    metadata = draft.metadata || {};
+  const delta = markdown.length - draft.markdown.length;
+  const run = blocks.slice(i, last + 1);
   const keepSeam = start >= segments[i].contentStart;
   const from = keepSeam ? segments[i].contentStart : segments[i].start;
-  const slice = markdown.slice(
-    from,
-    segments[j].end + markdown.length - before.length,
-  );
+  let slice, seamAfter;
+  if (kept) {
+    const at = segments[last + 1].contentStart + delta;
+    // The kept Block's text must still start on its own line.
+    if (at > 0 && markdown[at - 1] !== "\n") return null;
+    const region = markdown.slice(from, at);
+    seamAfter = /[ \t\r\n]*$/.exec(region)[0];
+    slice = region.slice(0, region.length - seamAfter.length);
+    // The first Block has no Seam, so leading whitespace stays in its text.
+    if (i === 0 && !slice) [slice, seamAfter] = [seamAfter, ""];
+  } else slice = markdown.slice(from, segments[last].end + delta);
   const owned = run.filter(kindOf);
   const touched = new Set(run.map((b) => b.id));
   const contexts = run.map((b) => contextForBlock(b, metadata));
@@ -437,12 +540,15 @@ function sourcePatch(draft, markdown, now) {
     else delete next.separator;
   } else next.separator = "";
   // A deletion that removed whole Blocks and their Seams leaves no empty Block.
-  const drop = slice === "" && (i > 0 ? !keepSeam : j === blocks.length - 1);
+  const drop =
+    slice === "" && (i > 0 ? !keepSeam : kept || last === blocks.length - 1);
   const result = [
     ...blocks.slice(0, i),
     ...(drop ? [] : [next]),
-    ...blocks.slice(j + 1),
+    ...(kept ? [{ ...blocks[last + 1], separator: seamAfter }] : []),
+    ...blocks.slice(last + (kept ? 2 : 1)),
   ];
+  if (kept && serializeBlocks(result) !== markdown) return null;
   let nextMetadata = mergeGenerated(
     { ...metadata },
     scopedGenerated(draft, touched),

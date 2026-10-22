@@ -96,7 +96,12 @@ import { detectSections } from "../markdown/sections.js";
 import { splitDraft, draftSnapshot } from "../state/import-plan.js";
 import "./import-dialog.js";
 import { Store } from "../state/store.js";
-import { newDraft, readDrafts, saveDrafts } from "../state/drafts.js";
+import {
+  newDraft,
+  readDrafts,
+  saveDrafts,
+  withoutDetachedCopies,
+} from "../state/drafts.js";
 import { template, templateNames } from "../data/templates.js";
 import { blockTypes, defaults } from "./builder-form.js";
 import "./markdown-editor.js";
@@ -119,6 +124,10 @@ import {
   detachmentNotice,
   moveBlock,
 } from "../markdown/source-patch.js";
+// A status message plus the polite Detachment notice for a raw source edit.
+const withDetachments = (message, result) =>
+  [message, detachmentNotice(result)].filter(Boolean).join(" ");
+
 export class AppShell extends HTMLElement {
   connectedCallback() {
     let saved;
@@ -417,12 +426,15 @@ export class AppShell extends HTMLElement {
         );
         return;
       }
-      this.store.raw(e.detail.plan.newMarkdown);
+      const result = this.store.raw(e.detail.plan.newMarkdown);
       this.closeDialog(this.editor.input);
       this.mobile("markdown");
       this.focusDocument();
       this.notify(
-        "Reviewed refactors applied. Undo restores source and builder ownership.",
+        withDetachments(
+          "Reviewed refactors applied. Undo restores source and builder ownership.",
+          result,
+        ),
       );
     });
     this.addEventListener("analysis-jump", (e) => {
@@ -1860,8 +1872,9 @@ export class AppShell extends HTMLElement {
         ...detail,
         cursor: this.componentCursor,
       });
+      let patched = null;
       if (result.blocks) this.store.blocks(result.blocks);
-      else this.store.raw(result.markdown);
+      else patched = this.store.raw(result.markdown);
       this.saveComponentLibrary({
         library: usedComponent(this.data.componentLibrary, detail.component.id),
         message: "Component inserted; recent usage saved.",
@@ -1874,6 +1887,9 @@ export class AppShell extends HTMLElement {
         this.querySelector("widget-hub").dirty = false;
       this.closeDialog();
       this.focusDocument();
+      // Inserting at the cursor inside an Owned block detaches only that block.
+      const notice = detachmentNotice(patched);
+      if (notice) this.notify(notice);
     } catch (e) {
       this.querySelector("component-library")?.status(e.message);
       this.querySelector("widget-hub")?.status(e.message);
@@ -2063,10 +2079,11 @@ export class AppShell extends HTMLElement {
       this.notify("The draft changed. Reopen Badge Studio before inserting.");
       return;
     }
+    let patched = null;
     if (target === "cursor") {
       const source = this.store.draft.markdown;
       const at = Math.min(this.badgeCursor, source.length);
-      this.store.raw(
+      patched = this.store.raw(
         source.slice(0, at) + "\n\n" + markdown + "\n\n" + source.slice(at),
       );
     } else {
@@ -2086,7 +2103,12 @@ export class AppShell extends HTMLElement {
     }
     this.closeDialog();
     this.focusDocument();
-    this.notify("Badge added. Use Undo to restore the previous draft.");
+    this.notify(
+      withDetachments(
+        "Badge added. Use Undo to restore the previous draft.",
+        patched,
+      ),
+    );
   }
   showTab(tab) {
     this.tab = tab;
@@ -2465,7 +2487,11 @@ export class AppShell extends HTMLElement {
             );
           if (action === "backup") {
             this.download(
-              JSON.stringify(portableData(this.store.draft), null, 2),
+              JSON.stringify(
+                portableData(withoutDetachedCopies(this.store.draft)),
+                null,
+                2,
+              ),
               "readme-studio-draft.json",
               "application/json",
             );
@@ -2610,12 +2636,15 @@ export class AppShell extends HTMLElement {
               );
               return;
             }
-            this.store.raw(event.detail.markdown);
+            const result = this.store.raw(event.detail.markdown);
             this.closeDialog();
             this.mobile("markdown", false);
             this.focusDocument();
             this.notify(
-              "Reviewed writing applied. Undo restores the previous source and builder ownership.",
+              withDetachments(
+                "Reviewed writing applied. Undo restores the previous source and builder ownership.",
+                result,
+              ),
             );
           });
         })

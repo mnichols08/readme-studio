@@ -143,3 +143,47 @@ test("changing badge output mode refreshes eligibility without losing selections
   await expect(dialog.getByLabel("After refactor")).toHaveValue(/^<p><img/);
   await expect(editor(page)).toHaveValue(source);
 });
+test("refactors in two places keep the builder section between them (#77)", async ({
+  page,
+}) => {
+  await start(page, "");
+  await page.locator("app-shell").evaluate((app) =>
+    app.store.blocks([
+      {
+        id: "intro",
+        type: "custom",
+        settings: { markdown: "# Title\n\n### Heading" },
+      },
+      { id: "rule", type: "divider", settings: {} },
+      { id: "image", type: "custom", settings: { markdown: "![](local.svg)" } },
+    ]),
+  );
+  const source = "# Title\n\n### Heading\n\n---\n\n![](local.svg)";
+  await expect(editor(page)).toHaveValue(source);
+  const dialog = await open(page);
+  await expect(dialog).toContainText(
+    "Untouched sections keep their ownership.",
+  );
+  await dialog.getByLabel(/Normalize heading hierarchy/).check();
+  await dialog.getByLabel(/Add alt-text placeholders/).check();
+  await dialog
+    .getByRole("button", { name: "Review selected refactors", exact: true })
+    .click();
+  await dialog
+    .getByRole("button", { name: "Apply reviewed refactors", exact: true })
+    .click();
+  await expect(editor(page)).toHaveValue(
+    "# Title\n\n## Heading\n\n---\n\n![TODO: describe image](local.svg)",
+  );
+  await expect(page.locator(".toast")).toHaveText(
+    "Reviewed refactors applied. Undo restores source and builder ownership.",
+  );
+  const blocks = await page
+    .locator("app-shell")
+    .evaluate((app) => app.store.draft.blocks.map((b) => [b.id, b.type]));
+  expect(blocks).toEqual([
+    ["intro", "custom"],
+    ["rule", "divider"],
+    ["image", "custom"],
+  ]);
+});

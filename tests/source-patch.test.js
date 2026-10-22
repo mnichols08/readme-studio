@@ -21,6 +21,8 @@ import { newDraft, validateDraft } from "../src/state/drafts.js";
 import { Store } from "../src/state/store.js";
 import { generatedRegistry } from "../src/generated/registry.js";
 import { createProject, inspectProject } from "../src/studio-projects/model.js";
+import { createBackup } from "../src/state/workspace-backup.js";
+import { withoutDetachedCopies } from "../src/state/drafts.js";
 
 const fixture = (name) =>
   readFileSync(`tests/fixtures/round-trip/${name}`, "utf8");
@@ -454,6 +456,137 @@ describe("Owned blocks and Detachment records", () => {
   });
 });
 
+describe("Edits that reach a Seam or change several places", () => {
+  it("deleting a section's last line keeps the next builder block", () => {
+    const draft = newDraft("Doc", [
+      createBlock("custom", { markdown: "## Notes\n\nFirst line\nlast line" }),
+      createBlock("stack", { items: [{ name: "JavaScript" }], style: "text" }),
+    ]);
+    const start = draft.markdown.indexOf("last line");
+    const { result } = golden(
+      draft,
+      { start, end: start + "last line\n".length, text: "" },
+      [draft.blocks[0].id],
+    );
+    expect(result.blocks.map((b) => b.id)).toEqual(
+      draft.blocks.map((b) => b.id),
+    );
+    expect(result.blocks[0].settings.markdown).toBe("## Notes\n\nFirst line");
+    expect(result.detachments).toEqual([]);
+    expect(detachmentNotice(result)).toBe("");
+  });
+  it("an edit that ends in the next block's Seam detaches only the edited block", () => {
+    const draft = newDraft("Doc", [
+      createBlock("hero", { name: "Ada", subtitle: "S" }),
+      createBlock("divider", {}),
+    ]);
+    const next = draft.markdown.replace("\nS\n", "x");
+    expect(next).toBe("# Ada\nx\n---");
+    const store = new Store(structuredClone(draft));
+    const result = store.raw(next);
+    expect(result.fallback).toBe(false);
+    expect(serializeBlocks(store.draft.blocks)).toBe(next);
+    expect(store.draft.blocks[1]).toEqual({
+      ...draft.blocks[1],
+      separator: "\n",
+    });
+    expect(result.detachments.map((r) => r.kinds)).toEqual([["builder"]]);
+  });
+  it("changes on either side of Owned blocks leave those blocks alone", () => {
+    const draft = newDraft("Doc", [
+      createBlock("custom", { markdown: "## Install\n\nnpm install old-pkg" }),
+      createBlock("hero", { name: "Ada", subtitle: "Builds things." }),
+      createBlock("stack", { items: [{ name: "JavaScript" }], style: "text" }),
+      createBlock("custom", { markdown: "## Usage\n\nRun `old-cmd`" }),
+    ]);
+    const store = new Store(structuredClone(draft));
+    const next = draft.markdown
+      .replace("old-pkg", "new-pkg")
+      .replace("old-cmd", "new-cmd");
+    const result = store.raw(next);
+    expect(result.fallback).toBe(false);
+    expect(store.draft.markdown).toBe(next);
+    expect(store.draft.blocks.map((b) => b.id)).toEqual(
+      draft.blocks.map((b) => b.id),
+    );
+    expect(store.draft.blocks.slice(1, 3)).toEqual(draft.blocks.slice(1, 3));
+    expect(result.detachments).toEqual([]);
+    store.undo();
+    expect(store.draft.blocks).toEqual(draft.blocks);
+  });
+  it("records one Detachment per changed Owned block", () => {
+    const draft = typed();
+    const hero = at(draft, 0),
+      last = at(draft, 4);
+    const store = new Store(structuredClone(draft));
+    let next = apply(draft.markdown, {
+      start: last.contentStart,
+      end: last.contentStart + 7,
+      text: "Final",
+    });
+    next = apply(next, {
+      start: hero.contentStart + 2,
+      end: hero.contentStart + 5,
+      text: "Grace",
+    });
+    const result = store.raw(next);
+    expect(result.fallback).toBe(false);
+    expect(serializeBlocks(store.draft.blocks)).toBe(next);
+    for (const k of [1, 2, 3])
+      expect(store.draft.blocks[k]).toEqual(draft.blocks[k]);
+    expect(store.draft.blocks[4].id).toBe(draft.blocks[4].id);
+    expect(result.detachments.map((r) => r.previousBlockIds)).toEqual([
+      [draft.blocks[0].id],
+    ]);
+    expect(detachmentNotice(result)).toBe(
+      "Raw edit detached: Ada (builder). Undo restores visual ownership.",
+    );
+  });
+  it("seeded edits in two places keep every Owned block between them", () => {
+    for (let seed = 1; seed <= 150; seed++) {
+      let state = seed;
+      const rand = (n) => {
+        state = (state * 48271) % 2147483647;
+        return state % n;
+      };
+      const blocks = [
+        createBlock("custom", { markdown: "## One\n\nalpha beta" }),
+        ...Array.from({ length: 1 + rand(3) }, (_, i) =>
+          rand(2)
+            ? createBlock("divider", {})
+            : createBlock("hero", { name: "Ada" + i, subtitle: "S" }),
+        ),
+        createBlock("custom", { markdown: "## Two\n\ngamma delta" }),
+      ];
+      const draft = newDraft("Doc", blocks);
+      const segs = documentSegments(draft);
+      const pieces = ["x", "", "\nnew line\n", "zz", "😀"];
+      const edit = (seg) => {
+        const start =
+          seg.contentStart + 3 + rand(seg.end - seg.contentStart - 3);
+        return {
+          start,
+          end: Math.min(seg.end, start + rand(3)),
+          text: pieces[rand(pieces.length)],
+        };
+      };
+      const second = edit(segs.at(-1)),
+        first = edit(segs[0]);
+      const next = apply(apply(draft.markdown, second), first);
+      if (next === draft.markdown) continue;
+      const result = patchBlocks(draft, next);
+      expect(result.fallback, `seed ${seed}`).toBe(false);
+      expect(serializeBlocks(result.blocks), `seed ${seed}`).toBe(next);
+      for (const block of blocks.slice(1, -1))
+        expect(
+          result.blocks.find((b) => b.id === block.id),
+          `seed ${seed}`,
+        ).toEqual(block);
+      expect(result.detachments, `seed ${seed}`).toEqual([]);
+    }
+  });
+});
+
 describe("Seams belong to positions", () => {
   it("moving the last split section up never glues it to the next heading", () => {
     const source = fixture("no-final-newline.md");
@@ -531,7 +664,31 @@ describe("Detachment records travel with the document", () => {
     expect(project.document.markdown).toBe(d.markdown);
     expect(project.document.markdown).not.toContain("previousBlockIds");
     const opened = inspectProject(JSON.stringify(project)).draft;
-    expect(opened.metadata.detachments).toEqual(d.metadata.detachments);
+    expect(opened.metadata.detachments).toEqual(
+      d.metadata.detachments.map((r) => ({ ...r, previous: null })),
+    );
+  });
+  it("never carries text removed by a raw edit into a download", () => {
+    const secret = "Call 555-0100 or private@example.com";
+    const draft = newDraft("Doc", [
+      createBlock("hero", { name: "Ada", subtitle: secret }),
+      createBlock("custom", { markdown: "## Notes" }),
+    ]);
+    const store = new Store(draft);
+    store.raw(draft.markdown.replace(secret, "Hi"));
+    const [record] = store.draft.metadata.detachments;
+    // The Restorable copy stays in this browser (Undo and autosave).
+    expect(isRestorable(record)).toBe(true);
+    expect(JSON.stringify(store.draft)).toContain(secret);
+    expect(JSON.stringify(createProject(store.draft))).not.toContain(secret);
+    expect(
+      JSON.stringify(createBackup({ drafts: [store.draft], active: "x" })),
+    ).not.toContain(secret);
+    const copy = withoutDetachedCopies(store.draft);
+    expect(JSON.stringify(copy)).not.toContain(secret);
+    expect(copy.metadata.detachments[0]).toEqual({ ...record, previous: null });
+    // Preparing a download never changes the live draft.
+    expect(store.draft.metadata.detachments[0]).toBe(record);
   });
 });
 

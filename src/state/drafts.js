@@ -80,6 +80,25 @@ export function validateDraft(d, { preserveBlockIds = false } = {}) {
     });
   return copy;
 }
+// Downloads (Studio projects, draft and workspace backups) leave out each
+// Detachment record's copy of the detached Block, so text the author removed
+// with a raw edit never travels in a file. Undo and autosave in this browser
+// keep it.
+export function withoutDetachedCopies(draft) {
+  const records = draft?.metadata?.detachments;
+  if (!Array.isArray(records)) return draft;
+  return {
+    ...draft,
+    metadata: {
+      ...draft.metadata,
+      detachments: records.map((r) =>
+        r && typeof r === "object" && !Array.isArray(r) && "previous" in r
+          ? { ...r, previous: null }
+          : r,
+      ),
+    },
+  };
+}
 export function readDrafts(storage = localStorage) {
   const raw = storage.getItem(STORAGE_KEY);
   if (raw === null) return null;
