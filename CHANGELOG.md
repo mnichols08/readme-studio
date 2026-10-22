@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.1
+
+- Add the Next steps panel. After an import (new draft, replace, append, merge or Re-import), a README opened from the audit, a profile or repository template, a Studio project opened as a new draft or a blank start from Guided start, it shows up to three existing tools that usually come next, each with a one-line reason, and one sentence saying what happened (for example "Imported into a new local draft. Nothing changed on GitHub."). **All tools** opens workspace search; **Hide** removes the panel.
+- Choose the steps with a pure, deterministic rule from how the document arrived, your goal and cheap facts (section shape, repository target, import source, online state). For example, an imported single Markdown block offers Split into sections, README Health and a Drift check when the document has a target; an audit offers README Health, a Drift check with a target and the README Attention Queue. Offline, GitHub steps are hidden and the panel says so; with blocked storage the last step is Export README.
+- A step only opens its tool through the same action as the visible control, so review, stale-draft checks and Undo stay with the tool. No step edits Markdown, applies a change, fetches or publishes, and choosing steps runs no Health or drift analysis.
+- The panel sits above the panes (also on mobile), never takes focus or announces itself, returns focus to a step when the step's dialog closes, and is unreachable while a dialog is open. Hide moves focus to the editor, or to Current draft when the editor is hidden. It is forgotten on Hide, a document switch, a workspace restore, a new Arrival or a reload; it is never stored (ADR 0005).
+- Add **Save → Settings → Guidance → Show next steps after imports, audits and templates**, saved as `guide.nextSteps` in the workspace (ADR 0004), included in all-drafts backups and never in Studio projects or exports. Workspace version and project schema stay at 1. No new request, dependency or telemetry.
+
 ## 1.7.0
 
 - Add Guided start, the first screen of a new workspace. It asks what you want to do first: **Write my profile README**, **Write a repository README** or **Audit my repository READMEs**, each with a one-line description; the audit says it needs a GitHub connection. Reopen it from **Create → Guided start** or workspace search. A saved workspace never opens it by itself.

@@ -119,7 +119,9 @@ test("audit opening reuses local work and Health analyzes only the selected docu
       () => document.querySelector("app-shell").data.drafts.length,
     ),
   ).toBe(2);
+  // The Next steps panel offers README Health too; use the workspace tool.
   await page
+    .getByRole("navigation", { name: "Workspace tools" })
     .getByRole("button", { name: "README Health", exact: true })
     .click();
   await expect

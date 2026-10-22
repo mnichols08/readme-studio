@@ -277,6 +277,7 @@ export class AppShell extends HTMLElement {
       });
       if (existing) {
         this.load(existing.id);
+        this.arrive("audit", { origin: "github", existing: true });
         this.closeDialog();
         this.mobile("markdown", false);
         this.focusDocument();
@@ -286,7 +287,7 @@ export class AppShell extends HTMLElement {
         return;
       }
       if (e.detail.builder) {
-        this.repositoryReadme(e.detail);
+        this.repositoryReadme(e.detail, "audit");
         return;
       }
       if (this.data.drafts.length >= 500) {
@@ -308,10 +309,13 @@ export class AppShell extends HTMLElement {
       };
       const block = createBlock("custom", { markdown: readme.source ?? "" });
       block.sourceContext = source;
-      this.addDraft(`${repo.name} README`, [block], {
-        repository: repo.full_name,
-        importSource: source,
-      });
+      if (
+        this.addDraft(`${repo.name} README`, [block], {
+          repository: repo.full_name,
+          importSource: source,
+        })
+      )
+        this.arrive("audit", { origin: "github" });
       this.closeDialog();
       this.mobile("markdown", false);
       this.focusDocument();
@@ -320,12 +324,14 @@ export class AppShell extends HTMLElement {
       );
     });
     this.addEventListener("import-apply", (e) => {
-      const { plan, mode, name, snapshot } = e.detail;
+      const { plan, mode, name, snapshot, origin } = e.detail;
       if (snapshot !== draftSnapshot(this.store.draft)) {
         this.notify("The draft changed. Preview the import again.");
         return;
       }
-      if (mode === "new") this.addDraft(name, plan.blocks, plan.metadata);
+      let arrived = true;
+      if (mode === "new")
+        arrived = !!this.addDraft(name, plan.blocks, plan.metadata);
       else this.store.blocks(plan.blocks, plan.metadata);
       this.closeDialog();
       this.focusDocument();
@@ -334,6 +340,8 @@ export class AppShell extends HTMLElement {
           ? "Merge applied. Use Undo to restore the previous draft."
           : "Import complete.",
       );
+      if (arrived)
+        this.arrive("import", { mode, origin, existing: mode !== "new" });
     });
     this.onclick = (e) => {
       const b = e.target.closest("button");
@@ -877,6 +885,8 @@ export class AppShell extends HTMLElement {
     const draft = this.data.drafts.find((d) => d.id === id);
     if (!draft) return;
     if (this.store?.draft.id === id && this.store.draft === draft) return;
+    // An Arrival belongs to one document; switching forgets it (ADR 0005).
+    if (this.arrival && this.arrival.draftId !== id) this.clearArrival();
     this.documentHistories ||= new DocumentHistories();
     if (this.store) {
       this.save();
@@ -2336,8 +2346,11 @@ export class AppShell extends HTMLElement {
     d.metadata = metadata;
     this.data.drafts.push(d);
     this.load(d.id);
+    return d;
   }
-  async repositoryReadme(context = {}) {
+  // `arrival` names the Next steps Arrival a created README counts as: a
+  // template, or an audit when the builder was opened from the README audit.
+  async repositoryReadme(context = {}, arrival = "template") {
     await import("./repository-readme-builder.js");
     this.modal("<repository-readme-builder></repository-readme-builder>");
     const builder = this.querySelector("repository-readme-builder");
@@ -2360,10 +2373,14 @@ export class AppShell extends HTMLElement {
         return;
       }
       const { name, blocks, metadata } = event.detail;
-      this.addDraft(name, blocks, metadata);
+      const created = this.addDraft(name, blocks, metadata);
       this.closeDialog();
       this.mobile(original ? "markdown" : "build", false);
       if (original) this.focusDocument();
+      if (created && arrival === "audit")
+        this.arrive("audit", { origin: "github" });
+      else if (created && original) this.arrive("import", { origin: "github" });
+      else if (created) this.arrive("template", { template: "repository" });
       this.notify(
         original
           ? "Existing README opened unchanged in a new local draft."
@@ -2387,8 +2404,12 @@ export class AppShell extends HTMLElement {
     this.querySelectorAll("[data-template]").forEach(
       (b) =>
         (b.onclick = () => {
-          this.addDraft(b.dataset.template, template(b.dataset.template));
+          const created = this.addDraft(
+            b.dataset.template,
+            template(b.dataset.template),
+          );
           this.closeDialog();
+          if (created) this.arrive("template", { template: "profile" });
         }),
     );
   }
@@ -2544,6 +2565,7 @@ export class AppShell extends HTMLElement {
             this.data = plan;
             this.storageBlocked = false;
             this.recoveryRaw = undefined;
+            this.clearArrival();
             this.store = null;
             this.documentHistories = new DocumentHistories();
             this.load(plan.active);

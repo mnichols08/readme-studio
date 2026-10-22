@@ -16,6 +16,13 @@ import {
   chooseGoal,
   goalOptions,
   blankDocument,
+  createArrival,
+  documentFacts,
+  nextSteps,
+  offlineHidden,
+  arrivalContext,
+  nextStepsEnabled,
+  setNextSteps,
 } from "./guide.js";
 
 const privacyDocs =
@@ -85,7 +92,8 @@ function installGuidedStart(app) {
             else if (start === "import") app.importDialog();
             else {
               app.closeDialog();
-              if (start === "blank") app.addDraft("Untitled", []);
+              if (start === "blank" && app.addDraft("Untitled", []))
+                app.arrive("blank");
               // On first run the sample is already open; later it is a copy.
               if (start === "sample" && !firstRun)
                 app.addDraft("My developer profile", template(), {
@@ -125,11 +133,14 @@ function installGuidedStart(app) {
             if (id.startsWith("blank-")) {
               const kind = id.slice(6);
               app.closeDialog();
-              app.addDraft(
-                kind === "profile" ? "Profile README" : "Repository README",
-                [],
-                { workspaceDocument: blankDocument(kind) },
-              );
+              if (
+                app.addDraft(
+                  kind === "profile" ? "Profile README" : "Repository README",
+                  [],
+                  { workspaceDocument: blankDocument(kind) },
+                )
+              )
+                app.arrive("blank");
               return;
             }
             app.action(id);
@@ -153,8 +164,110 @@ function installGuidedStart(app) {
   };
 }
 
+// The Next steps panel (ADR 0005). It sits directly after the batch bar so it
+// stays above every pane, also on mobile. It is not a live region and never
+// takes focus by itself; while a dialog is open, native modality makes it
+// inert. Steps use the shared data-action dispatch, so each opens its tool's
+// normal flow and the dialog close returns focus to the step button.
+function installNextSteps(app) {
+  const panel = document.createElement("section");
+  panel.className = "next-steps";
+  panel.hidden = true;
+  panel.setAttribute("aria-labelledby", "next-steps-title");
+  panel.innerHTML =
+    '<h2 id="next-steps-title">Next steps</h2><p data-next-context></p><ul class="next-step-list"></ul><p class="hint" data-next-offline hidden>GitHub steps are hidden while offline.</p><div class="next-steps-tools"><button data-action="command-palette">All tools</button><button data-next-hide>Hide</button></div>';
+  app.querySelector(".batch-bar").after(panel);
+  const list = panel.querySelector(".next-step-list");
+  app.arrival = null;
+  app.renderNextSteps = () => {
+    const arrival = app.arrival,
+      show =
+        !!arrival &&
+        arrival.draftId === app.store?.draft.id &&
+        nextStepsEnabled(app.data.guide);
+    panel.hidden = !show;
+    if (!show) {
+      list.replaceChildren();
+      return;
+    }
+    const facts = {
+      goal: guideGoal(app.data.guide),
+      online: navigator.onLine !== false,
+      storageBlocked: !!app.storageBlocked,
+      ...documentFacts(app.store.draft),
+    };
+    panel.querySelector("[data-next-context]").textContent =
+      arrivalContext(arrival);
+    panel.querySelector("[data-next-offline]").hidden = !offlineHidden(
+      arrival,
+      facts,
+    );
+    // Keyed by command: a step that stays keeps its button element, so focus
+    // and the dialog's return target survive a re-render.
+    const kept = new Map(
+      [...list.children].map((item) => [item.dataset.step, item]),
+    );
+    const items = nextSteps(arrival, facts).map((step) => {
+      let item = kept.get(step.command);
+      if (!item) {
+        item = document.createElement("li");
+        item.dataset.step = step.command;
+        item.innerHTML = `<button data-action="${step.command}" aria-describedby="next-step-${step.command}"></button><span id="next-step-${step.command}"></span>`;
+      }
+      item.querySelector("button").textContent = step.label;
+      item.querySelector("span").textContent = step.reason;
+      return item;
+    });
+    if (
+      items.length !== list.children.length ||
+      items.some((item, i) => list.children[i] !== item)
+    ) {
+      const before = [...list.querySelectorAll("button")],
+        focused = document.activeElement;
+      list.replaceChildren(...items);
+      // A step that went away hands focus, and the closing dialog's return
+      // targets, to the step now in its place.
+      const after = [...list.querySelectorAll("button")],
+        replace = (element) => {
+          const at = before.indexOf(element);
+          if (at < 0 || element.isConnected) return element;
+          return after[Math.min(at, after.length - 1)] || element;
+        };
+      if (before.includes(focused)) replace(focused).focus();
+      app.dialogTrigger = replace(app.dialogTrigger);
+      app.afterDialogFocus = replace(app.afterDialogFocus);
+    }
+  };
+  // Records an Arrival for a document (the active one by default) and shows
+  // its Next steps. A new Arrival replaces the previous one.
+  app.arrive = (kind, detail = {}, draftId = app.store?.draft.id) => {
+    app.arrival = createArrival(draftId, kind, detail);
+    app.renderNextSteps();
+  };
+  app.clearArrival = () => {
+    app.arrival = null;
+    app.renderNextSteps();
+  };
+  panel.querySelector("[data-next-hide]").onclick = () => {
+    app.clearArrival();
+    const input = app.editor?.input;
+    (input?.getClientRects().length
+      ? input
+      : app.querySelector("#draft-select")
+    ).focus();
+  };
+  // A tool may change the facts (a target set, sections split); connectivity
+  // changes which GitHub steps can be offered.
+  app.dialog.addEventListener("close", () => {
+    if (!app.dialog.open) app.renderNextSteps();
+  });
+  addEventListener("online", () => app.renderNextSteps());
+  addEventListener("offline", () => app.renderNextSteps());
+}
+
 export function installWorkspace(app) {
   installGuidedStart(app);
+  installNextSteps(app);
   const actions = app.querySelector(".header-actions");
   actions.innerHTML =
     '<button data-action="command-palette">Search workspace <kbd>Ctrl K</kbd></button>';
@@ -289,6 +402,19 @@ export function installWorkspace(app) {
       app.mobile(action === "show-preview" ? "preview" : "health");
       return true;
     }
+    // Next steps can open the Sections and Library builder tabs.
+    if (action === "sections" || action === "library") {
+      if (app.querySelector(".workspace").classList.contains("collapsed"))
+        app.action("expand");
+      app.mobile("build", false);
+      app.showTab(action);
+      const heading = app.content.querySelector("h2");
+      if (heading) {
+        heading.tabIndex = -1;
+        heading.focus();
+      }
+      return true;
+    }
     if (action === "activity") {
       const events = validateActivity(app.data.activity).reverse();
       app.modal(
@@ -303,7 +429,7 @@ export function installWorkspace(app) {
     }
     if (action === "settings") {
       app.modal(
-        `<h1>Workspace settings</h1><fieldset><legend>Editor</legend><label>Editor font size<select data-setting="editorFont"><option value="13">Small</option><option value="15">Medium</option><option value="18">Large</option></select></label></fieldset><fieldset><legend>Preview</legend><label>Default preview width<select data-setting="preview"><option value="1012">Desktop</option><option value="760">Narrow</option><option value="640">Tablet</option><option value="375">Mobile</option></select></label></fieldset><fieldset><legend>Accessibility</legend><label class="check"><input type="checkbox" data-setting="reduceMotion">Reduce motion</label><p>System reduced-motion preferences are also respected. Escape closes dialogs; Shift+Tab leaves the editor.</p></fieldset><fieldset><legend>GitHub</legend><p>Connection is optional. Publishing always requires a separate review.</p><button data-action="publish-github">Open publishing</button></fieldset><fieldset><legend>Storage</legend><button data-action="backup-all">Download all drafts backup</button><button data-action="restore">Restore backup</button></fieldset><details><summary>Advanced</summary><p>Analysis runs locally. Download a backup before clearing browser data.</p><a href="https://github.com/mnichols08/readme-studio/blob/main/docs/contributing.md" target="_blank" rel="noopener noreferrer">Contributor documentation</a></details>`,
+        `<h1>Workspace settings</h1><fieldset><legend>Editor</legend><label>Editor font size<select data-setting="editorFont"><option value="13">Small</option><option value="15">Medium</option><option value="18">Large</option></select></label></fieldset><fieldset><legend>Preview</legend><label>Default preview width<select data-setting="preview"><option value="1012">Desktop</option><option value="760">Narrow</option><option value="640">Tablet</option><option value="375">Mobile</option></select></label></fieldset><fieldset><legend>Accessibility</legend><label class="check"><input type="checkbox" data-setting="reduceMotion">Reduce motion</label><p>System reduced-motion preferences are also respected. Escape closes dialogs; Shift+Tab leaves the editor.</p></fieldset><fieldset><legend>Guidance</legend><label class="check"><input type="checkbox" data-guide-setting="nextSteps">Show next steps after imports, audits and templates</label><p>Next steps only open existing tools. Search workspace always lists every tool.</p></fieldset><fieldset><legend>GitHub</legend><p>Connection is optional. Publishing always requires a separate review.</p><button data-action="publish-github">Open publishing</button></fieldset><fieldset><legend>Storage</legend><button data-action="backup-all">Download all drafts backup</button><button data-action="restore">Restore backup</button></fieldset><details><summary>Advanced</summary><p>Analysis runs locally. Download a backup before clearing browser data.</p><a href="https://github.com/mnichols08/readme-studio/blob/main/docs/contributing.md" target="_blank" rel="noopener noreferrer">Contributor documentation</a></details>`,
       );
       app.querySelectorAll("[data-setting]").forEach((e) => {
         const key = e.dataset.setting;
@@ -315,6 +441,15 @@ export function installWorkspace(app) {
           app.save();
         };
       });
+      // A workspace preference (ADR 0004), not a setting: projects never
+      // carry it.
+      const guidance = app.querySelector("[data-guide-setting]");
+      guidance.checked = nextStepsEnabled(app.data.guide);
+      guidance.onchange = () => {
+        app.data.guide = setNextSteps(app.data.guide, guidance.checked);
+        app.save();
+        app.renderNextSteps();
+      };
       return true;
     }
     const event = activityEntry(action);

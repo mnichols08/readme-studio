@@ -223,6 +223,8 @@ export class ImportDialog extends HTMLElement {
         detail: {
           plan,
           mode: this.mode,
+          // Where the import came from, for the Next steps context only.
+          origin: this.source === "github" ? "github" : "file",
           name: this.payload.name,
           snapshot: this.snapshot,
         },
