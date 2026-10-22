@@ -15,7 +15,51 @@ Results are titled **Detected in selected repositories**. They describe declarat
 
 A manifest's presence is evidence of configuration for that ecosystem, not proof its dependencies are used. Unused workspace declarations are excluded; referenced same-file workspace values are resolved without fetching member manifests. Unresolved references are omitted with a notice. Build dependencies are labeled accordingly. The same dependency can appear in multiple roles.
 
-Only allowlisted regular root files are read. Nested projects, workspace members, local paths, include files, lockfiles and transitive resolution are not followed. Symlinks/submodules and oversized files produce notices. This initial version may miss technologies in monorepos or executable configuration.
+By default only allowlisted regular root files are read. Nested projects and Workspace members are read only with [Nested discovery](#nested-discovery-monorepos). Local `path =` dependencies, include files, lockfiles and transitive resolution are never followed. Symlinks/submodules and oversized files produce notices. Analysis may still miss technologies in executable configuration.
+
+## Nested discovery (monorepos)
+
+Check **Include nested manifests (monorepo)** after **Allow read-only manifest analysis for this session**. It is a second, session-only consent: it starts unchecked, can only be checked while manifest consent is checked, and resets with that consent when you withdraw it or close the audit. Without it, analysis is exactly the root-only behaviour described above, with the same requests.
+
+With Nested discovery on, each repository is read like this:
+
+1. One commits request for the default branch head and one recursive tree listing (the same read used by Evidence snapshots). The tree replaces the root contents listing.
+2. Root Manifests found in the tree, each read through the contents API with the usual checks (regular file, at most 256 KB, no symlink target or submodule, exact size and UTF-8).
+3. `pnpm-workspace.yaml` and `go.work`, only if they are in the tree. They are Workspace declaration files, never Manifests.
+4. Up to 15 nested Manifests, read the same way.
+
+Every Manifest below the root belongs to a **Project boundary**: its directory. A boundary named by a Workspace declaration is a **Workspace member**; any other is a **Nested project**, shown separately because it may be an example or a tool rather than part of the product. Workspace declarations are read as data from root files only:
+
+| File                  | Declaration                                            |
+| --------------------- | ------------------------------------------------------ |
+| `package.json`        | `workspaces` as an array or as `{ "packages": [...] }` |
+| `pnpm-workspace.yaml` | `packages:` as a list of plain or quoted strings       |
+| `Cargo.toml`          | `[workspace] members` and `exclude`                    |
+| `go.work`             | `use ./dir` and `use ( ... )` blocks                   |
+| `pyproject.toml`      | `[tool.uv.workspace] members` and `exclude`            |
+
+Patterns support literal segments, `*` for one directory segment (or any characters inside one segment, as in `apps/app-*`), `**` for any depth and a leading `!` for negation. Repeated `**` segments count as one, and matching takes bounded time for any pattern. Anything else (`?`, `[]`, `{}`, `..`, absolute paths or backslashes) is reported as "Workspace pattern not interpreted" and maps nothing; matching Manifests are still discovered and shown as Nested projects. Other YAML in the `packages:` list is reported, not guessed. A declaration never adds a path that is not in the tree: a declared member that is missing, a symlink or a submodule is reported and never fetched.
+
+### Discovery limits
+
+- Manifest names are the five registry names only.
+- At most four directory levels below the root.
+- Directories named `node_modules`, `vendor`, `dist`, `build`, `out`, `target`, `testdata`, `fixtures`, `__fixtures__` or `third_party`, and any directory starting with `.`, are skipped.
+- At most 15 nested Manifests are read per repository: Workspace members first, then Nested projects, each ordered by depth and then path.
+- At most 25 repositories per nested run. With more selected, the scan does not start and the status explains why; nothing is truncated silently.
+- Paths with empty, `.` or `..` segments (also percent-encoded), backslashes, control characters, a leading `/` or more than 300 characters are rejected. Symlinks (mode `120000`) and submodules are skipped with a notice. A nested Manifest whose tree entry is over 256 KB, or has no valid size, is listed as not read without a request. Each path segment is encoded when requested.
+
+A Manifest beyond a limit is listed as found but not read, never as absent. Hitting the read cap or the depth limit makes the result partial. If GitHub truncates the tree, the result is partial, root Manifests and Workspace declaration files are found through the root contents listing instead (the truncated tree may not list them), and nested Manifests not listed are unknown. If the tree cannot be read, Studio falls back to the root contents listing, reads root Manifests only and marks the result partial. A branch head that cannot be read fails the repository as before; rate-limit and forbidden responses stop the scan.
+
+**Request budget:** at most 24 requests per repository (head, tree, five root Manifests, two Workspace declaration files and 15 nested Manifests). The budget is counted: when a truncated tree also needs the root listing, at most 14 nested Manifests are read and the result says so. Every file is read at the head commit the tree came from, so the record describes one commit. Root-only analysis keeps its budget of one listing plus five Manifests.
+
+### Results
+
+Each repository's details list **Project boundaries** after the observed line: the repository root, then "Workspace members (declared by …)", then "Nested projects (not declared by a workspace)". Each boundary shows its Manifests, whether each was read, and its dependency count. A summary reads "N manifests found, M read, K not read", followed by the paths not read and why. Dependencies are grouped by boundary; the same package in two boundaries stays two records. Evidence and Stack DNA name the full Manifest path, for example `packages/web/package.json`.
+
+Stack-to-README suggestions still come from root Manifests only; per-project commands are not offered yet.
+
+Out of scope: Bazel, Nx, Turbo and Lerna configuration, lockfile-based membership, following local `path =` dependencies, mapping across repositories and running any workspace tool.
 
 The conservative TOML declaration reader supports common quoted keys, arrays, inline tables and dependency tables. It is not a general TOML validator. Unsupported dependency values are reported rather than evaluated; unrelated tool configuration is ignored. Multiline dependency strings, Python dynamic dependencies/group includes, requirements options/continuations and Go replacement/exclusion resolution have explicit limitations. Missing detections do not prove a technology is absent.
 
@@ -37,7 +81,7 @@ Requests go directly to the [GitHub repository contents API](https://docs.github
 
 ## Limits and recovery
 
-Scans use at most three concurrent repository workers, with sequential reads inside each worker. Each repository needs one root listing plus at most five manifests. Files are limited to 256 KB; each repository retains at most 200 declarations. Up to 1,000 selected repositories are accepted, with result navigation in groups of 25 and lazy detail rendering.
+Scans use at most three concurrent repository workers, with sequential reads inside each worker. Each repository needs one root listing plus at most five manifests, or at most 24 requests with Nested discovery. Files are limited to 256 KB; each repository retains at most 200 declarations. Up to 1,000 selected repositories are accepted, with result navigation in groups of 25 and lazy detail rendering.
 
 GitHub's unauthenticated rate limit can stop larger scans. Partial results retain successfully read manifests and explain failures; unreadable files are not treated as absent. Cancel stops pending requests. Use **Fetch fresh manifests** to bypass the five-minute cache after resolving a failure. Rate-limit cooldowns still apply.
 
@@ -45,7 +89,7 @@ The normalized cache is bounded to 128 repositories / approximately 2 MB. Result
 
 ## Development
 
-Pure adapters live in src/stack-intelligence/manifests.js, the bounded declaration reader in toml.js, and GitHub orchestration/cache in client.js. Tests use static manifest strings and mocked HTTP responses; none execute scanned repository code.
+Pure adapters live in src/stack-intelligence/manifests.js, the bounded declaration reader in toml.js, pure Nested discovery (workspace patterns, path safety and limits) in discovery.js, and GitHub orchestration/cache in client.js. Tests use static manifest strings and mocked HTTP responses; none execute scanned repository code.
 
 ## Stack DNA (1.3.2)
 

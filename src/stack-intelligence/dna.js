@@ -69,8 +69,8 @@ export function stackDNA(records) {
       }
     for (const dependency of [...(record.dependencies || [])].sort((a, b) =>
       compare(
-        JSON.stringify([a.ecosystem, a.name, a.kind]),
-        JSON.stringify([b.ecosystem, b.name, b.kind]),
+        JSON.stringify([a.ecosystem, a.name, a.kind, a.project || ""]),
+        JSON.stringify([b.ecosystem, b.name, b.kind, b.project || ""]),
       ),
     )) {
       const technology = technologyForDependency(dependency);
