@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.8.0.** Before publishing, a read-only Preflight checks the exact repository, branch and path: publishing service, GitHub session, App installation and Contents permission, your push access, archive state and branch. Publishing stays in Read-only mode until every blocking check passes; branch protection and default-branch commits are advisory warnings. [GitHub publishing](docs/github-publishing.md) · [Next steps](docs/next-steps.md) · [Guided start](docs/guided-start.md)
+**Version 1.9.0.** Stack Intelligence can include nested manifests in monorepos with a separate, session-only consent, mapping each Manifest to the repository root, a Workspace member or a Nested project. Discovery reads one tree at the head commit, stays within depth, read and request limits, and rejects unsafe paths, symlinks and submodules with notices. [Stack Intelligence](docs/stack-intelligence.md#nested-discovery-monorepos) · [Stack-to-README](docs/stack-to-readme.md) · [GitHub publishing](docs/github-publishing.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -23,6 +23,7 @@ Guided start asks whether you want to write a profile README, write a repository
 - Coordinate themes, generate local light/dark SVG banners, and configure attributed external widget embeds.
 - Import public GitHub data, review refreshes, analyze compatibility and apply explicit, undoable refactors.
 - Audit selected public repositories with advisory expectations for 14 project types, then choose the next README from the attention queue.
+- Analyze declared dependencies in repository manifests with explicit consent, including bounded monorepo discovery that maps Workspace members and Nested projects ([Stack Intelligence](docs/stack-intelligence.md)).
 - Record read-only evidence snapshots of a repository's branch head, README, manifests and linked files, then check what changed since a pinned Baseline.
 - Check for stale scripts, missing files, broken links and anchors, and outdated config keys without running repository code or changing your Markdown.
 - Save portable `.readme-studio.json` projects or export Markdown, packs and full workspace backups.
