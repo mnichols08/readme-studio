@@ -1,0 +1,50 @@
+# Reviewed drift fixes
+
+Version 1.6.2 lets you turn the findings of a [drift check](drift-checks.md) into reviewed edits. Fixing is opt-in and line by line: every proposed change shows its evidence and its exact diff, nothing is approved for you, and nothing is applied until you choose **Apply**. Applying changes only your local Markdown. It never writes to GitHub; publishing stays a separate step through **Publish to GitHub**, which has its own review.
+
+## Review fixes
+
+1. Run a drift check (**GitHub → Drift check**, then **Run drift check**).
+2. If the result has observed mismatches or uncertain findings, choose **Review fixes (N lines)**. Focus moves to the **Review drift fixes** heading.
+3. Each proposal covers one line of the Markdown that was checked and lists every finding on that line with its status, the claim, the evidence message, the evidence file and, with a Baseline, whether that file changed since. Below it are the current line (read-only), the **Proposed line** (editable), the exact change as minus and plus lines, and **Approve this change to line N**.
+4. Approve each change you want. **All approved changes** shows the Markdown that was checked next to the Markdown with only the approved changes, plus a unified diff, and the count of approved changes.
+5. Choose **Apply N approved changes**, or **Discard proposals** to close the review without changing anything. **Download current Markdown** saves a copy first if you want one outside the browser.
+
+After applying, the drift result and proposals are cleared because they describe the previous Markdown, and focus returns to **Run drift check** so you can check the updated text. **Undo** in the editor restores the Markdown as it was before the fixes, as one step.
+
+## What is proposed
+
+Only **observed mismatches** and **uncertain findings** become proposals. **Unknown** results (evidence that could not be read) and matches never do, so a failed, truncated or offline check offers no fixes for the claims it could not check.
+
+A proposal starts with a suggestion only when the evidence itself supplies one:
+
+| Finding                                                                                     | Suggestion                                                        |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| A linked, commanded or inline path that differs from the repository's in case               | The repository's spelling, e.g. `docs/guide.md` → `docs/Guide.md` |
+| An anchor that differs from a heading only in punctuation (uncertain)                       | The heading's anchor, e.g. `#set-up--the-cli` → `#set-up-the-cli` |
+| A missing `package.json` script when exactly one script differs only in punctuation or case | That script, e.g. `npm run test-unit` → `npm run test:unit`       |
+| A Node version in prose older than `engines.node` (uncertain)                               | The `engines.node` minimum, e.g. `Node 18+` → `Node 20+`          |
+
+Everything else (a missing file with no similar path, a missing script with no similar name, a lockfile or `.env` key finding) starts as the unchanged line with the note "No suggestion from the evidence"; edit the **Proposed line** yourself if it needs a change, or leave it. A suggestion is placed only where it matches whole words on its line (`lint` is not found inside `lint:fix`); a script suggestion that could match twice on the line is not placed, and the proposal says so.
+
+Uncertain findings are labelled **Uncertain — may be correct as written** and are never approved by default. Line breaks you type in a proposed line are written with that line's own line ending, so a CRLF document stays CRLF.
+
+## Approval, conflicts and your edits
+
+- Every proposal starts unapproved. A proposal identical to the current line cannot be approved, and editing a proposed line withdraws its approval until you approve it again.
+- Unapproved lines, and every line without a proposal, are kept byte for byte.
+- Proposals apply only to the exact Markdown that was checked. If the Markdown changed in any way after the check, or the document or its target changed, **Apply** changes nothing, reports that the Markdown changed since the drift check, keeps your edit, clears the stale proposals and returns focus to **Run drift check**. Run the check again to review fixes for the current text.
+- Starting a new check, a failed or cancelled check, or closing the dialog clears any open review. Proposals and approvals are not saved anywhere, like drift results ([ADR 0002](adr/0002-drift-checks-read-content-but-persist-nothing.md), [ADR 0003](adr/0003-drift-fixes-apply-only-to-the-checked-markdown.md)).
+
+## Offline, failure and accessibility
+
+Reviewing and applying needs no network: the proposals come from the result already on screen and nothing is sent anywhere. A check that cannot read GitHub reports its failure and offers no fixes; an in-document anchor check works offline as before.
+
+All controls are native buttons, text areas and checkboxes inside one fieldset per line, labelled with the line number. Diffs are focusable text. Outcomes are announced in the dialog's polite live region. The review fits at 320px without horizontal page scrolling. Automated checks cover keyboard operation; they do not replace manual screen-reader review.
+
+## Limits
+
+- A proposal edits one line, as numbered by the drift check. A command continued over several lines is reported on its first line, so a suggestion for a later line is not placed; edit the proposed line yourself.
+- Suggestions are deliberately narrow. README Studio does not invent replacement commands, paths or links when the evidence has no close match.
+- Applying does not re-run the drift check. Run it again to confirm the fixes against the repository.
+- Applying does not publish. Use [Publish to GitHub](github-publishing.md) to review and publish the updated README separately.

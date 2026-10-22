@@ -1438,7 +1438,11 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
     }
   })();
   const results = [];
-  const result = (claim, status, message, path = "") =>
+  // `fix` is an optional suggested correction, { find, replace, once }, that
+  // the evidence itself supplies (an existing path's case, a similar anchor
+  // or script name, the engines.node minimum). It is only a suggestion for
+  // reviewed remediation; nothing here applies it.
+  const result = (claim, status, message, path = "", fix = null) =>
     results.push({
       id: claim.id,
       category: claim.category,
@@ -1449,6 +1453,7 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
       where: claim.where || "",
       message,
       evidencePath: path,
+      ...(fix && status !== "matches" && status !== "unknown" ? { fix } : {}),
     });
   const inlineNote = (claim) =>
     claim.where === "inline"
@@ -1483,6 +1488,8 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
           near
             ? `No exact heading anchor #${anchor} in this Markdown; #${near} is similar. GitHub's anchor rules are approximated here.`
             : `No heading or HTML anchor in this Markdown produces #${anchor}.`,
+          "",
+          near && anchorFix(claim.text, near),
         );
       }
       continue;
@@ -1516,6 +1523,7 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
           ref ? "uncertain" : "mismatch",
           `${what} ${claim.path} is not in the repository at ${short(evidence.head)}.${near ? ` ${near} exists; GitHub paths are case-sensitive.` : ""}${ref ? ` The URL may point at another branch, such as ${ref}, which was not checked.` : ""}`,
           claim.path,
+          near && urlFix(claim.text, claim.path, near),
         );
         continue;
       }
@@ -1550,6 +1558,7 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
             ? `${claim.path} has no exact #${anchor}; #${near} is similar. GitHub's anchor rules are approximated here.`
             : `${claim.path} exists but has no heading or HTML anchor #${anchor}.`,
           claim.path,
+          near && anchorFix(claim.text, near),
         );
       }
       continue;
@@ -1640,6 +1649,7 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
           : "mismatch",
         `${claim.anyOf ? `${label}${where}` : `${target}`}: not in the repository at ${short(evidence.head)}.${extensions}${near ? ` ${near} exists; GitHub paths are case-sensitive.` : ""}${reason}`,
         claim.anyOf ? "" : target,
+        near && caseFix(claim.text, target, near),
       );
       continue;
     }
@@ -1763,11 +1773,20 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
           : ambiguous
             ? " The command may run from another directory."
             : inlineNote(claim);
+      // Exactly one script that differs only in punctuation or case
+      // (`test-unit` for `test:unit`) is suggested; anything else is left to
+      // the author.
+      const similar = scripts.filter(
+        (name) => loose(name) === loose(claim.script),
+      );
       result(
         claim,
         observed ? "mismatch" : "uncertain",
         `package.json has no "${claim.script}" script (scripts: ${list(scripts)}).${reason}`,
         "package.json",
+        similar.length === 1
+          ? { find: claim.script, replace: similar[0], once: true }
+          : null,
       );
       continue;
     }
@@ -1793,6 +1812,13 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
           "uncertain",
           `This text suggests Node ${claim.major}; package.json engines.node is "${pkg.data.node}" (Node ${minimum} or newer). Reading prose is a heuristic.`,
           "package.json",
+          {
+            find: claim.text,
+            replace: claim.text.replace(
+              new RegExp(`(?<!\\d)${claim.major}(?:\\.\\d+)*`),
+              String(minimum),
+            ),
+          },
         );
       else
         result(
@@ -1890,4 +1916,45 @@ function resolvePath(dir, path) {
   } catch {
     return null;
   }
+}
+// Suggested corrections for case-only path differences (GitHub paths are
+// case-sensitive). The suggestion replaces the shortest trailing part of the
+// path that holds every differing name, lengthened while `written` (the
+// claim's text) still contains it, so `./docs/guide.md` becomes
+// `./docs/Guide.md` and the `./` is kept. Null when the written form does not
+// contain the path literally (percent-encoding, for example).
+function caseFix(written, path, near) {
+  const from = path.split("/"),
+    to = near.split("/");
+  if (from.length !== to.length) return null;
+  const first = from.findIndex((part, index) => part !== to[index]);
+  if (first === -1) return null;
+  let size = from.length - first;
+  if (!written.includes(from.slice(-size).join("/"))) return null;
+  while (
+    size < from.length &&
+    written.includes(from.slice(-(size + 1)).join("/"))
+  )
+    size++;
+  return {
+    find: from.slice(-size).join("/"),
+    replace: to.slice(-size).join("/"),
+  };
+}
+// A link's whole URL with its path corrected, so only that link changes.
+function urlFix(url, path, near) {
+  const fix = caseFix(url.split(/[?#]/)[0], path, near);
+  if (!fix) return null;
+  const at = url.split(/[?#]/)[0].lastIndexOf(fix.find);
+  return {
+    find: url,
+    replace: url.slice(0, at) + fix.replace + url.slice(at + fix.find.length),
+  };
+}
+// A link's whole URL with its fragment replaced by a similar heading anchor.
+function anchorFix(url, near) {
+  const hash = url.indexOf("#");
+  return hash === -1
+    ? null
+    : { find: url, replace: `${url.slice(0, hash + 1)}${near}` };
 }

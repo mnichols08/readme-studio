@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.6.1.** Run a read-only drift check to find commands, paths, links and config keys in your README that no longer match the repository, with observed mismatches kept apart from heuristics. [Drift checks](docs/drift-checks.md) · [Evidence snapshots](docs/evidence-snapshots.md)
+**Version 1.6.2.** Turn drift check findings into reviewed fixes: each line's proposed edit shows its evidence and exact diff, applies only after you approve it and only to the Markdown that was checked, and can be undone. Nothing is published automatically. [Reviewed drift fixes](docs/drift-remediation.md) · [Drift checks](docs/drift-checks.md) · [Evidence snapshots](docs/evidence-snapshots.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

@@ -2463,6 +2463,19 @@ evidence-snapshots h3 {
   color: var(--text);
   font-size: 12px;
 }
+evidence-snapshots [data-proposal] {
+  margin-block: 12px;
+  overflow-wrap: anywhere;
+}
+evidence-snapshots [data-proposal] fieldset {
+  min-width: 0;
+}
+evidence-snapshots [data-fixes] pre {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .evidence-actions {
   display: flex;
   flex-wrap: wrap;

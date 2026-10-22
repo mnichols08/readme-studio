@@ -67,3 +67,11 @@ _Avoid_: Warning, false positive
 **Unknown** (Drift check):
 A Claim whose Evidence could not be read or does not cover it (failed or truncated tree, unreadable file, workspace package). Unknown is never drift.
 _Avoid_: Skipped, passed
+
+**Fix proposal**:
+A reviewed, line-level edit derived from an Observed mismatch or Uncertain finding of one Drift check. It shows the finding's Evidence and exact diff, may carry a suggestion only when Evidence supplies one, starts unapproved and is applied only after explicit per-change approval. Never derived from an Unknown result. Not saved.
+_Avoid_: Auto-fix, quick fix, patch
+
+**Conflict** (drift fix):
+The Source, document or target changed after the Drift check that produced the Fix proposals. Nothing is applied; the author re-runs the check.
+_Avoid_: Merge, rebase

@@ -47,7 +47,7 @@ If the document has a pinned [Baseline](evidence-snapshots.md#baseline-and-chang
 
 Notes list what was bounded or skipped: claims beyond the first 200, links above the repository root or undecodable, links to this repository on another branch or commit, linked Markdown files beyond the first 10, and environment variables with no `.env` example to compare against.
 
-Fixing findings is up to you: edit the Markdown as usual. A drift check never proposes or applies edits.
+A drift check itself never edits your Markdown. To fix findings, edit the Markdown as usual or choose **Review fixes** under the result: see [Reviewed drift fixes](drift-remediation.md), which turns observed mismatches and uncertain findings into line-by-line proposals that apply only after you approve each one.
 
 ## Offline, failure and accessibility
 

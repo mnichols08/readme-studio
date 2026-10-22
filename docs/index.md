@@ -66,3 +66,4 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 - [Evidence snapshots](evidence-snapshots.md) — explicit, read-only records of repository revisions, Baselines and change checks for documentation drift.
 
 - [Drift checks](drift-checks.md) — read-only warnings when commands, paths, links or config keys in your Markdown no longer match the repository, with observed mismatches kept apart from heuristics.
+- [Reviewed drift fixes](drift-remediation.md) — opt-in, line-by-line edit proposals for drift findings with evidence, exact diffs, per-change approval, conflict rejection and Undo; never published automatically.
