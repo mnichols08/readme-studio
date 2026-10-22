@@ -86,7 +86,9 @@ test("GitHub import, exact export, split, re-import merge, undo and source versi
     "src",
     "https://raw.githubusercontent.com/ada/tools/main/docs/snake.svg",
   );
+  // The Next steps panel offers the same split; use the builder's button.
   await page
+    .getByRole("complementary", { name: "Builder" })
     .getByRole("button", { name: "Split into sections", exact: true })
     .click();
   await page.getByLabel("Split by").selectOption("h1");

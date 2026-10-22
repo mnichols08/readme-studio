@@ -99,6 +99,7 @@ export function openProjectDialog(app) {
         const opened = next.drafts.at(-1);
         app.data = next;
         app.load(opened.id);
+        app.arrive("import", { origin: "project" });
         app.applySettings();
         app.mobile(app.data.settings.pane || "build", false);
         app.closeDialog(app.querySelector("#draft-select"));
