@@ -1,6 +1,6 @@
 # Readme Studio
 
-A local-first workspace for authoring GitHub profile and repository READMEs. This glossary covers the language used for documentation drift detection (Epic 13) and for guided first-run and task-based UX (Epic 01).
+A local-first workspace for authoring GitHub profile and repository READMEs. This glossary covers the language used for documentation drift detection (Epic 13), for guided first-run and task-based UX (Epic 01) and for reliable round-trip Markdown editing (Epic 02).
 
 ## Language: documentation drift (Epic 13)
 
@@ -131,3 +131,69 @@ _Avoid_: Score, time on task, effort
 **Friction**:
 A recorded obstacle in one Usability scenario at a named step, with a severity from 1 (cannot complete) to 4 (cosmetic) and the kind of run that found it.
 _Avoid_: Bug, complaint, pain point
+
+## Language: round-trip Markdown editing (Epic 02)
+
+### Blocks and ownership
+
+**Block**:
+One piece of a document's Source, in order. Joined end to end, a document's Blocks reproduce its Source exactly.
+_Avoid_: Section (a Block is not always a heading section), node, chunk
+
+**Owned block**:
+A Block whose Source is driven by something other than the author's typing: builder settings, a component, a generated section, a shared component, profile autofill or a banner reference.
+_Avoid_: Managed block, linked block, structured block
+
+**Custom Markdown block**:
+A Block whose Source is exactly the author's text and nothing else drives it. Its text is never converted back into settings.
+_Avoid_: Raw block, plain block, unmanaged block
+
+**Seam**:
+The boundary between two adjacent Blocks, holding the whitespace that separates them. A Seam belongs to its position in the document, not to the Block that happens to follow it.
+_Avoid_: Gap, divider (a divider is a Block type)
+
+**Edited scope**:
+The Blocks and Seams an edit actually touches. Every byte outside the Edited scope stays identical, including line endings, HTML and trailing whitespace.
+_Avoid_: Affected area, dirty region
+
+### Detaching
+
+**Detachment**:
+What happens to an Owned block when a raw edit touches it: it becomes a Custom Markdown block holding exactly what the author typed, and its former owner stops driving it. Owned blocks outside the Edited scope are never detached.
+_Avoid_: Unlink, break, convert, lose ownership
+
+**Detachment record**:
+A saved, visible note on the document that a Detachment happened: which Block, what kind of ownership it lost and, when it can be offered back safely, the visual version it had. It travels with the document and never appears in exported Markdown.
+_Avoid_: Warning log, history, tombstone
+
+**Restorable**:
+A Detachment record that kept one builder or component Block's previous visual version and so can offer it back. A record made by an edit that spanned several Blocks, or for generated, shared, profile or banner ownership, is not Restorable.
+_Avoid_: Recoverable, revertible
+
+### Resolving conflicts
+
+**Ownership conflict**:
+A visual edit or restore that would replace a Block whose Source changed or detached after the visual form was opened. Never resolved silently: the author resolves it in Ownership review. Distinct from a **Conflict** (drift fix), which is about a stale Drift check.
+_Avoid_: Merge conflict, collision, stale edit
+
+**Ownership review**:
+The dialog that shows the author's current Markdown (**Original**), the visual version (**Proposed**) and their diff, and offers **Keep my Markdown** or **Use visual version**. Keep is the default and changes nothing; Use applies one Undo step.
+_Avoid_: Merge dialog, resolve dialog, conflict modal
+
+### Round trips
+
+**Round trip**:
+Opening Markdown, a Studio project or a workspace backup in README Studio and exporting or saving it again.
+_Avoid_: Sync, re-import, conversion
+
+**Round-trip identity**:
+The guarantee that an unchanged Round trip gives back byte-identical Markdown and, for Studio projects and backups, the same Blocks and metadata apart from regenerated IDs and save times.
+_Avoid_: Equivalence, normalization, "close enough"
+
+**Round-trip corpus**:
+The checked-in fixtures that Round-trip identity is proven against: raw Markdown, Studio JSON and documents with mixed ownership. Each fixture's exact bytes are pinned.
+_Avoid_: Test data, samples
+
+**Round-trip gate**:
+The named CI check over the Round-trip corpus that must pass before a release. A failure is fixed in code, never by re-pinning a fixture to match new output.
+_Avoid_: Smoke test, snapshot test
