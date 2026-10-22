@@ -23,16 +23,51 @@ This intentionally small deployment supports one server process. Multi-instance/
 ## Review and publish
 
 1. Connect, then choose an explicitly selected repository. The picker shows visibility, default branch, and effective write status based on app installation and user access. A profile repository is suggested, never assumed or created.
-2. Enter the branch and README path. Load remote README captures its exact text, blob SHA and branch commit separately from your local draft.
+2. Enter the branch and README path. Load remote README runs a [Preflight](#preflight) for that exact Publish target and then captures the file's exact text, blob SHA and branch commit separately from your local draft.
 3. Review remote/prepared source, the unified changed-region diff, line counts and headings. The diff uses bounded linear memory and may include unchanged interior lines within a changed region; source panes are authoritative.
-4. Edit the commit message and check the confirmation naming the target. Confirm and publish makes exactly one Contents API write, using the loaded SHA for updates and omitting it only for a new file. GitHub rejects a stale SHA. No files are deleted.
+4. Edit the commit message and check the confirmation naming the target. The confirmation and publish button exist only when the Preflight for the current target is writable. Confirm and publish makes exactly one Contents API write, using the loaded SHA for updates and omitting it only for a new file. GitHub rejects a stale SHA. No files are deleted.
 5. Success shows the commit, repository and file links. Local source remains unchanged. Failure keeps the prepared source/diff and Download README fallback. If a network response is lost, check GitHub before retrying; a remote write may have completed.
+
+### Preflight
+
+Every publishing review starts in **Read-only mode**: remote content can be loaded, reviewed and downloaded, but no write can be approved. A Preflight is an explicit, read-only check of the exact repository, branch and path. It runs when you choose Load remote README (Preflight first, then the read, as one action) and again only when you choose **Re-check access**. Nothing is checked automatically or retried.
+
+The Preflight section lists each check with a written status (Pass, Warning, Fail or Unknown), never colour alone, and announces the verdict as a status message.
+
+| Check                   | Kind                     | Fails when                                                                                                                                                                   |
+| ----------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Publishing service      | blocking                 | The deployment has no publishing service configured.                                                                                                                         |
+| GitHub session          | blocking                 | You are not connected.                                                                                                                                                       |
+| GitHub App installation | blocking                 | The app is not installed on the repository, or the repository is not shared with it.                                                                                         |
+| Contents permission     | blocking                 | The installation grants Contents: read only (or none).                                                                                                                       |
+| Your push access        | blocking                 | Your own account cannot push to the repository.                                                                                                                              |
+| Repository not archived | blocking                 | The repository is archived.                                                                                                                                                  |
+| Branch exists           | blocking                 | The branch is missing. Choose an existing branch, load it, then use “Publish on a new branch instead”.                                                                       |
+| Supported path          | blocking                 | The README, asset or workflow path is not one Studio writes.                                                                                                                 |
+| Workflow permission     | blocking, workflows only | The server lacks `ALLOW_WORKFLOW_WRITES=true`, or the app lacks Workflows: write.                                                                                            |
+| Branch rules            | advisory                 | Warns when the branch is protected or a ruleset requires pull requests, status checks, signatures, linear updates or blocks force pushes. Unknown when rules cannot be read. |
+| Default branch          | advisory                 | Warns when you are committing directly to the default branch.                                                                                                                |
+
+The target is writable only when every blocking check passes; any Fail or Unknown keeps Read-only mode. Advisory checks never block, because a token without admin rights cannot read every protection setting and rulesets can allow bypass. GitHub still decides at write time: a 403 or 422 from GitHub writes nothing and opens the “Publish on a new branch instead” route. That route appears only when the checks the server enforces for branch creation pass: installation, Contents permission, push access, repository not archived, branch exists and, for workflows, Workflow permission. A refusal by the server's own Preflight at write time (for example, access revoked after the check) does not suggest the route, because branch creation would be refused the same way; re-check access instead.
+
+The server enforces the same blocking checks before every write with the same evaluator (`src/publishing/preflight.js`), so a refused commit reports the same message the Preflight showed. If the Preflight request fails or you are offline, every check is Unknown, the review stays read-only and your local draft is safe. The Preflight report is held only in the dialog's memory: changing the target, disconnecting or reloading clears it, and it is never saved to drafts, backups or projects.
+
+#### Manual verification with a real GitHub App (not performed by CI)
+
+Automated tests use mocked GitHub responses only. Before offering publishing publicly, an operator should verify these cases by hand against a real app installation on a disposable repository. CI does not run these steps.
+
+- [ ] **Read-only installation**: set the app's Contents permission to read-only (or accept a read-only installation). Load remote README shows Contents permission Fail with “App grants Contents: read only”, and no confirmation or publish button appears.
+- [ ] **Removed Workflows permission**: with `ALLOW_WORKFLOW_WRITES=true`, remove Workflows: write from the app. Workflow publishing shows Workflow permission Fail, and Download YAML fallback still works.
+- [ ] **Protected branch or ruleset**: protect the target branch or add a ruleset requiring pull requests. Branch rules shows Warning, the verdict stays writable, and a direct commit refused by GitHub (403/422) writes nothing and opens “Publish on a new branch instead”.
+- [ ] **Archived repository**: archive the repository. Repository not archived shows Fail and no publish control appears. Unarchive it afterwards.
+
+Record who ran each check and when in your deployment notes; Studio does not record or claim these results.
 
 Publishing supports UTF-8 README text up to 750 KB, relative README paths without hidden folders/traversal, and valid Git ref names. Read-only repositories remain exportable. Offline editing/export works; publishing needs connectivity. Changing the target invalidates the review. Source is a snapshot taken when opening publishing, so unrelated background editor changes cannot silently change the reviewed commit.
 
 ## Verification
 
-`npm test` includes server tests in Node with mocked OAuth and Contents responses: cookie flags, CSRF/Origin rejection, permission enforcement, token redaction, read/create/update, exact Unicode source and disconnect. `tests/browser/publishing.spec.js` covers explicit confirmation, unchanged local source, new files, denied writes and mobile download fallback in all three engines. Manual deployment verification with a real app is still required before offering publishing publicly; automated tests do not prove an operator's proxy/configuration is secure.
+`npm test` includes server tests in Node with mocked OAuth and Contents responses: cookie flags, CSRF/Origin rejection, permission enforcement, token redaction, read/create/update, exact Unicode source and disconnect. `tests/publishing-preflight.test.js` covers every Preflight check, and the server tests prove a refused commit matches the Preflight message with zero PUT requests. `tests/browser/publishing.spec.js` covers explicit confirmation, Read-only mode, failing checks, target changes, offline Preflight, unchanged local source, new files, denied writes and mobile download fallback in all three engines. Manual deployment verification with a real app is still required before offering publishing publicly; automated tests do not prove an operator's proxy/configuration is secure.
 
 The API contract follows [GitHub Contents documentation](https://docs.github.com/en/rest/repos/contents). Check upstream permission changes when enabling new write types.
 
@@ -48,4 +83,4 @@ Target branch remains explicit. Optional Create branch requires its own confirma
 
 ## Workflow permission boundary (0.8.3)
 
-Workflow Builder can use this same diff/SHA confirmation flow only when the operator sets `ALLOW_WORKFLOW_WRITES=true` and the app installation grants Workflows: write in addition to Contents: write. The server accepts only safely named workflow files whose YAML matches its validated generator settings. Ordinary README/asset publishing does not need the extra permission. See [workflow setup and limits](workflows.md). The optional server denies framing and rejects non-UTF-8 remote content rather than silently replacing bytes.
+Workflow Builder can use this same diff/SHA confirmation flow only when the operator sets `ALLOW_WORKFLOW_WRITES=true` and the app installation grants Workflows: write in addition to Contents: write. The Preflight's Workflow permission check reports which of the two is missing. The server accepts only safely named workflow files whose YAML matches its validated generator settings. Ordinary README/asset publishing does not need the extra permission. See [workflow setup and limits](workflows.md). The optional server denies framing and rejects non-UTF-8 remote content rather than silently replacing bytes.

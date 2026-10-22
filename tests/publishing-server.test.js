@@ -10,6 +10,14 @@ function harness({
   exists = true,
   commitStatus = 200,
   workflows = false,
+  allowWorkflows = workflows,
+  installed = true,
+  push = true,
+  archived = false,
+  branchStatus = 200,
+  protectedBranch = false,
+  rules = [],
+  rulesStatus = 200,
 } = {}) {
   let clock = 1000,
     cookie,
@@ -44,15 +52,28 @@ function harness({
       });
     if (url.includes("/user/installations/1/repositories?"))
       return Response.json({
-        repositories: [
-          {
-            full_name: "octocat/octocat",
-            default_branch: "main",
-            permissions: { push: true },
-          },
-        ],
+        repositories: installed
+          ? [
+              {
+                full_name: "octocat/octocat",
+                default_branch: "main",
+                archived,
+                permissions: { push },
+              },
+            ]
+          : [],
       });
-    if (url.includes("/branches/")) return Response.json({ commit: { sha } });
+    if (url.includes("/rules/branches/"))
+      return Response.json(rulesStatus === 200 ? rules : { message: "no" }, {
+        status: rulesStatus,
+      });
+    if (url.includes("/branches/"))
+      return Response.json(
+        branchStatus === 200
+          ? { commit: { sha }, protected: protectedBranch }
+          : { message: "Branch not found" },
+        { status: branchStatus },
+      );
     if (url.endsWith("/git/refs"))
       return Response.json({ ref: "refs/heads/readme-studio/update" });
     if (options.method === "PUT")
@@ -80,7 +101,7 @@ function harness({
   const service = createPublishingService({
     origin,
     clientId: "APP_ID",
-    allowWorkflows: workflows,
+    allowWorkflows,
     fetchImpl: upstream,
     now: () => clock,
   });
@@ -324,4 +345,235 @@ it("workflow write requires opt-in, app permission and exact generated YAML", as
     ).response.status,
   ).toBe(400);
   expect((await allowed.request("commit", input)).value.commitSha).toBe(newSha);
+});
+
+const readmeTarget = {
+  repository: "octocat/octocat",
+  branch: "main",
+  path: "README.md",
+};
+const puts = (h) =>
+  h.upstream.mock.calls.filter(([, o]) => o?.method === "PUT").length;
+const checkOf = (report, id) => report.checks.find((c) => c.id === id);
+async function preflightThenCommit(options, value = readmeTarget) {
+  const h = harness(options);
+  await h.connect();
+  const report = (await h.request("preflight", value)).value;
+  const commit = await h.request("commit", {
+    ...value,
+    sha,
+    content: "# New",
+    message: "update",
+    confirmed: true,
+  });
+  return { h, report, commit };
+}
+it("preflight is read-only and reports a writable target with advisory warnings", async () => {
+  const { h, report, commit } = await preflightThenCommit({
+    protectedBranch: true,
+  });
+  expect(report.verdict).toBe("writable");
+  expect(report.branchCommitSha).toBe(sha);
+  expect(report.defaultBranch).toBe("main");
+  expect(checkOf(report, "branch-rules").status).toBe("warn");
+  expect(checkOf(report, "default-branch").status).toBe("warn");
+  expect(commit.value.commitSha).toBe(newSha);
+  // The preflight itself only issued GET requests.
+  const preflightCalls = h.upstream.mock.calls.filter(([url]) =>
+    url.includes("/rules/branches/"),
+  );
+  expect(preflightCalls).toHaveLength(1);
+  expect(preflightCalls[0][1].method).toBe("GET");
+  expect(puts(h)).toBe(1);
+});
+it.each([
+  [
+    "installation contents: read",
+    { permission: false },
+    "contents-permission",
+    "App grants Contents: read only",
+  ],
+  ["push: false", { push: false }, "user-push", "cannot push"],
+  ["archived repository", { archived: true }, "not-archived", "archived"],
+  [
+    "missing installation",
+    { installed: false },
+    "installation",
+    "not installed",
+  ],
+  ["branch 404", { branchStatus: 404 }, "branch-exists", "was not found"],
+])(
+  "%s: preflight fails and commit is refused with the same message and no PUT",
+  async (_, options, id, message) => {
+    const { h, report, commit } = await preflightThenCommit(options);
+    expect(report.verdict).toBe("read-only");
+    const failed = checkOf(report, id);
+    expect(failed.status).toBe("fail");
+    expect(failed.message).toContain(message);
+    expect(commit.response.status).toBe(403);
+    expect(commit.value.error).toBe(failed.message);
+    expect(commit.value.preflight).toBe(id);
+    expect(puts(h)).toBe(0);
+  },
+);
+it("unreadable branch rules stay an unknown advisory and do not block", async () => {
+  for (const rulesStatus of [403, 404]) {
+    const { report, commit } = await preflightThenCommit({ rulesStatus });
+    expect(checkOf(report, "branch-rules")).toMatchObject({
+      status: "unknown",
+      blocking: false,
+    });
+    expect(report.verdict).toBe("writable");
+    expect(commit.value.commitSha).toBe(newSha);
+  }
+  const { report } = await preflightThenCommit({
+    rules: [{ type: "pull_request" }],
+  });
+  expect(checkOf(report, "branch-rules").status).toBe("warn");
+  expect(report.verdict).toBe("writable");
+});
+it.each([
+  [
+    "without server opt-in",
+    { workflows: true, allowWorkflows: false },
+    "ALLOW_WORKFLOW_WRITES",
+  ],
+  [
+    "with opt-in but no Workflows: write",
+    { workflows: false, allowWorkflows: true },
+    "Workflows: write",
+  ],
+])(
+  "workflow preflight %s fails workflow-permission and refuses the commit",
+  async (_, options, message) => {
+    const config = {
+        provider: "snake",
+        publish: true,
+        repository: "octocat/octocat",
+      },
+      r = generateWorkflow(config);
+    const h = harness(options);
+    await h.connect();
+    const value = { ...readmeTarget, path: r.path, kind: "workflow" };
+    const report = (await h.request("preflight", value)).value;
+    expect(report.target.kind).toBe("workflow");
+    const failed = checkOf(report, "workflow-permission");
+    expect(failed.status).toBe("fail");
+    expect(failed.message).toContain(message);
+    expect(report.verdict).toBe("read-only");
+    const repos = (await h.request("repositories", {})).value.repositories;
+    expect(repos[0]).toMatchObject({
+      writable: true,
+      workflowsWritable: false,
+    });
+    const commit = await h.request("commit", {
+      ...value,
+      sha,
+      content: r.yaml,
+      workflow: config,
+      message: "Add workflow",
+      confirmed: true,
+    });
+    expect(commit.response.status).toBe(403);
+    expect(commit.value.error).toBe(failed.message);
+    expect(commit.value.preflight).toBe("workflow-permission");
+    expect(puts(h)).toBe(0);
+  },
+);
+it("preflight needs a session, verifies CSRF and reports offline GitHub as unknown", async () => {
+  const h = harness();
+  await h.request("session");
+  const disconnected = (await h.request("preflight", readmeTarget)).value;
+  expect(checkOf(disconnected, "session").status).toBe("fail");
+  expect(h.upstream).not.toHaveBeenCalled();
+  expect(
+    (await h.request("preflight", readmeTarget, { "x-studio-csrf": "bad" }))
+      .response.status,
+  ).toBe(403);
+  await h.connect();
+  expect(
+    (await h.request("preflight", { ...readmeTarget, repository: "../x" }))
+      .response.status,
+  ).toBe(400);
+  h.upstream.mockRejectedValueOnce(new Error("PRIVATE_ACCESS offline"));
+  const offline = await h.request("preflight", readmeTarget);
+  expect(offline.response.status).toBe(200);
+  expect(checkOf(offline.value, "installation").status).toBe("unknown");
+  expect(offline.value.verdict).toBe("read-only");
+  expect(JSON.stringify(offline.value)).not.toContain("PRIVATE");
+});
+it("unconfigured deployments return a read-only preflight without contacting GitHub", async () => {
+  const upstream = vi.fn();
+  const service = createPublishingService({ origin, fetchImpl: upstream });
+  const report = await (
+    await service(
+      new Request(`${origin}/api/publishing/preflight`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      }),
+    )
+  ).json();
+  expect(report.verdict).toBe("read-only");
+  expect(checkOf(report, "service").status).toBe("fail");
+  expect(upstream).not.toHaveBeenCalled();
+});
+it("branch creation is refused on a read-only installation before any ref write", async () => {
+  const h = harness({ permission: false });
+  await h.connect();
+  const result = await h.request("branch", {
+    ...readmeTarget,
+    commitSha: sha,
+    newBranch: "readme-studio/update",
+    confirmed: true,
+  });
+  expect(result.response.status).toBe(403);
+  expect(result.value.error).toContain("App grants Contents: read only");
+  expect(h.upstream.mock.calls.some(([url]) => url.endsWith("/git/refs"))).toBe(
+    false,
+  );
+});
+const refWrites = (h) =>
+  h.upstream.mock.calls.filter(([url]) => url.endsWith("/git/refs")).length;
+it("branch creation is refused in an archived repository", async () => {
+  const h = harness({ archived: true });
+  await h.connect();
+  const result = await h.request("branch", {
+    ...readmeTarget,
+    commitSha: sha,
+    newBranch: "readme-studio/update",
+    confirmed: true,
+  });
+  expect(result.response.status).toBe(403);
+  expect(result.value.error).toContain("archived");
+  expect(result.value.preflight).toBe("not-archived");
+  expect(refWrites(h)).toBe(0);
+});
+it("workflow branch creation keeps the opt-in and Workflows: write boundary", async () => {
+  const input = {
+    repository: "octocat/octocat",
+    branch: "main",
+    path: ".github/workflows/readme-studio.yml",
+    kind: "workflow",
+    commitSha: sha,
+    newBranch: "readme-studio/wf",
+    confirmed: true,
+  };
+  for (const options of [
+    { allowWorkflows: false, workflows: false },
+    { allowWorkflows: true, workflows: false },
+  ]) {
+    const h = harness(options);
+    await h.connect();
+    const result = await h.request("branch", input);
+    expect(result.response.status).toBe(403);
+    expect(result.value.preflight).toBe("workflow-permission");
+    expect(refWrites(h)).toBe(0);
+  }
+  const allowed = harness({ workflows: true });
+  await allowed.connect();
+  expect((await allowed.request("branch", input)).value.branch).toBe(
+    "readme-studio/wf",
+  );
+  expect(refWrites(allowed)).toBe(1);
 });
