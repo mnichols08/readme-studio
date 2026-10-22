@@ -2157,6 +2157,15 @@ publish-dialog {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
 }
+publish-dialog .preflight-checks {
+  display: grid;
+  gap: 0.35rem;
+  padding-left: 1.25rem;
+}
+publish-dialog [data-check-status="fail"] strong,
+publish-dialog [data-check-status="unknown"] strong {
+  text-decoration: underline;
+}
 publish-dialog pre {
   max-width: 100%;
   overflow: auto;

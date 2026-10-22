@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { evaluatePreflight } from "../../src/publishing/preflight.js";
 const sha = "a".repeat(40),
   next = "b".repeat(40);
 async function setup(
@@ -10,13 +11,19 @@ async function setup(
     writable = true,
     assets = false,
     failAsset = false,
+    access = {},
+    preflightOffline = false,
+    load = true,
   } = {},
 ) {
-  const writes = [];
+  const writes = [],
+    ops = [];
   let connected = false,
     reads = 0;
   await page.route("**/api/publishing/*", async (route) => {
     const op = route.request().url().split("/").at(-1);
+    ops.push(op);
+    if (op === "preflight" && preflightOffline) return route.abort("failed");
     let data = {};
     let status = 200;
     if (op === "session")
@@ -47,6 +54,28 @@ async function setup(
           },
         ],
       };
+    // The mocked server judges facts with the real evaluator; `access`
+    // overrides individual facts (and may be changed mid-test).
+    if (op === "preflight")
+      data = evaluatePreflight(
+        {
+          configured: true,
+          connected: true,
+          allowWorkflows: false,
+          target: route.request().postDataJSON(),
+          installation: {
+            permissions: {
+              contents: writable ? "write" : "read",
+              workflows: "read",
+            },
+          },
+          repository: { push: true, archived: false, defaultBranch: "main" },
+          branch: { protected: false, commitSha: sha },
+          rules: [],
+          ...access,
+        },
+        { kind: route.request().postDataJSON().kind },
+      );
     if (op === "branch")
       data = {
         ...route.request().postDataJSON(),
@@ -123,8 +152,8 @@ async function setup(
   await expect(d).toContainText("ABCD-EFGH");
   await d.getByRole("button", { name: "Check authorization" }).click();
   await d.getByLabel("Target repository").selectOption("octocat/octocat");
-  await d.getByRole("button", { name: "Load remote README" }).click();
-  return { d, writes };
+  if (load) await d.getByRole("button", { name: "Load remote README" }).click();
+  return { d, writes, ops, access };
 }
 for (const exists of [true, false])
   test(`explicit review before ${exists ? "updating" : "creating"} README; source stays unchanged`, async ({
@@ -158,6 +187,11 @@ test("failed publish preserves review and download at mobile width", async ({
   await d.getByLabel(/I reviewed this diff/).check();
   await d.getByRole("button", { name: "Confirm and publish README" }).click();
   await expect(d.locator("[data-status]")).toContainText("branch protection");
+  // GitHub's refusal routes the author to the new-branch review.
+  await expect(d.locator("[data-new-branch-route]")).toHaveAttribute(
+    "open",
+    "",
+  );
   await expect(d.getByLabel("Prepared Markdown")).toHaveValue("# New 🦀");
   const download = page.waitForEvent("download");
   await d.getByRole("button", { name: "Download README fallback" }).click();
@@ -202,13 +236,122 @@ test("stale README requires explicit conflict resolution and fresh confirmation"
     page.getByRole("textbox", { name: "Markdown editor", exact: true }),
   ).toHaveValue("# New 🦀");
 });
-test("read-only disables publish and creating a branch still requires a separate README review", async ({
+test("dialog starts in Read-only mode with no publish control", async ({
   page,
 }) => {
-  const { d, writes } = await setup(page, { writable: false });
+  const { d, ops } = await setup(page, { load: false });
+  await expect(d.locator("[data-preflight] [role=status]")).toContainText(
+    "Read-only mode",
+  );
+  await expect(d.getByLabel(/I reviewed this diff/)).toHaveCount(0);
+  await expect(
+    d.getByRole("button", { name: /Confirm and publish/ }),
+  ).toHaveCount(0);
+  expect(ops).not.toContain("preflight");
+  // Loading is one explicit action: Preflight first, then the read.
+  await d.getByRole("button", { name: "Load remote README" }).click();
+  await expect(d.locator("[data-preflight] [role=status]")).toContainText(
+    "Writable",
+  );
+  expect(ops.filter((op) => ["preflight", "read"].includes(op))).toEqual([
+    "preflight",
+    "read",
+  ]);
+  await expect(d.locator('[data-check="branch-rules"]')).toContainText("Pass");
+  await expect(d.locator('[data-check="default-branch"]')).toContainText(
+    "Warning",
+  );
   await expect(
     d.getByRole("button", { name: "Confirm and publish README" }),
-  ).toBeDisabled();
+  ).toBeVisible();
+});
+test("read-only repository shows the failing check and no confirm control", async ({
+  page,
+}) => {
+  const { d, writes, access } = await setup(page, { writable: false });
+  const check = d.locator('[data-check="contents-permission"]');
+  await expect(check).toContainText("Fail");
+  await expect(check).toContainText("App grants Contents: read only");
+  await expect(d.locator("[data-preflight] [role=status]")).toContainText(
+    "Read-only mode",
+  );
+  // Remote content is still reviewable; write controls are not rendered.
+  await expect(d.getByLabel("Prepared Markdown")).toHaveValue("# New 🦀");
+  await expect(d.getByLabel(/I reviewed this diff/)).toHaveCount(0);
+  await expect(
+    d.getByRole("button", { name: "Confirm and publish README" }),
+  ).toHaveCount(0);
+  await expect(
+    d.getByText("Publish on a new branch instead", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    d.getByRole("button", { name: "Download README fallback" }),
+  ).toBeVisible();
+  expect(writes).toHaveLength(0);
+  // After the owner grants write access, an explicit re-check enables review.
+  access.installation = { permissions: { contents: "write" } };
+  await d.getByRole("button", { name: "Re-check access" }).click();
+  await expect(check).toContainText("Pass");
+  await expect(d.getByLabel(/I reviewed this diff/)).not.toBeChecked();
+  await expect(
+    d.getByRole("button", { name: "Confirm and publish README" }),
+  ).toBeVisible();
+  expect(writes).toHaveLength(0);
+});
+test("archived repository and missing branch keep the review read-only", async ({
+  page,
+}) => {
+  const { d, access, ops } = await setup(page, {
+    access: {
+      repository: { push: true, archived: true, defaultBranch: "main" },
+    },
+  });
+  await expect(d.locator('[data-check="not-archived"]')).toContainText("Fail");
+  await expect(d.getByLabel(/I reviewed this diff/)).toHaveCount(0);
+  access.repository = { push: true, archived: false, defaultBranch: "main" };
+  access.branch = null;
+  await d.getByLabel("Target branch").fill("missing");
+  await d.getByRole("button", { name: "Load remote README" }).click();
+  await expect(d.locator('[data-check="branch-exists"]')).toContainText(
+    "Publish on a new branch",
+  );
+  await expect(d.locator("[data-status]")).toContainText(
+    "Remote file not loaded",
+  );
+  // A missing branch is never loaded as if the README were new.
+  expect(ops.filter((op) => op === "read")).toHaveLength(1);
+  await expect(d.getByLabel("Prepared Markdown")).toHaveCount(0);
+});
+test("target change clears the Preflight and its publish control", async ({
+  page,
+}) => {
+  const { d } = await setup(page);
+  await expect(
+    d.getByRole("button", { name: "Confirm and publish README" }),
+  ).toBeVisible();
+  await d.getByLabel("Target branch").fill("docs");
+  await expect(d.locator("[data-preflight] [role=status]")).toContainText(
+    "Read-only mode. Load the remote file",
+  );
+  await expect(d.locator("[data-check]")).toHaveCount(0);
+  await expect(
+    d.getByRole("button", { name: "Confirm and publish README" }),
+  ).toHaveCount(0);
+});
+test("offline Preflight leaves every check unknown without loading or retrying", async ({
+  page,
+}) => {
+  const { d, ops, writes } = await setup(page, { preflightOffline: true });
+  await expect(d.locator('[data-check-status="unknown"]')).toHaveCount(10);
+  await expect(d.locator('[data-check-status="pass"]')).toHaveCount(0);
+  await expect(d.locator("[data-preflight] [role=status]")).toContainText(
+    "local draft is safe",
+  );
+  expect(ops.filter((op) => op === "preflight")).toHaveLength(1);
+  expect(ops).not.toContain("read");
+  await expect(
+    d.getByRole("button", { name: /Confirm and publish/ }),
+  ).toHaveCount(0);
   expect(writes).toHaveLength(0);
 });
 test("branch creation is explicit and does not commit a README", async ({

@@ -1,4 +1,22 @@
 import { test, expect } from "@playwright/test";
+import { evaluatePreflight } from "../../src/publishing/preflight.js";
+// Preflight facts for the mocked publishing server; overrides vary access.
+function preflightReport(value, overrides = {}) {
+  return evaluatePreflight(
+    {
+      configured: true,
+      connected: true,
+      allowWorkflows: true,
+      target: value,
+      installation: { permissions: { contents: "write", workflows: "write" } },
+      repository: { push: true, archived: false, defaultBranch: "main" },
+      branch: { protected: false, commitSha: "a".repeat(40) },
+      rules: [],
+      ...overrides,
+    },
+    { kind: value.kind },
+  );
+}
 async function start(page) {
   await page.goto("/");
   await page
@@ -89,6 +107,8 @@ test("workflow publishing requires permissions, diff and confirmation; stale rem
           },
         ],
       };
+    if (op === "preflight")
+      data = preflightReport(route.request().postDataJSON());
     if (op === "read") {
       reads++;
       data = {
@@ -127,4 +147,72 @@ test("workflow publishing requires permissions, diff and confirmation; stale rem
   await d.getByRole("button", { name: "Confirm and publish workflow" }).click();
   await expect(d.locator("[data-status]")).toContainText("Workflow published");
   expect(writes).toBe(1);
+});
+
+test("denied workflow permission keeps the review read-only with YAML download", async ({
+  page,
+}) => {
+  let writes = 0,
+    reads = 0;
+  await page.route("**/api/publishing/*", async (route) => {
+    const op = route.request().url().split("/").at(-1);
+    let data = {};
+    if (op === "session")
+      data = {
+        configured: true,
+        connected: true,
+        csrf: "test",
+        identity: { login: "octocat", name: "Octo", avatar: "" },
+      };
+    if (op === "repositories")
+      data = {
+        repositories: [
+          {
+            repository: "octocat/octocat",
+            branch: "main",
+            visibility: "public",
+            writable: true,
+            workflowsWritable: false,
+          },
+        ],
+      };
+    if (op === "preflight")
+      data = preflightReport(route.request().postDataJSON(), {
+        installation: { permissions: { contents: "write", workflows: "read" } },
+      });
+    if (op === "read") {
+      reads++;
+      data = {
+        ...route.request().postDataJSON(),
+        content: "name: Before",
+        sha: "a".repeat(40),
+        commitSha: "a".repeat(40),
+      };
+    }
+    if (op === "commit") writes++;
+    await route.fulfill({ json: data });
+  });
+  let d = await start(page);
+  await d.getByRole("button", { name: "Generate YAML for review" }).click();
+  await d.getByRole("button", { name: "Review workflow publishing" }).click();
+  d = page.getByRole("dialog");
+  await d.getByLabel("Target repository").selectOption("octocat/octocat");
+  await d.getByRole("button", { name: "Load remote workflow" }).click();
+  const check = d.locator('[data-check="workflow-permission"]');
+  await expect(check).toContainText("Fail");
+  await expect(check).toContainText("Workflows: write");
+  await expect(d.locator("[data-preflight] [role=status]")).toContainText(
+    "Read-only mode",
+  );
+  // Remote YAML still loads for review, but no write control exists.
+  await expect(d.getByLabel("Prepared YAML")).toHaveValue(/workflow_dispatch/);
+  expect(reads).toBe(1);
+  await expect(d.getByLabel(/I reviewed this diff/)).toHaveCount(0);
+  await expect(
+    d.getByRole("button", { name: "Confirm and publish workflow" }),
+  ).toHaveCount(0);
+  const download = page.waitForEvent("download");
+  await d.getByRole("button", { name: "Download YAML fallback" }).click();
+  expect((await download).suggestedFilename()).toMatch(/\.ya?ml$/);
+  expect(writes).toBe(0);
 });

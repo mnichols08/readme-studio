@@ -2,6 +2,13 @@ import { generateWorkflow } from "../src/workflows/model.js";
 import { randomBytes } from "node:crypto";
 import { validateGeneratedAsset } from "../src/publishing/assets.js";
 import {
+  evaluatePreflight,
+  blockingFailure,
+  passes,
+  ACCESS_CHECKS,
+  BRANCH_CHECKS,
+} from "../src/publishing/preflight.js";
+import {
   target,
   writeInput,
   MAX_SOURCE_BYTES,
@@ -101,47 +108,129 @@ export function createPublishingService({
         "/user/installations",
         "installations",
       ),
-      rows = new Map();
+      rows = new Map(),
+      facts = new Map();
     for (const installation of installations) {
       const repos = await pages(
         s,
         `/user/installations/${Number(installation.id)}/repositories`,
         "repositories",
       );
-      for (const repo of repos)
+      for (const repo of repos) {
+        // Preflight facts stay in server memory; the picker only gets labels.
+        const fact = {
+          installation: {
+            permissions: {
+              contents: installation.permissions?.contents,
+              workflows: installation.permissions?.workflows,
+            },
+          },
+          repository: {
+            push: repo.permissions?.push === true,
+            archived: repo.archived === true,
+            defaultBranch: repo.default_branch,
+          },
+        };
+        const judged = (kind) =>
+          evaluatePreflight(
+            { configured: true, connected: true, allowWorkflows, ...fact },
+            { kind },
+          );
+        facts.set(repo.full_name, fact);
         rows.set(repo.full_name, {
           repository: repo.full_name,
           branch: repo.default_branch,
           visibility: repo.private ? "private" : "public",
-          workflowsWritable:
-            allowWorkflows &&
-            installation.permissions?.workflows === "write" &&
-            installation.permissions?.contents === "write" &&
-            repo.permissions?.push === true &&
-            !repo.archived,
-          writable:
-            !repo.archived &&
-            repo.permissions?.push === true &&
-            installation.permissions?.contents === "write",
+          workflowsWritable: passes(judged("workflow"), [
+            ...ACCESS_CHECKS,
+            "workflow-permission",
+          ]),
+          writable: passes(judged(), ACCESS_CHECKS),
         });
+      }
     }
+    s.repositoryFacts = facts;
     s.repositories = [...rows.values()];
     return s.repositories;
   }
-  async function authorizeTarget(s, value, write = false) {
+  // Read-only fact gathering for a Preflight. Never writes; GitHub failures
+  // become unknown checks (with redacted reasons) instead of errors.
+  async function preflightFacts(s, value, { rules = true } = {}) {
+    const facts = {
+      configured: true,
+      connected: !!s.token,
+      allowWorkflows,
+      target: value,
+      reasons: {},
+    };
+    if (!s.token) return facts;
+    // Repository and branch must be well formed before anything is requested.
+    const t = target({
+      repository: value?.repository,
+      branch: value?.branch,
+      path: "README.md",
+    });
+    try {
+      await repositories(s);
+    } catch (e) {
+      facts.reasons.installation = e.message;
+      return facts;
+    }
+    const fact = s.repositoryFacts.get(t.repository);
+    facts.installation = fact ? fact.installation : null;
+    facts.repository = fact ? fact.repository : null;
+    if (!fact) return facts;
+    try {
+      const branch = await github(
+        s,
+        `/repos/${t.repository}/branches/${encodeURIComponent(t.branch)}`,
+      );
+      facts.branch = {
+        protected: branch.protected === true,
+        commitSha:
+          typeof branch.commit?.sha === "string" ? branch.commit.sha : null,
+      };
+    } catch (e) {
+      if (e.status === 404) facts.branch = null;
+      else facts.reasons.branch = e.message;
+    }
+    if (rules && facts.branch)
+      try {
+        const found = await github(
+          s,
+          `/repos/${t.repository}/rules/branches/${encodeURIComponent(t.branch)}`,
+        );
+        if (Array.isArray(found)) facts.rules = found;
+      } catch {
+        // Advisory only: unreadable rules stay unknown and never block.
+      }
+    return facts;
+  }
+  async function preflight(s, value, options) {
+    return evaluatePreflight(await preflightFacts(s, value, options), {
+      kind: value?.kind,
+    });
+  }
+  // mode: "read" (installation only), "write" (every blocking Preflight check)
+  // or "branch" (access and source branch checks for branch creation).
+  async function authorizeTarget(s, value, mode = "read") {
     const t = target(value);
-    const repos = await repositories(s),
-      repo = repos.find((r) => r.repository === t.repository);
-    if (!repo || (write && !repo.writable))
-      throw fail(
-        403,
-        "This repository is not writable with your current GitHub App access. Download remains available.",
-      );
-    if (write && t.kind === "workflow" && !repo.workflowsWritable)
-      throw fail(
-        403,
-        "Workflow writes require server opt-in and GitHub App Workflows: write permission. Download YAML remains available.",
-      );
+    if (mode === "read") {
+      const repos = await repositories(s);
+      if (!repos.some((r) => r.repository === t.repository))
+        throw fail(
+          403,
+          "This repository is not shared with the GitHub App. Download remains available.",
+        );
+      return t;
+    }
+    // Enforcement equals display: the same evaluator, without advisory reads.
+    const failure = blockingFailure(
+      await preflight(s, t, { rules: false }),
+      mode === "branch" ? BRANCH_CHECKS : undefined,
+    );
+    if (failure)
+      throw fail(failure.status === "unknown" ? 502 : 403, failure.message);
     return t;
   }
   async function read(s, t) {
@@ -192,7 +281,12 @@ export function createPublishingService({
         operation = url.pathname.split("/").at(-1);
       if (url.origin !== origin || url.search)
         throw fail(400, "Invalid publishing request.");
-      if (!clientId) return reply({ configured: false, connected: false });
+      if (!clientId)
+        return reply(
+          operation === "preflight"
+            ? evaluatePreflight({ configured: false })
+            : { configured: false, connected: false },
+        );
       for (const [key, s] of sessions)
         if (s.expires <= now()) sessions.delete(key);
       const id = request.headers
@@ -318,13 +412,25 @@ export function createPublishingService({
           }
           return reply({ connected: true, identity: s.identity });
         }
+        if (operation === "preflight") {
+          try {
+            target({
+              repository: data?.repository,
+              branch: data?.branch,
+              path: "README.md",
+            });
+          } catch (e) {
+            throw fail(400, e.message);
+          }
+          return reply(await preflight(s, data));
+        }
         if (!s.token) throw fail(401, "Connect GitHub first.");
         if (operation === "repositories")
           return reply({ repositories: await repositories(s) });
         if (operation === "read")
           return reply(await read(s, await authorizeTarget(s, data)));
         if (operation === "branch") {
-          const t = await authorizeTarget(s, data, true);
+          const t = await authorizeTarget(s, data, "branch");
           const next = target({ ...t, branch: data.newBranch });
           if (
             data.confirmed !== true ||
@@ -366,7 +472,7 @@ export function createPublishingService({
           } catch (e) {
             throw fail(400, e.message);
           }
-          const t = await authorizeTarget(s, input, true);
+          const t = await authorizeTarget(s, input, "write");
           const current = await read(s, t);
           if (current.sha !== input.sha)
             throw Object.assign(
