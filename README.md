@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.1.** Usability scripts define seven novice and experienced scenarios with step budgets that scripted runs enforce, Guided start can restore a backup, and exports and backups now ask before leaving out unsaved section edits. No sessions with real participants have been run yet. [Usability scripts](docs/usability-scripts.md) · [Usability findings](docs/usability-findings.md) · [Guided start](docs/guided-start.md)
+**Version 1.9.2.** Stack Intelligence shows where each detected declaration came from and its named confidence basis, lists uncertain results separately, and marks results Stale after a newer push or 24 hours. [Stack Intelligence](docs/stack-intelligence.md#provenance-confidence-and-staleness) · [Stack DNA](docs/stack-dna.md) · [Stack-to-README](docs/stack-to-readme.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
