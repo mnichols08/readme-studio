@@ -34,6 +34,12 @@ export const READ_CHECKS = [
 ];
 // Checks the "Publish on a new branch" route enforces on the source branch.
 export const BRANCH_CHECKS = [...ACCESS_CHECKS, "branch-exists"];
+// Branch checks for a target kind: a workflow branch also needs the server
+// opt-in and Workflows: write, exactly like a workflow commit.
+export const branchChecks = (kind) =>
+  kind === "workflow"
+    ? [...BRANCH_CHECKS, "workflow-permission"]
+    : BRANCH_CHECKS;
 export const CHECK_LABELS = {
   service: "Publishing service",
   session: "GitHub session",
@@ -213,17 +219,21 @@ export function evaluatePreflight(facts = {}, { kind, now = Date.now } = {}) {
         reasons.branch || "The branch could not be checked.",
       );
   }
-  // path-supported is pure validation and needs no network.
-  try {
-    validTarget({ ...raw, kind });
-    add(
-      "path-supported",
-      "pass",
-      `${t.path} is a supported ${kind === "workflow" ? "workflow" : kind === "asset" ? "asset" : "README"} path.`,
-    );
-  } catch (e) {
-    add("path-supported", "fail", e.message);
-  }
+  // path-supported is pure validation and needs no network. Without a chosen
+  // target there is nothing to validate yet.
+  if (!facts.target)
+    add("path-supported", "unknown", "Requires a repository, branch and path.");
+  else
+    try {
+      validTarget({ ...raw, kind });
+      add(
+        "path-supported",
+        "pass",
+        `${t.path} is a supported ${kind === "workflow" ? "workflow" : kind === "asset" ? "asset" : "README"} path.`,
+      );
+    } catch (e) {
+      add("path-supported", "fail", e.message);
+    }
   // workflow-permission (workflow publishing only)
   if (
     ids.includes("workflow-permission") &&

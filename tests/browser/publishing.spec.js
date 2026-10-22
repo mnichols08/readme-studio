@@ -104,10 +104,17 @@ async function setup(
         (failAsset && route.request().postDataJSON().path.endsWith("-dark.svg"))
       ) {
         status = 403;
-        data = {
-          error:
-            "GitHub denied access: branch protection. Download remains available.",
-        };
+        data =
+          fail === "preflight"
+            ? {
+                error:
+                  "Your GitHub account cannot push to octocat/octocat. Ask an owner for write access.",
+                preflight: "user-push",
+              }
+            : {
+                error:
+                  "GitHub denied access: branch protection. Download remains available.",
+              };
       } else
         data = {
           ...route.request().postDataJSON(),
@@ -298,6 +305,21 @@ test("read-only repository shows the failing check and no confirm control", asyn
   ).toBeVisible();
   expect(writes).toHaveLength(0);
 });
+test("the server's own Preflight refusal does not suggest the new-branch route", async ({
+  page,
+}) => {
+  const { d } = await setup(page, { fail: "preflight" });
+  await d.getByLabel(/I reviewed this diff/).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await expect(d.locator("[data-status]")).toContainText("cannot push");
+  await expect(d.locator("[data-status]")).not.toContainText(
+    "Publish on a new branch instead",
+  );
+  await expect(d.locator("[data-new-branch-route]")).not.toHaveAttribute(
+    "open",
+    "",
+  );
+});
 test("archived repository and missing branch keep the review read-only", async ({
   page,
 }) => {
@@ -308,6 +330,8 @@ test("archived repository and missing branch keep the review read-only", async (
   });
   await expect(d.locator('[data-check="not-archived"]')).toContainText("Fail");
   await expect(d.getByLabel(/I reviewed this diff/)).toHaveCount(0);
+  // The server refuses branch creation in an archived repository too.
+  await expect(d.locator("[data-new-branch-route]")).toHaveCount(0);
   access.repository = { push: true, archived: false, defaultBranch: "main" };
   access.branch = null;
   await d.getByLabel("Target branch").fill("missing");

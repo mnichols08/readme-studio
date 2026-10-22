@@ -6,6 +6,8 @@ import {
   PREFLIGHT_CHECKS,
   ACCESS_CHECKS,
   READ_CHECKS,
+  BRANCH_CHECKS,
+  branchChecks,
 } from "../src/publishing/preflight.js";
 import { PublishingClient } from "../src/github/publishing-client.js";
 
@@ -123,6 +125,49 @@ describe("evaluatePreflight", () => {
     expect(check(report, id).message).toContain(message);
     expect(report.verdict).toBe("read-only");
     expect(blockingFailure(report).id).toBe(id);
+  });
+
+  it.each([
+    [{ configured: true, connected: false }, "session"],
+    [{ configured: false }, "service"],
+  ])(
+    "without a chosen target, path support is unknown, not a failure",
+    (local, blocker) => {
+      const report = evaluatePreflight(local);
+      expect(check(report, "path-supported")).toMatchObject({
+        status: "unknown",
+        message: "Requires a repository, branch and path.",
+      });
+      expect(report.checks.filter((c) => c.status === "fail")).toHaveLength(1);
+      expect(blockingFailure(report).id).toBe(blocker);
+    },
+  );
+
+  it("branch checks include archive state, and workflow permission for workflows", () => {
+    expect(BRANCH_CHECKS).toContain("not-archived");
+    expect(branchChecks()).toEqual(BRANCH_CHECKS);
+    expect(branchChecks("workflow")).toEqual([
+      ...BRANCH_CHECKS,
+      "workflow-permission",
+    ]);
+    const archived = evaluatePreflight(
+      facts({
+        repository: { push: true, archived: true, defaultBranch: "main" },
+      }),
+    );
+    expect(passes(archived, branchChecks())).toBe(false);
+    const workflow = evaluatePreflight(
+      facts({
+        target: {
+          repository: "octocat/octocat",
+          branch: "docs",
+          path: ".github/workflows/readme-studio.yml",
+          kind: "workflow",
+        },
+      }),
+    );
+    expect(passes(workflow, branchChecks())).toBe(true);
+    expect(passes(workflow, branchChecks("workflow"))).toBe(false);
   });
 
   it("marks dependent checks unknown instead of guessing", () => {
@@ -293,6 +338,21 @@ describe("PublishingClient injection", () => {
     );
     expect(fetchImpl.mock.calls[1][0]).toBe("/api/publishing/preflight");
     expect(fetchImpl.mock.calls[1][1].headers["X-Studio-CSRF"]).toBe("token");
+  });
+  it("passes the server's Preflight refusal marker through", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        Response.json(
+          { error: "Cannot push.", preflight: "user-push" },
+          { status: 403 },
+        ),
+      );
+    const client = new PublishingClient({ fetchImpl, online: () => true });
+    await expect(client.request("commit", {})).rejects.toMatchObject({
+      status: 403,
+      preflight: "user-push",
+    });
   });
   it("surfaces server errors with status", async () => {
     const fetchImpl = vi

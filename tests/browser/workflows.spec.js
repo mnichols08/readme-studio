@@ -211,6 +211,8 @@ test("denied workflow permission keeps the review read-only with YAML download",
   await expect(
     d.getByRole("button", { name: "Confirm and publish workflow" }),
   ).toHaveCount(0);
+  // Branch creation needs the same workflow permission, so it is not offered.
+  await expect(d.locator("[data-new-branch-route]")).toHaveCount(0);
   const download = page.waitForEvent("download");
   await d.getByRole("button", { name: "Download YAML fallback" }).click();
   expect((await download).suggestedFilename()).toMatch(/\.ya?ml$/);

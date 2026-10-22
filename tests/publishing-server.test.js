@@ -412,6 +412,7 @@ it.each([
     expect(failed.message).toContain(message);
     expect(commit.response.status).toBe(403);
     expect(commit.value.error).toBe(failed.message);
+    expect(commit.value.preflight).toBe(id);
     expect(puts(h)).toBe(0);
   },
 );
@@ -475,6 +476,7 @@ it.each([
     });
     expect(commit.response.status).toBe(403);
     expect(commit.value.error).toBe(failed.message);
+    expect(commit.value.preflight).toBe("workflow-permission");
     expect(puts(h)).toBe(0);
   },
 );
@@ -530,4 +532,48 @@ it("branch creation is refused on a read-only installation before any ref write"
   expect(h.upstream.mock.calls.some(([url]) => url.endsWith("/git/refs"))).toBe(
     false,
   );
+});
+const refWrites = (h) =>
+  h.upstream.mock.calls.filter(([url]) => url.endsWith("/git/refs")).length;
+it("branch creation is refused in an archived repository", async () => {
+  const h = harness({ archived: true });
+  await h.connect();
+  const result = await h.request("branch", {
+    ...readmeTarget,
+    commitSha: sha,
+    newBranch: "readme-studio/update",
+    confirmed: true,
+  });
+  expect(result.response.status).toBe(403);
+  expect(result.value.error).toContain("archived");
+  expect(result.value.preflight).toBe("not-archived");
+  expect(refWrites(h)).toBe(0);
+});
+it("workflow branch creation keeps the opt-in and Workflows: write boundary", async () => {
+  const input = {
+    repository: "octocat/octocat",
+    branch: "main",
+    path: ".github/workflows/readme-studio.yml",
+    kind: "workflow",
+    commitSha: sha,
+    newBranch: "readme-studio/wf",
+    confirmed: true,
+  };
+  for (const options of [
+    { allowWorkflows: false, workflows: false },
+    { allowWorkflows: true, workflows: false },
+  ]) {
+    const h = harness(options);
+    await h.connect();
+    const result = await h.request("branch", input);
+    expect(result.response.status).toBe(403);
+    expect(result.value.preflight).toBe("workflow-permission");
+    expect(refWrites(h)).toBe(0);
+  }
+  const allowed = harness({ workflows: true });
+  await allowed.connect();
+  expect((await allowed.request("branch", input)).value.branch).toBe(
+    "readme-studio/wf",
+  );
+  expect(refWrites(allowed)).toBe(1);
 });

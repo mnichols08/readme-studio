@@ -45,7 +45,11 @@ export class PublishingClient {
         new Error(
           value.error || "Publishing failed. Download remains available.",
         ),
-        { status: response.status, remote: value.remote },
+        {
+          status: response.status,
+          remote: value.remote,
+          preflight: value.preflight,
+        },
       );
     if (value.csrf) this.csrf = value.csrf;
     return value;

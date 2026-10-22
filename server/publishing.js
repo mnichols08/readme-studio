@@ -6,7 +6,7 @@ import {
   blockingFailure,
   passes,
   ACCESS_CHECKS,
-  BRANCH_CHECKS,
+  branchChecks,
 } from "../src/publishing/preflight.js";
 import {
   target,
@@ -227,10 +227,14 @@ export function createPublishingService({
     // Enforcement equals display: the same evaluator, without advisory reads.
     const failure = blockingFailure(
       await preflight(s, t, { rules: false }),
-      mode === "branch" ? BRANCH_CHECKS : undefined,
+      mode === "branch" ? branchChecks(t.kind) : undefined,
     );
+    // Marked so the dialog can tell its own Preflight refusal from GitHub's.
     if (failure)
-      throw fail(failure.status === "unknown" ? 502 : 403, failure.message);
+      throw Object.assign(
+        fail(failure.status === "unknown" ? 502 : 403, failure.message),
+        { preflight: failure.id },
+      );
     return t;
   }
   async function read(s, t) {
@@ -511,6 +515,7 @@ export function createPublishingService({
             ? e.message
             : "Publishing could not complete. Your local draft is safe.",
           ...(e.remote ? { remote: e.remote } : {}),
+          ...(e.preflight ? { preflight: e.preflight } : {}),
         },
         Number.isInteger(e.status) && e.status >= 400 && e.status < 600
           ? e.status

@@ -20,6 +20,7 @@ import {
   evaluatePreflight,
   blockingFailure,
   passes,
+  branchChecks,
   CHECK_LABELS,
   READ_CHECKS,
 } from "../publishing/preflight.js";
@@ -320,11 +321,9 @@ export class PublishDialog extends HTMLElement {
         ? this.querySelector("[data-message]")?.value
         : undefined,
       writable = this.writableTarget(),
-      branchable = passes(this.preflight, [
-        "installation",
-        "contents-permission",
-        "user-push",
-      ]);
+      // Enforcement equals display: offer the route only when the server's
+      // branch operation would accept it.
+      branchable = passes(this.preflight, branchChecks(this.kind));
     this.querySelector("[data-review]").innerHTML =
       `<h2>Review ${b.sha ? "updated file" : "New file"}</h2><p>${html(b.repository)} · branch ${html(b.branch)} · ${html(b.path)}</p><p>SHA baseline: <code>${html(b.sha || "New file (does not exist)")}</code></p><p>${diff.added} added / ${diff.removed} removed lines in changed region. Sections: ${html(diff.sections.join(", ") || "body content")}.</p>${sourceDiffMarkup({ beforeLabel: `Remote ${this.kind === "workflow" ? "YAML" : "Markdown"}`, afterLabel: `Prepared ${this.kind === "workflow" ? "YAML" : "Markdown"}`, label: "Publishing diff" })}<label>Commit message<input data-message value="Update README with README Studio" maxlength="500"></label>${writable ? `<label class="check"><input type="checkbox" data-confirm> I reviewed this diff and confirm ${b.sha ? "updating" : "creating"} this exact repository, branch, path and every listed asset write.</label><button data-commit ${b.content === this.source && !this.assetRows?.some((r) => r.status !== "unchanged") ? "disabled" : ""}>Confirm and publish README</button>` : `<p data-read-only>Read-only mode: no publish control is available until a Preflight for this exact target passes. Re-check access after fixing the failing check. Download remains available.</p>`}<div data-result></div><section data-stale></section>${branchable ? `<details data-new-branch-route><summary>Publish on a new branch instead</summary><p>Create a branch from ${html(b.branch)} at commit ${html(b.commitSha || "unknown")}. This creates only a branch; committing still needs a fresh review.</p><label>New branch name<input data-new-branch value="readme-studio/update-${new Date().toISOString().slice(0, 10)}"></label><label class="check"><input type="checkbox" data-confirm-branch> I confirm creating this branch in ${html(b.repository)}.</label><button data-create-branch>Create branch for review</button></details>` : ""}`;
     if (this.assetRows?.length) {
@@ -416,9 +415,11 @@ export class PublishDialog extends HTMLElement {
       result = await this.client.request("commit", input);
     } catch (e) {
       // GitHub's own refusal is definitive; route to the new-branch review.
-      const route = [403, 422].includes(e.status)
-        ? this.querySelector("[data-new-branch-route]")
-        : null;
+      // A refusal by the server's own Preflight would refuse the branch too.
+      const route =
+        [403, 422].includes(e.status) && !e.preflight
+          ? this.querySelector("[data-new-branch-route]")
+          : null;
       if (route) {
         route.open = true;
         e.message += " You can use “Publish on a new branch instead” below.";
