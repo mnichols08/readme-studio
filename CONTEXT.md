@@ -1,8 +1,8 @@
 # Readme Studio
 
-A local-first workspace for authoring GitHub profile and repository READMEs. This glossary covers the language used for documentation drift detection (Epic 13).
+A local-first workspace for authoring GitHub profile and repository READMEs. This glossary covers the language used for documentation drift detection (Epic 13) and for guided first-run and task-based UX (Epic 01).
 
-## Language
+## Language: documentation drift (Epic 13)
 
 **Source**:
 The user's own Markdown text of a document. Never used for anything fetched from GitHub.
@@ -75,3 +75,59 @@ _Avoid_: Auto-fix, quick fix, patch
 **Conflict** (drift fix):
 The Source, document or target changed after the Drift check that produced the Fix proposals. Nothing is applied; the author re-runs the check.
 _Avoid_: Merge, rebase
+
+## Language: guided first-run and task-based UX (Epic 01)
+
+### Starting
+
+**Guided start**:
+The screen that asks a new author what they want to do first, offering the three Goals, the Start paths and a plain statement of where their work is kept. Opens by itself only when the browser has no saved workspace; afterwards it is reopened on request.
+_Avoid_: Onboarding, wizard, welcome tour, setup
+
+**Goal**:
+The first task an author chose in Guided start: a **Profile README**, a **Repository README** or a **README audit**. One per workspace, changed only by choosing again, and it never changes a document.
+_Avoid_: Mode, persona, track, intent
+
+**Start path**:
+A way to begin that is not a Goal: start blank, import an existing README, pick a template, open a Studio project, autofill from GitHub or explore the sample. Every Start path that existed before Guided start stays reachable under its existing name.
+_Avoid_: Shortcut, quick start, advanced entry route
+
+**Locality statement**:
+The fixed text in Guided start that says drafts stay in this browser, GitHub is contacted only when the author chooses a GitHub action, and nothing is published without its own review.
+_Avoid_: Privacy banner, disclaimer
+
+### Next steps
+
+**Arrival**:
+The moment a document was just created or opened by an import, an audit, a template or a blank start. Only the latest Arrival of the active document counts, and it is forgotten on reload or document switch.
+_Avoid_: Event, trigger, moment, onboarding step
+
+**Next step**:
+A suggested existing tool shown after an Arrival, with a one-line reason. Choosing it only opens that tool's normal flow; a Next step never edits Source, applies a change or publishes.
+_Avoid_: Recommendation, quick action, tip, auto-fix
+
+**Next steps panel**:
+The non-blocking region that lists at most three Next steps for the active document's Arrival, beside a route to all tools. It never takes focus by itself and the author can hide it or turn it off.
+_Avoid_: Wizard, checklist, coach, popup
+
+### Usability validation
+
+**Usability scenario**:
+A scripted realistic task with a fixed starting state, success criterion and audience, either **Novice** (first visit, no saved workspace) or **Experienced** (saved workspace, uses search, tools and shortcuts).
+_Avoid_: Test case, user story, journey
+
+**Scripted run**:
+An automated execution of a Usability scenario's intended path that records whether it completes and how many author actions it takes. It measures navigation cost, not people.
+_Avoid_: User test, usability evidence, session
+
+**Participant session**:
+A Usability scenario attempted by a real person with a facilitator taking notes. Its results exist only when such a session actually happened.
+_Avoid_: Scripted run, simulated user
+
+**Step count**:
+The number of author actions (clicks, key presses, field entries) a Scripted run needs to complete a Usability scenario.
+_Avoid_: Score, time on task, effort
+
+**Friction**:
+A recorded obstacle in one Usability scenario at a named step, with a severity from 1 (cannot complete) to 4 (cosmetic) and the kind of run that found it.
+_Avoid_: Bug, complaint, pain point
