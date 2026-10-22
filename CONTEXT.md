@@ -1,6 +1,6 @@
 # Readme Studio
 
-A local-first workspace for authoring GitHub profile and repository READMEs. This glossary covers the language used for documentation drift detection (Epic 13) and for guided first-run and task-based UX (Epic 01).
+A local-first workspace for authoring GitHub profile and repository READMEs. This glossary covers the language used for documentation drift detection (Epic 13), for guided first-run and task-based UX (Epic 01) and for repository evidence and stack intelligence (Epic 04).
 
 ## Language: documentation drift (Epic 13)
 
@@ -131,3 +131,79 @@ _Avoid_: Score, time on task, effort
 **Friction**:
 A recorded obstacle in one Usability scenario at a named step, with a severity from 1 (cannot complete) to 4 (cosmetic) and the kind of run that found it.
 _Avoid_: Bug, complaint, pain point
+
+## Language: repository evidence and stack intelligence (Epic 04)
+
+### Discovery
+
+**Manifest**:
+A recognised file in a repository that declares dependencies for one ecosystem (`package.json`, `Cargo.toml`, `pyproject.toml`, `requirements.txt` or `go.mod`). A manifest is read as data and never executed.
+_Avoid_: Config, build file, lockfile
+
+**Declaration**:
+One dependency or engine statement in a Manifest, with its ecosystem and kind (runtime, development, peer, build, optional). A Declaration says what a repository asks for, never what a developer knows or what runs in production.
+_Avoid_: Skill, usage, technology, dependency graph
+
+**Project boundary**:
+A directory in a repository that holds at least one Manifest and is treated as its own project: the repository root, a Workspace member or a Nested project. Every Declaration belongs to exactly one Project boundary.
+_Avoid_: Package, module, app, sub-repo
+
+**Workspace declaration**:
+A root-level statement that names member directories: `workspaces` in `package.json`, `packages` in `pnpm-workspace.yaml`, `[workspace] members` in `Cargo.toml`, `use` in `go.work` or `[tool.uv.workspace] members` in `pyproject.toml`. Read as data; patterns it cannot interpret are reported, not guessed.
+_Avoid_: Monorepo config, workspace file
+
+**Workspace member**:
+A Project boundary whose directory is named by a Workspace declaration.
+_Avoid_: Child package, sub-project
+
+**Nested project**:
+A Project boundary below the root that holds a Manifest but is not named by any Workspace declaration, for example `docs/site/package.json`. Shown separately from Workspace members because it may be an example or tool rather than part of the product.
+_Avoid_: Orphan, member
+
+**Nested discovery**:
+The separately consented, bounded search of one repository tree listing for Manifests below the root. Off unless the author turns it on for the session; root-only analysis is unchanged without it.
+_Avoid_: Crawl, recursive scan, deep scan
+
+**Discovery limit**:
+A fixed bound on Nested discovery (directory depth, excluded directories, Manifests read per repository, repositories per run). A Manifest beyond a limit is reported as found but not read, never as absent.
+_Avoid_: Quota, cutoff
+
+### Freshness and confidence
+
+**Provenance**:
+Where and when one Declaration was observed: repository, branch, Project boundary, Manifest path, file revision, section, line when known, and Observed at.
+_Avoid_: Source (that word means the author's Markdown), citation, origin
+
+**Observed at**:
+The time Studio read the Manifest from GitHub. Not the time the Manifest was last changed and not the commit date.
+_Avoid_: Updated at, last modified, timestamp
+
+**Stale** (stack result):
+A stack result that may no longer match the repository: the loaded repository list reports a push after it was Observed at, or it was Observed at more than 24 hours ago. Stale is a reason to refresh, never a claim that anything changed. Not the same as a Different target or an Observed mismatch.
+_Avoid_: Outdated, expired, invalid
+
+**Confidence basis**:
+The named reason a Declaration is believed, one of **explicit** (stated directly in a supported field), **inherited** (resolved from a workspace table in the same file), **conditional** (optional, peer, build or target-specific, so it may not be active) or **ambiguous** (the file cannot distinguish direct from generated or aliased entries). A basis comes with a one-line explanation and is never a percentage or ranking.
+_Avoid_: Confidence score, certainty, accuracy
+
+**Uncertain stack result**:
+A Declaration whose Confidence basis is conditional or ambiguous, or a Manifest that was found but not read. Shown beside explicit results with its reason, never hidden and never promoted.
+_Avoid_: Uncertain finding (that is a Drift check result), warning, low confidence
+
+### Evidence to documentation
+
+**Evidence suggestion**:
+Editable README text derived only from Declarations and Manifest facts of one stack result, carrying the Provenance it came from. Starts unselected.
+_Avoid_: Recommendation, generated section, auto-fill
+
+**Command suggestion**:
+An Evidence suggestion that contains a shell command, built only from a fixed set of conventional commands for the evidence present. It is documentation text that Studio never runs.
+_Avoid_: Script, action, run step
+
+**Technology claim**:
+An Evidence suggestion that states the repository uses a technology, package manager or published package, such as a Detected stack section, a badge or a registry link.
+_Avoid_: Skill, proficiency, stack badge
+
+**Confirmation**:
+The author's explicit per-item acknowledgement that a selected Command suggestion or Technology claim is true for their repository. Required before the exact diff can be reviewed, separate from diff approval, and cleared when the item's text changes.
+_Avoid_: Approval (that is for the whole diff), consent (that is for reading manifests), verification
