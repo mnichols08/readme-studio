@@ -56,12 +56,24 @@ const WORD = /[\p{L}\p{N}_]/u,
   // (`docs/guide.md#x`, `guide.md.bak`); at the end of a token they are
   // punctuation (`See docs/guide.md.`).
   SEPARATOR = /[/.\\#?%@~+]/;
+// Whether the `=` or `,` just before `at` joins a longer URL: a query value
+// (`view?file=docs/guide.md`) or a comma inside a URL
+// (`example.com/x,docs/guide.md`). An HTML attribute (`href=docs/x.md`), a
+// command option (`--config=docs/x.md`) or a comma in prose does not.
+function joinedBy(text, at) {
+  const mark = text[at - 1];
+  if (mark === ",") return JOINED.test(text[at - 2] || "");
+  if (mark !== "=") return false;
+  const run = text.slice(0, at - 1).match(/[^\s"'(<[`]*$/)[0];
+  return /[?&#/:;]/.test(run);
+}
 // Where `find` occurs in `text` as a whole token: not inside a longer word,
 // path or URL. So `lint` is not found in `lint:fix`, `guide.md` not in
 // `myguide.md` or `docs/guide.md`, `docs/guide.md` not in
-// `other/docs/guide.md`, and `#setup` not in `docs/x.md#setup`. A
-// suggestion therefore lands only on its own claim, never on a longer,
-// different link, path or anchor that shares its text.
+// `other/docs/guide.md` or another URL's query (`?file=docs/guide.md`), and
+// `#setup` not in `docs/x.md#setup`. A suggestion therefore lands only on
+// its own claim, never on a longer, different link, path or anchor that
+// shares its text.
 export function occurrences(text, find) {
   const found = [];
   if (!find) return found;
@@ -73,7 +85,7 @@ export function occurrences(text, find) {
     const end = at + find.length,
       prev = text[at - 1] || "",
       next = text[end] || "";
-    if (JOINED.test(prev)) continue;
+    if (JOINED.test(prev) || joinedBy(text, at)) continue;
     // A find ending in a word character or a separator (`docs/`) is part
     // of a longer token when the name goes on (`docs/setup.md`).
     const last = find.at(-1);
@@ -106,7 +118,8 @@ export function placeFix(text, fix) {
 // evidence file, Baseline annotation and whether a suggestion was placed.
 export function driftProposals(source, result) {
   const lines = sourceLines(String(source ?? ""));
-  const byLine = new Map();
+  const byLine = new Map(),
+    applied = new Map();
   let unplaced = 0;
   for (const item of result?.results || []) {
     if (!REMEDIABLE.includes(item.status)) continue;
@@ -128,6 +141,16 @@ export function driftProposals(source, result) {
     if (item.status === "mismatch") proposal.status = "mismatch";
     const placed = item.fix ? placeFix(proposal.suggested, item.fix) : null;
     if (placed !== null) proposal.suggested = placed;
+    // The same correction found twice on a line (a path written as a code
+    // span and as a link) is placed by the first finding, which replaces
+    // every occurrence, so the second one is already in the suggested line.
+    const key = item.fix
+      ? JSON.stringify([item.fix.find, item.fix.replace])
+      : "";
+    const covered =
+      placed === null && !!key && !!applied.get(item.line)?.has(key);
+    if (placed !== null && key)
+      applied.set(item.line, (applied.get(item.line) || new Set()).add(key));
     proposal.findings.push({
       id: item.id,
       status: item.status,
@@ -140,7 +163,7 @@ export function driftProposals(source, result) {
         ? {
             find: item.fix.find,
             replace: item.fix.replace,
-            placed: placed !== null,
+            placed: placed !== null || covered,
           }
         : null,
     });

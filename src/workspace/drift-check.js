@@ -896,9 +896,9 @@ export function minimumMajor(range) {
   return version === null ? null : Number(version.split(".")[0]);
 }
 const NODE_CLAIMS = [
-  /\bnode(?:\.?js)?\s*(?:version\s*)?v?(\d{1,2})(?:\.\d+){0,2}\s*(?:\+|or (?:later|newer|higher|above|greater))/gi,
-  /\bnode(?:\.?js)?\s*(?:version\s*)?(?:>=|≥)\s*v?(\d{1,2})(?:\.\d+){0,2}/gi,
-  /\b(?:requires?|required|minimum|at least)\s+node(?:\.?js)?\s*(?:version\s*)?(?:v|>=\s*)?(\d{1,2})(?:\.\d+){0,2}\b/gi,
+  /\bnode(?:\.?js)?\s*(?:version\s*)?v?(\d{1,2}(?:\.\d+){0,2})\s*(?:\+|or (?:later|newer|higher|above|greater))/gi,
+  /\bnode(?:\.?js)?\s*(?:version\s*)?(?:>=|≥)\s*v?(\d{1,2}(?:\.\d+){0,2})/gi,
+  /\b(?:requires?|required|minimum|at least)\s+node(?:\.?js)?\s*(?:version\s*)?(?:v|>=\s*)?(\d{1,2}(?:\.\d+){0,2})\b/gi,
 ];
 
 // GitHub footnote definitions (`[^1]: Benchmarks.`). Marked has no footnote
@@ -1085,10 +1085,58 @@ export function driftClaims(markdown, destination) {
         ...at,
       });
   };
-  for (const block of marked.lexer(source)) {
+  const blocks = marked.lexer(source),
+    offsets = [];
+  for (const block of blocks) {
     const found = source.indexOf(block.raw, cursor);
-    const offset = found === -1 ? cursor : found;
+    offsets.push(found === -1 ? cursor : found);
     if (found !== -1) cursor = found + block.raw.length;
+  }
+  // The definition each reference label uses (the first one, as Markdown
+  // does), with the top-level block it is written in. Only real definitions
+  // count: one in a code sample or an HTML comment is not lexed as one.
+  const definitions = new Map();
+  blocks.forEach((block, index) =>
+    visitTokens([block], (token) => {
+      if (token.type === "def" && !definitions.has(token.tag))
+        definitions.set(token.tag, { block, offset: offsets[index] });
+    }),
+  );
+  // The line of the definition a reference link (`[text][label]`,
+  // `[label][]` or `[label]`) uses, or null when it cannot be told apart.
+  const definitionLine = (token, value) => {
+    const raw = token.raw.replace(/^!/, "");
+    const label = (
+      raw.match(/\]\[([^\]]+)\]$/)?.[1] ??
+      raw.replace(/^\[/, "").replace(/\](?:\[\])?$/, "")
+    )
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    const definition = definitions.get(label);
+    if (!definition) return null;
+    const text = maskCode(definition.block.raw);
+    const matches = [
+      ...text.matchAll(
+        new RegExp(
+          String.raw`^[ \t]{0,3}(?:>[ \t]?)*[ \t]{0,3}\[[ \t]*${label
+            .split(" ")
+            .map(escapeRegExp)
+            .join(
+              String.raw`\s+`,
+            )}[ \t]*\]:[ \t]*(?:\n[ \t>]*)?<?${escapeRegExp(value)}(?=[\s>]|$)`,
+          "gim",
+        ),
+      ),
+    ].filter((match) => match[0].endsWith(value));
+    if (matches.length !== 1) return null;
+    const [match] = matches;
+    return lineAt(
+      definition.offset + match.index + match[0].length - value.length,
+    );
+  };
+  for (const [index, block] of blocks.entries()) {
+    const offset = offsets[index];
     // Separate cursors keep repeated text in code, prose and links on the
     // right line; text not found verbatim (nested list content is
     // de-indented by the lexer) falls back to the block's first line.
@@ -1099,13 +1147,25 @@ export function driftClaims(markdown, destination) {
       cursors[cursor] = index + 1;
       return lineAt(offset + index);
     };
-    // A link's own line: where its URL is written as a link (`](url`, an
-    // HTML attribute or, for a reference link, its definition anywhere in
-    // the document), never a plain prose mention of the same path on an
-    // earlier line. A full URL may also be a bare autolink. When the URL is
-    // not written verbatim (escapes or entities), the line is a best guess
-    // and the claim is marked unlocated, so no fix is suggested for it.
-    const linkAt = (value) => {
+    // A link's own line: where its URL is written as a link (`](url` or an
+    // href/src attribute) outside code spans, code blocks and HTML comments,
+    // or, for a reference link, the definition its label uses. Never a plain
+    // prose mention of the same path, a code example, a comment or another
+    // URL's query string (`?file=docs/x.md`). A full URL may also be a bare
+    // autolink. When the URL is not written verbatim (escapes or entities)
+    // or the definition cannot be told apart, the line is a best guess and
+    // the claim is marked unlocated, so no fix is suggested for it.
+    const visible = maskCode(block.raw);
+    const linkAt = (value, token) => {
+      if (value && token && /^(?:link|image)$/.test(token.type)) {
+        // A reference link (`[text][label]`, `[label][]`, `[label]`); an
+        // inline link ends with `)` and an autolink is not bracketed.
+        if (/^!?\[[\s\S]*\]$/.test(token.raw)) {
+          const line = definitionLine(token, value);
+          if (line !== null) return { line, located: true };
+          return { line: lineOf(value, "link"), located: false };
+        }
+      }
       if (value) {
         const url = escapeRegExp(value),
           bare =
@@ -1113,26 +1173,15 @@ export function driftClaims(markdown, destination) {
               ? ""
               : String.raw`|^|[\s(*_~]`;
         const inline = new RegExp(
-          String.raw`(?<=\]\(\s*<?|<|=\s*["']?${bare})${url}(?=[\s)>"']|$)`,
+          String.raw`(?<=\]\(\s*<?|<|\s(?:[Hh][Rr][Ee][Ff]|[Ss][Rr][Cc](?:[Ss][Ee][Tt])?)\s*=\s*["']?${bare})${url}(?=[\s)>"']|$)`,
           "gm",
         );
         inline.lastIndex = cursors.link;
-        const here = inline.exec(block.raw);
+        const here = inline.exec(visible);
         if (here) {
           cursors.link = here.index + 1;
           return { line: lineAt(offset + here.index), located: true };
         }
-        const definition = new RegExp(
-          String.raw`^[ \t]{0,3}(?:>[ \t]?)*[ \t]{0,3}\[[^\]\n]+\]:[ \t]*\n?[ \t]*<?${url}(?=[\s>]|$)`,
-          "m",
-        ).exec(source);
-        if (definition)
-          return {
-            line: lineAt(
-              definition.index + definition[0].length - value.length,
-            ),
-            located: true,
-          };
       }
       return { line: lineOf(value, "link"), located: false };
     };
@@ -1243,7 +1292,23 @@ export function driftClaims(markdown, destination) {
         // A paragraph's (or list item's) own text tokens repeat its text;
         // their statements are read once, from the outermost token.
         visitTokens(token.tokens || [], (child) => covered.add(child));
-        const text = token.text.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1");
+        // Statements are read with inline links reduced to their text
+        // (`[Node.js](https://nodejs.org) 18+`); `at` maps each character
+        // back to where it is written in token.text.
+        let text = "",
+          last = 0;
+        const at = [];
+        const keep = (from, to) => {
+          text += token.text.slice(from, to);
+          for (let n = from; n < to; n++) at.push(n);
+        };
+        for (const found of token.text.matchAll(/!?\[([^\]]*)\]\([^)]*\)/g)) {
+          keep(last, found.index);
+          const inner = found.index + found[0].indexOf("[") + 1;
+          keep(inner, inner + found[1].length);
+          last = found.index + found[0].length;
+        }
+        keep(last, token.text.length);
         // Two patterns can match the same statement (`Requires Node 18+`):
         // the earlier pattern's match is kept and overlapping ones are
         // dropped, but separate statements on one line (`Node 18+ and
@@ -1261,18 +1326,62 @@ export function driftClaims(markdown, destination) {
             statements.push({ match, index: match.index, end });
           }
         statements.sort((a, b) => a.index - b.index);
-        for (const { match } of statements)
+        // Where each statement is written: `written` is the text its fix
+        // replaces, on one line, and `versionAt` where its version starts in
+        // it. A statement written as read is replaced whole. One with a link
+        // in it (`[Node.js](https://nodejs.org) 18+`) or wrapped onto a
+        // second line is replaced from its version to the end of that line,
+        // once, so the suggestion still lands on the version itself.
+        const written = (match, index, end) => {
+          const from = at[index],
+            statement = token.text.slice(from, at[end - 1] + 1),
+            version = at[index + match[0].search(/\d/)] - from;
+          const start = block.raw.indexOf(statement, cursors.prose);
+          if (
+            start !== -1 &&
+            statement === match[0] &&
+            !statement.includes("\n")
+          ) {
+            cursors.prose = start + 1;
+            return {
+              line: lineAt(offset + start),
+              written: statement,
+              versionAt: version,
+            };
+          }
+          const stop = statement.indexOf("\n", version),
+            lead = /[vV]/.test(statement[version - 1]) ? 1 : 0;
+          const segment = statement
+            .slice(version - lead, stop === -1 ? undefined : stop)
+            .trimEnd();
+          // A list item's continuation lines are de-indented in token.text,
+          // so a wrapped statement is found by the line holding its version.
+          const here =
+            start !== -1
+              ? start + version - lead
+              : block.raw.indexOf(segment, cursors.prose);
+          if (here === -1) return { line: lineOf(match[0], "prose") };
+          cursors.prose = here + 1;
+          return {
+            line: lineAt(offset + here),
+            written: segment,
+            versionAt: lead,
+            once: true,
+          };
+        };
+        for (const { match, index, end } of statements)
           add({
             category: "config",
             kind: "node",
-            major: Number(match[1]),
+            major: Number(match[1].split(".")[0]),
+            version: match[1],
             text: match[0].trim(),
-            line: lineOf(match[0], "prose"),
+            ...written(match, index, end),
           });
       }
     });
-    for (const { value, image } of tokenUrls([block])) {
-      const { line, located } = linkAt(value.trim());
+    for (const { value, image, token } of tokenUrls([block])) {
+      const { line, located } = linkAt(value.trim(), token);
       link(value, image, located ? { line } : { line, unlocated: true });
     }
   }
@@ -1292,6 +1401,34 @@ export function driftClaims(markdown, destination) {
       `${otherRefs} link(s) to this repository point at another branch or commit and were not checked.`,
     );
   return { claims, notes, anchors: markdownAnchors(source) };
+}
+// `raw` with code (fenced code, code spans) and HTML comments blanked out,
+// keeping every offset and line break, so a link written as an example or
+// commented out is never taken for the link itself.
+function maskCode(raw) {
+  const blank = (text) => text.replace(/[^\n]/g, " ");
+  const lines = raw.split("\n");
+  let fence = null;
+  for (const [index, line] of lines.entries()) {
+    const marker = line.match(/^[ \t>]*(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (
+        marker &&
+        marker[1][0] === fence[0] &&
+        marker[1].length >= fence.length &&
+        !marker[2].trim()
+      )
+        fence = null;
+      lines[index] = blank(line);
+    } else if (marker && !(marker[1][0] === "`" && marker[2].includes("`"))) {
+      fence = marker[1];
+      lines[index] = blank(line);
+    }
+  }
+  return lines
+    .join("\n")
+    .replace(/(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g, blank)
+    .replace(/<!--[\s\S]*?-->/g, blank);
 }
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1878,21 +2015,16 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
           `package.json engines.node is "${pkg.data.node}", which could not be compared.`,
           "package.json",
         );
-      else if (claim.major < minimum)
+      else if (olderNode(claim.version ?? String(claim.major), version))
         result(
           claim,
           "uncertain",
-          `This text suggests Node ${claim.major}; package.json engines.node is "${pkg.data.node}" (Node ${version} or newer). Reading prose is a heuristic.`,
+          `This text suggests Node ${claim.version ?? claim.major}; package.json engines.node is "${pkg.data.node}" (Node ${version} or newer). Reading prose is a heuristic.`,
           "package.json",
-          // The whole minimum: for `>=20.11`, `Node.js 18.17` becomes
-          // `Node.js 20.11`, not `Node.js 20`, which would still understate it.
-          {
-            find: claim.text,
-            replace: claim.text.replace(
-              new RegExp(`(?<!\\d)${claim.major}(?:\\.\\d+)*`),
-              version,
-            ),
-          },
+          // The whole minimum, on the version as written: for `>=20.11`,
+          // `Node.js 18.17` becomes `Node.js 20.11`, not `Node.js 20`, which
+          // would still understate it.
+          nodeFix(claim, version),
         );
       else
         result(
@@ -1990,6 +2122,32 @@ function resolvePath(dir, path) {
   } catch {
     return null;
   }
+}
+// Whether a prose Node version is older than the engines.node minimum,
+// compared only as far as the prose writes it: `20` names the whole 20
+// release line, so it matches `>=20.11`, while `20.5` is older.
+function olderNode(written, minimum) {
+  const given = written.split(".").map(Number),
+    least = minimum.split(".").map(Number);
+  for (const [index, part] of given.entries()) {
+    const other = least[index] || 0;
+    if (part !== other) return part < other;
+  }
+  return false;
+}
+// The fix for an older Node statement: its version, where it is written,
+// replaced by the whole minimum.
+function nodeFix(claim, minimum) {
+  const find = claim.written ?? claim.text,
+    given = claim.version ?? String(claim.major);
+  const at =
+    claim.versionAt ?? find.search(new RegExp(`(?<!\d)${escapeRegExp(given)}`));
+  if (at < 0 || find.slice(at, at + given.length) !== given) return null;
+  return {
+    find,
+    replace: find.slice(0, at) + minimum + find.slice(at + given.length),
+    ...(claim.once ? { once: true } : {}),
+  };
 }
 // Suggested corrections for case-only path differences (GitHub paths are
 // case-sensitive). The suggestion replaces the shortest trailing part of the

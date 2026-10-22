@@ -688,3 +688,219 @@ describe("drift fix review dialog", () => {
     el.remove();
   });
 });
+
+describe("link fixes skip code, comments, other URLs and unused definitions", () => {
+  const repo = nested(["README.md", "docs", "docs/Guide.md"]);
+  const recheck = (markdown) =>
+    evaluateDrift(driftClaims(markdown, target), repo).results.filter(
+      (item) => item.status !== "matches",
+    );
+  // Applies every suggestion and re-runs the check: nothing may remain.
+  const fixAll = (markdown) => {
+    const proposals = suggest(markdown, repo);
+    const { markdown: fixed } = applyDriftProposals(
+      markdown,
+      markdown,
+      proposals.map(({ line, before, suggested }) => ({
+        line,
+        before,
+        after: suggested,
+      })),
+    );
+    return { proposals, fixed };
+  };
+  it("fixes the definition a reference link uses", () => {
+    for (const [markdown, line, suggested] of [
+      // A fenced code sample of a definition.
+      [
+        "# T\n\n```md\n[guide]: docs/guide.md\n```\n\nSee [the guide][guide].\n\n[guide]: docs/guide.md",
+        9,
+        "[guide]: docs/Guide.md",
+      ],
+      // An indented code sample of a definition.
+      [
+        "# T\n\n    [guide]: docs/guide.md\n\nSee [the guide][guide].\n\n[guide]: docs/guide.md",
+        7,
+        "[guide]: docs/Guide.md",
+      ],
+      // A commented-out definition.
+      [
+        "<!--\n[g]: docs/guide.md\n-->\n\nSee [the guide][g].\n\n[g]: docs/guide.md",
+        7,
+        "[g]: docs/Guide.md",
+      ],
+      // An unused definition before the one the link uses.
+      [
+        "See [the guide][guide].\n\n[old]: docs/guide.md\n[guide]: docs/guide.md",
+        4,
+        "[guide]: docs/Guide.md",
+      ],
+      // Collapsed and shortcut references, matched without case.
+      [
+        "See [Guide][] or [GUIDE].\n\n[x]: docs/guide.md\n[guide]: docs/guide.md",
+        4,
+        "[guide]: docs/Guide.md",
+      ],
+      // A definition inside a block quote.
+      [
+        "See [the guide][q].\n\n> [q]: docs/guide.md",
+        3,
+        "> [q]: docs/Guide.md",
+      ],
+    ]) {
+      const [result] = recheck(markdown);
+      expect(result.line, markdown).toBe(line);
+      const { proposals, fixed } = fixAll(markdown);
+      expect(
+        proposals.map((p) => [p.line, p.suggested]),
+        markdown,
+      ).toEqual([[line, suggested]]);
+      expect(recheck(fixed), markdown).toEqual([]);
+    }
+  });
+
+  it("fixes the inline link, not a code span or another URL's query", () => {
+    for (const [markdown, expected] of [
+      [
+        "Write links as `[x](docs/guide.md)`,\nfor example [the guide](docs/guide.md).",
+        [[2, "for example [the guide](docs/Guide.md)."]],
+      ],
+      [
+        "Open [viewer](https://example.com/view?file=docs/guide.md)\nthen read [b](docs/guide.md).",
+        [[2, "then read [b](docs/Guide.md)."]],
+      ],
+      [
+        '<a href="https://example.com/?u=docs/guide.md">x</a>\n<a href="docs/guide.md">y</a>',
+        [[2, '<a href="docs/Guide.md">y</a>']],
+      ],
+      [
+        "See [viewer](https://example.com/view?file=docs/guide.md) and [b](docs/guide.md).",
+        [
+          [
+            1,
+            "See [viewer](https://example.com/view?file=docs/guide.md) and [b](docs/Guide.md).",
+          ],
+        ],
+      ],
+      [
+        "[a](https://example.com/x,docs/guide.md) [b](docs/guide.md)",
+        [[1, "[a](https://example.com/x,docs/guide.md) [b](docs/Guide.md)"]],
+      ],
+      [
+        "- item\n\n  ```md\n  [x](docs/guide.md)\n  ```\n\n  See [b](docs/guide.md).",
+        [[7, "  See [b](docs/Guide.md)."]],
+      ],
+    ]) {
+      const { proposals, fixed } = fixAll(markdown);
+      expect(
+        proposals.map((p) => [p.line, p.suggested]),
+        markdown,
+      ).toEqual(expected);
+      expect(recheck(fixed), markdown).toEqual([]);
+    }
+  });
+
+  it("still fixes autolinks on their own line", () => {
+    const url = "https://github.com/example/widget/blob/main/docs/guide.md";
+    for (const second of [`then <${url}>.`, `then ${url} .`]) {
+      const markdown = `Read docs/guide.md,${"\n"}${second}`;
+      const { proposals, fixed } = fixAll(markdown);
+      expect(
+        proposals.map((p) => [p.line, p.suggested]),
+        markdown,
+      ).toEqual([[2, second.replace("guide.md", "Guide.md")]]);
+      expect(recheck(fixed), markdown).toEqual([]);
+    }
+  });
+
+  it("still places a path fix after a command option's `=`", () => {
+    expect(
+      occurrences("node x --config=docs/guide.md", "docs/guide.md"),
+    ).toEqual([16]);
+    expect(occurrences("<a href=docs/guide.md>", "docs/guide.md")).toEqual([8]);
+    expect(occurrences("x?file=docs/guide.md", "docs/guide.md")).toEqual([]);
+    expect(occurrences("x/a,docs/guide.md", "docs/guide.md")).toEqual([]);
+    expect(occurrences("a, docs/guide.md", "docs/guide.md")).toEqual([3]);
+  });
+
+  it("marks a finding placed when an identical earlier fix already covered it", () => {
+    const markdown =
+      "Open `docs/guide.md` or see [the guide](docs/guide.md).\n";
+    const [proposal] = suggest(markdown, repo);
+    expect(proposal.suggested).toBe(
+      "Open `docs/Guide.md` or see [the guide](docs/Guide.md).",
+    );
+    expect(proposal.findings).toHaveLength(2);
+    for (const finding of proposal.findings)
+      expect(finding.suggestion.placed).toBe(true);
+  });
+});
+
+describe("Node versions that are linked, wrapped or only older in minor", () => {
+  const pkg = nested(
+    ["README.md", "package.json"],
+    [
+      [
+        "package.json",
+        {
+          status: "read",
+          text: JSON.stringify({ engines: { node: ">=20.11" } }),
+        },
+      ],
+    ],
+  );
+  it("places the suggestion on the version when the statement is linked or wrapped", () => {
+    for (const [markdown, line, suggested] of [
+      [
+        "Requires [Node.js](https://nodejs.org) 18 or newer.\n",
+        1,
+        "Requires [Node.js](https://nodejs.org) 20.11 or newer.",
+      ],
+      ["Requires Node.js\n18 or newer to run.\n", 2, "20.11 or newer to run."],
+      [
+        "- Requires [Node.js](https://nodejs.org)\n  v18.17 at least.\n",
+        2,
+        "  v20.11 at least.",
+      ],
+      // The version is written twice on the line: nothing is placed.
+      [
+        "Requires [Node.js](https://nodejs.org) 18+ (tested on 18+).\n",
+        1,
+        "Requires [Node.js](https://nodejs.org) 18+ (tested on 18+).",
+      ],
+    ]) {
+      const [proposal] = suggest(markdown, pkg);
+      expect(proposal, markdown).toMatchObject({ line, suggested });
+      expect(proposal.findings[0].suggestion.placed, markdown).toBe(
+        suggested !== proposal.before,
+      );
+    }
+  });
+
+  it("reports an older minor of the same major", () => {
+    const result = evaluateDrift(
+      driftClaims("Requires Node.js 20.5 or newer.", target),
+      pkg,
+    );
+    expect(result.results[0]).toMatchObject({
+      status: "uncertain",
+      fix: {
+        find: "Node.js 20.5 or newer",
+        replace: "Node.js 20.11 or newer",
+      },
+    });
+    expect(result.results[0].message).toContain("suggests Node 20.5;");
+    // A major alone names the whole release line, and an equal or newer
+    // minor matches.
+    for (const markdown of [
+      "Requires Node.js 20 or newer.",
+      "Requires Node.js 20.11 or newer.",
+      "Requires Node.js 20.12 or newer.",
+      "Requires Node.js 22+.",
+    ])
+      expect(
+        evaluateDrift(driftClaims(markdown, target), pkg).results[0].status,
+        markdown,
+      ).toBe("matches");
+  });
+});
