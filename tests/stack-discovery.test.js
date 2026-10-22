@@ -67,15 +67,16 @@ function mockClient(
       if (treeError) throw treeError;
       return { data: { tree: tree || treeFor(files), truncated } };
     }
-    if (path === contentsPrefix + "?ref=main")
+    const ref = path.match(/\?ref=(main|c{40})$/)?.[0];
+    if (path === contentsPrefix + ref)
       return {
         data: Object.keys(files)
           .filter((p) => !p.includes("/"))
           .map((p) => ({ type: "file", path: p, size: files[p].length })),
       };
-    if (path.startsWith(contentsPrefix) && path.endsWith("?ref=main")) {
+    if (path.startsWith(contentsPrefix) && ref) {
       const decoded = path
-        .slice(contentsPrefix.length, -"?ref=main".length)
+        .slice(contentsPrefix.length, -ref.length)
         .split("/")
         .map(decodeURIComponent)
         .join("/");
@@ -87,14 +88,19 @@ function mockClient(
   };
   return { client: { request }, calls };
 }
+// Nested discovery reads at the head commit; root-only analysis at the branch.
+const AT_HEAD = "?ref=" + HEAD;
 const contentsPaths = (calls) =>
   calls
     .filter(
-      (c) => c.startsWith(contentsPrefix) && c !== contentsPrefix + "?ref=main",
+      (c) =>
+        c.startsWith(contentsPrefix) &&
+        c !== contentsPrefix + "?ref=main" &&
+        c !== contentsPrefix + AT_HEAD,
     )
     .map((c) =>
       c
-        .slice(contentsPrefix.length, -"?ref=main".length)
+        .slice(contentsPrefix.length, c.lastIndexOf("?ref="))
         .split("/")
         .map(decodeURIComponent)
         .join("/"),
@@ -205,6 +211,38 @@ describe("Workspace declarations", () => {
       workspacePatterns({ "go.work": "use (\n ./a\n" }).notices[0],
     ).toContain("unterminated");
   });
+  it("ignores top-level TOML keys named like Object.prototype members", () => {
+    for (const key of ["toString", "constructor", "valueOf", "__proto__"]) {
+      expect(
+        workspacePatterns({
+          "Cargo.toml": `${key} = true\n[workspace]\nmembers = ["crates/*"]\n`,
+        }),
+      ).toEqual({
+        patterns: [
+          {
+            pattern: "crates/*",
+            negated: false,
+            declaredBy: "Cargo.toml workspace.members",
+          },
+        ],
+        notices: [],
+      });
+      expect(
+        workspacePatterns({
+          "pyproject.toml": `${key} = 1\n[tool.uv.workspace]\nmembers = ["py/*"]\n`,
+        }).patterns.map((p) => p.pattern),
+      ).toEqual(["py/*"]);
+    }
+  });
+  it("reports an over-long pnpm packages line quickly instead of matching it", () => {
+    const started = performance.now();
+    const read = workspacePatterns({
+      "pnpm-workspace.yaml": "packages:\n  - a" + " ".repeat(200_000) + "# \n",
+    });
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(read.patterns).toEqual([]);
+    expect(read.notices[0]).toContain("not interpreted");
+  });
   it("reports patterns it cannot interpret and maps nothing from them", () => {
     const hostile = [
       "{a,b}/*",
@@ -255,6 +293,53 @@ describe("pattern matching", () => {
     expect(matchPattern("a$^*", "a$^q")).toBe(true);
     for (const pattern of ["c++*", "pkg(*", "x)*", "^*$", "a+*"])
       expect(() => matchPattern(pattern, "anything")).not.toThrow();
+  });
+  it("matches in-segment wildcards anywhere and collapses repeated **", () => {
+    expect(matchPattern("a*b*c", "abc")).toBe(true);
+    expect(matchPattern("a*b*c", "aXbYc")).toBe(true);
+    expect(matchPattern("a*b*c", "acb")).toBe(false);
+    expect(matchPattern("*a", "ba")).toBe(true);
+    expect(matchPattern("*a", "ab")).toBe(false);
+    expect(matchPattern("a*", "a")).toBe(true);
+    expect(matchPattern("*ab*ab", "xabyabab")).toBe(true);
+    expect(matchPattern("a/**/**/b", "a/b")).toBe(true);
+    expect(matchPattern("a/**/**/b", "a/x/y/b")).toBe(true);
+    expect(matchPattern("a/**/**/b", "a/x/c")).toBe(false);
+    expect(matchPattern("**/**", "")).toBe(true);
+    expect(
+      workspacePatterns({
+        "package.json": pkg({ workspaces: ["apps/**/**/**/web"] }),
+      }).patterns.map((p) => p.pattern),
+    ).toEqual(["apps/**/web"]);
+  });
+  it("stays fast for hostile patterns: repeated ** segments and in-segment wildcards", () => {
+    const doubleStars = Array(99).fill("**").join("/") + "/zz";
+    const stars = "*a".repeat(140) + "*b";
+    const declared = workspacePatterns({
+      "package.json": pkg({
+        workspaces: [
+          ...Array(20).fill(doubleStars),
+          ...Array(20).fill(stars + "/x"),
+          ...Array(20).fill("**/" + stars),
+        ],
+      }),
+    });
+    expect(declared.notices).toEqual([]);
+    expect(declared.patterns).toHaveLength(60);
+    const tree = [];
+    for (let i = 0; i < 20; i++) {
+      tree.push(blob(`a/b/c/d${i}/package.json`));
+      tree.push(blob(`${"a".repeat(250)}${i}/package.json`));
+      tree.push(blob(`l${i}/${"a".repeat(200)}`, 10, "120000"));
+    }
+    const started = performance.now();
+    expect(matchPattern(doubleStars, "a/b/c/zz")).toBe(true);
+    expect(matchPattern(doubleStars, "a/b/c/d")).toBe(false);
+    expect(matchPattern(stars, "a".repeat(250))).toBe(false);
+    const found = discoverManifests(tree, declared.patterns);
+    expect(found.toRead).toHaveLength(15);
+    expect(found.toRead.every((m) => m.role === "nested")).toBe(true);
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 });
 
@@ -401,7 +486,11 @@ describe("Nested discovery through StackClient", () => {
       "/repos/example/mono/commits?sha=main&per_page=1",
       `/repos/example/mono/git/trees/${TREE}?recursive=1`,
     ]);
+    expect(calls).not.toContain(contentsPrefix + AT_HEAD);
     expect(calls).not.toContain(contentsPrefix + "?ref=main");
+    // Every file is read at the head commit the tree came from.
+    for (const call of calls.slice(2))
+      expect(call.endsWith(AT_HEAD)).toBe(true);
     expect(contentsPaths(calls)).toEqual([
       "package.json",
       "go.work",
@@ -550,7 +639,66 @@ describe("Nested discovery through StackClient", () => {
     expect(record.status).toBe("partial");
     expect(record.discovery.tree).toBe("truncated");
     expect(record.issues).toContain(
-      "GitHub truncated the repository tree; nested manifests not listed are unknown.",
+      "GitHub truncated the repository tree; root manifests were found from the root listing, and nested manifests not listed are unknown.",
+    );
+  });
+  it("still reads root manifests and declarations a truncated tree did not list", async () => {
+    const files = {
+      "go.mod": "module x\nrequire github.com/gin-gonic/gin v1.0.0\n",
+      "pnpm-workspace.yaml": "packages:\n  - apps/*\n",
+      "apps/web/package.json": pkg({ dependencies: { react: "19" } }),
+    };
+    // The cut falls inside apps/, before the root files that sort after it.
+    const { client, calls } = mockClient(files, {
+      truncated: true,
+      tree: treeFor({
+        "apps/web/package.json": files["apps/web/package.json"],
+      }),
+    });
+    const record = await new StackClient({ client }).repository(repo, {
+      nested: true,
+    });
+    expect(calls).toContain(contentsPrefix + AT_HEAD);
+    expect(calls.length).toBeLessThanOrEqual(24);
+    expect(contentsPaths(calls)).toEqual([
+      "go.mod",
+      "pnpm-workspace.yaml",
+      "apps/web/package.json",
+    ]);
+    expect(record.status).toBe("partial");
+    expect(record.manifests.map((m) => m.path)).toEqual([
+      "go.mod",
+      "apps/web/package.json",
+    ]);
+    expect(record.projects).toEqual([
+      { path: "", role: "root", declaredBy: [], manifests: ["go.mod"] },
+      {
+        path: "apps/web",
+        role: "member",
+        declaredBy: ["pnpm-workspace.yaml packages"],
+        manifests: ["apps/web/package.json"],
+      },
+    ]);
+  });
+  it("keeps a truncated tree within 24 requests when the root listing is needed", async () => {
+    const big = {
+      "package.json": pkg({ workspaces: ["packages/*"] }),
+      "Cargo.toml": "[workspace]\nmembers = []\n",
+      "pyproject.toml": "[project]\nname = 'x'\n",
+      "requirements.txt": "",
+      "go.mod": "module x\n",
+      "pnpm-workspace.yaml": "packages:\n  - packages/*\n",
+      "go.work": "use ./packages/p0\n",
+    };
+    for (let i = 0; i < 40; i++) big[`packages/p${i}/package.json`] = "{}";
+    const { client, calls } = mockClient(big, { truncated: true });
+    const record = await new StackClient({ client }).repository(repo, {
+      nested: true,
+    });
+    expect(calls).toHaveLength(24);
+    expect(record.discovery.read).toBe(5 + 14);
+    expect(record.issues).toContain(
+      "At most 14 nested manifests could be read within the budget of 24 requests per repository.",
     );
   });
   it("keeps the scan and root manifests when a workspace pattern holds regular-expression characters", async () => {
@@ -589,10 +737,14 @@ describe("Nested discovery through StackClient", () => {
     });
     expect(record.status).toBe("partial");
     expect(record.discovery.tree).toBe("failed");
-    expect(calls).toContain(contentsPrefix + "?ref=main");
+    expect(calls).toContain(contentsPrefix + AT_HEAD);
     expect(contentsPaths(calls)).toEqual(["package.json"]);
     expect(record.projects.map((p) => p.path)).toEqual([""]);
     expect(record.issues.join(" ")).toContain("only root manifests were read");
+    // No members were mapped, so the root note still says so.
+    expect(record.manifests[0].notes).toContain(
+      "Workspace members are not followed; only root declarations were read.",
+    );
   });
   it("fails the record when the head commit cannot be read and stops on rate limits", async () => {
     const records = [];
@@ -778,6 +930,26 @@ describe("malicious paths and responses (#131)", () => {
     expect(record.discovery.skipped.map((s) => s.path)).toContain(target);
     expect(record.issues.some((i) => i.startsWith(target + ": "))).toBe(true);
   });
+  it.each([
+    ["over 256 KB", 300_000],
+    ["missing", undefined],
+    ["not an integer", 10.5],
+  ])(
+    "never requests a nested manifest whose tree size is %s",
+    async (_, size) => {
+      const target = "packages/web/package.json";
+      const { record, paths } = await scan([{ ...blob(target), size }]);
+      expect(paths).not.toContain(target);
+      expect(record.status).toBe("partial");
+      expect(record.discovery.skipped).toContainEqual({
+        path: target,
+        reason: "not a regular file within the 256 KB limit",
+      });
+      expect(record.issues).toContain(
+        target + ": not a regular file within the 256 KB limit.",
+      );
+    },
+  );
   it("bounds CPU and requests for a 100,000-entry tree", async () => {
     const tree = [];
     for (let i = 0; i < 100_000; i++)
@@ -813,7 +985,7 @@ describe("malicious paths and responses (#131)", () => {
           call.startsWith(contentsPrefix),
       ).toBe(true);
     expect(calls).toContain(
-      contentsPrefix + "packages/a%20b%23%3F/package.json?ref=main",
+      contentsPrefix + "packages/a%20b%23%3F/package.json" + AT_HEAD,
     );
     expect(calls.some((c) => c.includes(".."))).toBe(false);
     expect(SAFE.has("package.json")).toBe(true);

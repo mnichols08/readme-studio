@@ -1,5 +1,5 @@
 import { tomlRecords, tomlValue } from "./toml.js";
-import { manifests } from "./manifests.js";
+import { manifests, MANIFEST_LIMIT } from "./manifests.js";
 
 // Pure Nested discovery (ADR epic65-01). Everything here is data in, data
 // out: one recursive tree listing and the text of root files. Workspace
@@ -8,6 +8,9 @@ import { manifests } from "./manifests.js";
 export const DISCOVERY_LIMITS = Object.freeze({
   depth: 4,
   nested: 15,
+  // Requests per repository: head, tree, root listing or Manifests,
+  // workspace declaration files and nested Manifests together.
+  requests: 24,
   repositories: 25,
   path: 300,
   patterns: 100,
@@ -64,7 +67,7 @@ const excludedSegment = (segment) =>
 
 // Returns pattern segments, or null when the pattern uses syntax we do not
 // interpret (`?`, `[]`, `{}`, `..`, absolute paths, backslashes, `**` mixed
-// into a segment).
+// into a segment). Consecutive `**` segments collapse into one.
 function patternSegments(raw) {
   if (typeof raw !== "string" || !raw || raw.length > DISCOVERY_LIMITS.path)
     return null;
@@ -80,47 +83,66 @@ function patternSegments(raw) {
     )
   )
     return null;
-  return segments;
+  return segments.filter((s, i) => s !== "**" || segments[i - 1] !== "**");
 }
-const segmentPatterns = new Map();
+// `*` inside a segment matches any run of characters; everything else is
+// literal. A greedy two-pointer match with one backtrack point takes at most
+// O(pattern × segment) steps. No RegExp is built from untrusted text, so
+// patterns such as `*a*a*a*b` cannot backtrack exponentially.
 function segmentMatches(pattern, segment) {
   if (pattern === "*") return true;
   if (!pattern.includes("*")) return pattern === segment;
-  let expression = segmentPatterns.get(pattern);
-  if (!expression) {
-    expression = new RegExp(
-      "^" +
-        pattern
-          .split("*")
-          // Every other character is literal: escape all RegExp syntax.
-          .map((part) => part.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&"))
-          .join("[^/]*") +
-        "$",
-    );
-    if (segmentPatterns.size > 500) segmentPatterns.clear();
-    segmentPatterns.set(pattern, expression);
+  let p = 0,
+    s = 0,
+    star = -1,
+    mark = 0;
+  while (s < segment.length) {
+    if (pattern[p] === "*") {
+      star = p++;
+      mark = s;
+    } else if (p < pattern.length && pattern[p] === segment[s]) {
+      p++;
+      s++;
+    } else if (star >= 0) {
+      p = star + 1;
+      s = ++mark;
+    } else return false;
   }
-  return expression.test(segment);
+  while (pattern[p] === "*") p++;
+  return p === pattern.length;
 }
 
 // `*` matches exactly one directory segment (or any characters inside one
 // segment when mixed with text), `**` matches any number of segments. Paths
-// are directory paths relative to the root, already bounded by the depth
-// limit, so the recursion is bounded too.
+// are directory paths relative to the root, bounded by the depth limit. A
+// pattern that needs more single segments than the path has fails at once,
+// and `walk` is memoized on (pattern segment, path part), so one call costs
+// at most O(segments × parts²) steps whatever the pattern.
 export function matchPattern(pattern, directory) {
   const segments = Array.isArray(pattern) ? pattern : patternSegments(pattern);
   if (!segments || typeof directory !== "string") return false;
   const parts = directory ? directory.split("/") : [];
   if (parts.length > DISCOVERY_LIMITS.depth + 1) return false;
+  let required = 0;
+  for (const segment of segments) if (segment !== "**") required++;
+  if (required > parts.length) return false;
+  const width = parts.length + 1;
+  const memo = new Uint8Array((segments.length + 1) * width); // 0 unknown, 1 no, 2 yes
   const walk = (p, d) => {
     if (p === segments.length) return d === parts.length;
-    if (segments[p] === "**") {
-      for (let i = d; i <= parts.length; i++) if (walk(p + 1, i)) return true;
-      return false;
-    }
-    return d < parts.length && segmentMatches(segments[p], parts[d])
-      ? walk(p + 1, d + 1)
-      : false;
+    const key = p * width + d;
+    if (memo[key]) return memo[key] === 2;
+    let matched = false;
+    if (segments[p] === "**")
+      for (let i = d; i <= parts.length && !matched; i++)
+        matched = walk(p + 1, i);
+    else
+      matched =
+        d < parts.length &&
+        segmentMatches(segments[p], parts[d]) &&
+        walk(p + 1, d + 1);
+    memo[key] = matched ? 2 : 1;
+    return matched;
   };
   return walk(0, 0);
 }
@@ -133,6 +155,14 @@ function pnpmPackages(source, notices) {
     found = false;
   for (const raw of source.replace(/\r\n?/g, "\n").split("\n")) {
     if (!raw.trim() || /^\s*#/.test(raw)) continue;
+    // Entries are paths of at most 300 characters; longer lines are not
+    // interpreted (and would make the item expression below quadratic).
+    if (inside && raw.length > 1000) {
+      notices.push(
+        "pnpm-workspace.yaml packages use YAML syntax that is not interpreted; only a list of plain or quoted strings is read.",
+      );
+      return [];
+    }
     // YAML allows sequence items at the key's own indentation.
     const topItem = inside && /^-(?:\s|$)/.test(raw);
     if (!/^\s/.test(raw) && !topItem) {
@@ -188,7 +218,7 @@ function tomlArrays(source, keys) {
   const result = Object.fromEntries(keys.map((key) => [key, []]));
   for (const record of tomlRecords(source)) {
     const key = record.path.join(".");
-    if (!(key in result)) continue;
+    if (!Object.hasOwn(result, key)) continue;
     const value = tomlValue(record.raw);
     if (!Array.isArray(value) || value.some((v) => typeof v !== "string"))
       throw Error(key + " must be an array of strings.");
@@ -285,6 +315,11 @@ export function workspacePatterns(rootFiles = {}) {
 
 const regularFile = (item) =>
   item?.type === "blob" && item.mode !== "120000" && item.mode !== "160000";
+// The tree entry's size is checked before any request, as for root Manifests.
+const withinLimit = (item) =>
+  Number.isSafeInteger(item.size) &&
+  item.size >= 0 &&
+  item.size <= MANIFEST_LIMIT;
 const linked = (item) =>
   item?.mode === "120000"
     ? "symlink"
@@ -298,7 +333,7 @@ const linked = (item) =>
 // deterministic order, everything found but not read with its reason, and
 // notices. CPU is linear in the listing size: only entries whose last
 // segment is a registry Manifest name, or that are symlinks/submodules, get
-// further checks.
+// further checks, and each pattern check is bounded (see matchPattern).
 export function discoverManifests(listing, patterns = [], limits = {}) {
   const limit = { ...DISCOVERY_LIMITS, ...limits };
   const entries = listing instanceof Map ? listing.values() : listing || [];
@@ -384,6 +419,14 @@ export function discoverManifests(listing, patterns = [], limits = {}) {
       continue;
     }
     if (!regularFile(item)) continue;
+    if (!withinLimit(item)) {
+      if (notices.length < 20)
+        notices.push(
+          `${displayPath(path)}: not a regular file within the 256 KB limit.`,
+        );
+      skip("unsafe", path, "not a regular file within the 256 KB limit");
+      continue;
+    }
     const declared = positive.filter((p) =>
       matchPattern(p.segments, directory),
     );

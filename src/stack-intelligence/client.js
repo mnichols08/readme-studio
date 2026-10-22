@@ -51,8 +51,18 @@ export class StackClient {
       this.bytes -= cached.size;
       this.cache.delete(key);
     }
-    const ref = "?ref=" + encodeURIComponent(branch);
+    // Nested discovery reads every file at the head commit its tree came from.
+    let ref = "?ref=" + encodeURIComponent(branch);
     const base = "/repos/" + name + "/contents/";
+    // Every request of this repository goes through `client`, so the
+    // per-repository request budget is counted, not assumed.
+    let requests = 0;
+    const client = {
+      request: (path, s) => {
+        requests++;
+        return this.client.request(path, s);
+      },
+    };
     const result = {
       version: 4,
       language: repo.language || "",
@@ -74,7 +84,7 @@ export class StackClient {
     // Reads one regular file through the contents API with the existing
     // checks. `path` is a validated repository path; each segment is encoded.
     const readFile = async (path) => {
-      const { data } = await this.client.request(
+      const { data } = await client.request(
         base + encodePath(path) + ref,
         signal,
       );
@@ -122,10 +132,6 @@ export class StackClient {
         const { source, sha } = await readFile(path);
         if (!project) rootSources[file] = source;
         const analysis = analyzeManifest(file, source);
-        if (nested)
-          analysis.notes = analysis.notes.flatMap((note) =>
-            Object.hasOwn(nestedNotes, note) ? nestedNotes[note] : [note],
-          );
         const remaining = Math.max(
           0,
           200 - result.manifests.reduce((n, m) => n + m.entries.length, 0),
@@ -154,20 +160,23 @@ export class StackClient {
         reason: "not a regular file within the 256 KB limit",
       });
     };
-    // Nested discovery replaces the root contents listing with one tree
-    // listing; a failed tree falls back to the root-only listing.
+    // Nested discovery reads one tree listing at the branch head. Root
+    // Manifests and workspace declaration files come from that listing only
+    // when it is complete; a truncated or failed tree may omit root files, so
+    // the root contents listing (one request) is read for them instead.
     let tree = null;
     if (nested) {
       tree = await readTree({
-        client: this.client,
+        client,
         target: { repository: repo.full_name, branch },
         signal,
       });
       result.headSha = tree.head;
+      ref = "?ref=" + encodeURIComponent(tree.head);
       discovery.tree = tree.tree;
       if (tree.tree === "truncated")
         result.issues.push(
-          "GitHub truncated the repository tree; nested manifests not listed are unknown.",
+          "GitHub truncated the repository tree; root manifests were found from the root listing, and nested manifests not listed are unknown.",
         );
       if (tree.tree === "failed") {
         result.issues.push(
@@ -177,39 +186,43 @@ export class StackClient {
         tree = null;
       }
     }
-    const roots = [];
-    if (tree) {
-      for (const descriptor of manifests) {
-        const listed = tree.listing.get(descriptor.path);
-        if (!listed) continue;
-        if (
-          listed.type !== "blob" ||
+    // Returns "regular", "other" (listed but not a regular file within the
+    // limit) or "" (not listed) for a root file name.
+    let rootEntry;
+    if (tree?.tree === "complete")
+      rootEntry = (path) => {
+        const listed = tree.listing.get(path);
+        if (!listed) return "";
+        return listed.type !== "blob" ||
           listed.mode === "120000" ||
           !Number.isSafeInteger(listed.size) ||
           listed.size > MANIFEST_LIMIT
-        )
-          notRegular(descriptor.path);
-        else roots.push(descriptor.path);
-      }
-    } else {
-      const { data: listing } = await this.client.request(base + ref, signal);
+          ? "other"
+          : "regular";
+      };
+    else {
+      const { data: listing } = await client.request(base + ref, signal);
       if (!Array.isArray(listing) || listing.length > 1000)
         throw new AuditError("response", "Unreadable root manifest listing.");
       if (listing.length === 1000)
         result.issues.push(
           "Root listing may be truncated; absence of other manifests is uncertain.",
         );
-      for (const descriptor of manifests) {
-        const listed = listing.find((entry) => entry.path === descriptor.path);
-        if (!listed) continue;
-        if (
-          listed.type !== "file" ||
+      rootEntry = (path) => {
+        const listed = listing.find((entry) => entry?.path === path);
+        if (!listed) return "";
+        return listed.type !== "file" ||
           listed.submodule_git_url ||
           listed.size > MANIFEST_LIMIT
-        )
-          notRegular(descriptor.path);
-        else roots.push(descriptor.path);
-      }
+          ? "other"
+          : "regular";
+      };
+    }
+    const roots = [];
+    for (const descriptor of manifests) {
+      const kind = rootEntry(descriptor.path);
+      if (kind === "other") notRegular(descriptor.path);
+      else if (kind) roots.push(descriptor.path);
     }
     discovery.found = roots.length + discovery.skipped.length;
     for (const path of roots) {
@@ -220,18 +233,15 @@ export class StackClient {
       await analyze({ path, file: path, project: "" });
     }
     const boundaries = [];
+    // True once members were mapped from the tree listing.
+    let mapped = false;
     if (tree && !result.stopped) {
       // Workspace declaration files are read only here and never analyzed
       // as Manifests; they count toward the per-repository request budget.
       for (const file of workspaceFiles) {
-        const listed = tree.listing.get(file);
-        if (!listed || result.stopped) continue;
-        if (
-          listed.type !== "blob" ||
-          listed.mode === "120000" ||
-          !Number.isSafeInteger(listed.size) ||
-          listed.size > MANIFEST_LIMIT
-        ) {
+        const kind = rootEntry(file);
+        if (!kind || result.stopped) continue;
+        if (kind === "other") {
           result.issues.push(
             file + ": not a regular file within the 256 KB limit.",
           );
@@ -244,10 +254,23 @@ export class StackClient {
           stop(error);
         }
       }
+      // Nested reads use what is left of the request budget: 15 at most,
+      // 14 only when a truncated tree also needed the root listing and every
+      // root Manifest and declaration file exists.
+      const cap = Math.max(
+        0,
+        Math.min(DISCOVERY_LIMITS.nested, DISCOVERY_LIMITS.requests - requests),
+      );
       const declared = workspacePatterns(rootSources);
       const found = discoverManifests(tree.listing, declared.patterns, {
         complete: tree.tree === "complete",
+        nested: cap,
       });
+      mapped = true;
+      if (cap < DISCOVERY_LIMITS.nested && found.notRead)
+        result.issues.push(
+          `At most ${cap} nested manifests could be read within the budget of ${DISCOVERY_LIMITS.requests} requests per repository.`,
+        );
       result.issues.push(...declared.notices, ...found.notices);
       discovery.found += found.found;
       discovery.skipped.push(...found.skipped);
@@ -263,6 +286,13 @@ export class StackClient {
         await analyze(item);
       }
     }
+    // Root-only notes about unfollowed members are replaced only when the
+    // tree listing actually mapped members; a fallback keeps them.
+    if (mapped)
+      for (const manifest of result.manifests)
+        manifest.notes = manifest.notes.flatMap((note) =>
+          Object.hasOwn(nestedNotes, note) ? nestedNotes[note] : [note],
+        );
     discovery.read = result.manifests.length;
     result.discovery = discovery;
     const rootManifests = result.manifests

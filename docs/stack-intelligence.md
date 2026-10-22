@@ -38,7 +38,7 @@ Every Manifest below the root belongs to a **Project boundary**: its directory. 
 | `go.work`             | `use ./dir` and `use ( ... )` blocks                   |
 | `pyproject.toml`      | `[tool.uv.workspace] members` and `exclude`            |
 
-Patterns support literal segments, `*` for one directory segment (or any characters inside one segment, as in `apps/app-*`), `**` for any depth and a leading `!` for negation. Anything else (`?`, `[]`, `{}`, `..`, absolute paths or backslashes) is reported as "Workspace pattern not interpreted" and maps nothing; matching Manifests are still discovered and shown as Nested projects. Other YAML in the `packages:` list is reported, not guessed. A declaration never adds a path that is not in the tree: a declared member that is missing, a symlink or a submodule is reported and never fetched.
+Patterns support literal segments, `*` for one directory segment (or any characters inside one segment, as in `apps/app-*`), `**` for any depth and a leading `!` for negation. Repeated `**` segments count as one, and matching takes bounded time for any pattern. Anything else (`?`, `[]`, `{}`, `..`, absolute paths or backslashes) is reported as "Workspace pattern not interpreted" and maps nothing; matching Manifests are still discovered and shown as Nested projects. Other YAML in the `packages:` list is reported, not guessed. A declaration never adds a path that is not in the tree: a declared member that is missing, a symlink or a submodule is reported and never fetched.
 
 ### Discovery limits
 
@@ -47,11 +47,11 @@ Patterns support literal segments, `*` for one directory segment (or any charact
 - Directories named `node_modules`, `vendor`, `dist`, `build`, `out`, `target`, `testdata`, `fixtures`, `__fixtures__` or `third_party`, and any directory starting with `.`, are skipped.
 - At most 15 nested Manifests are read per repository: Workspace members first, then Nested projects, each ordered by depth and then path.
 - At most 25 repositories per nested run. With more selected, the scan does not start and the status explains why; nothing is truncated silently.
-- Paths with empty, `.` or `..` segments (also percent-encoded), backslashes, control characters, a leading `/` or more than 300 characters are rejected. Symlinks (mode `120000`) and submodules are skipped with a notice. Each path segment is encoded when requested.
+- Paths with empty, `.` or `..` segments (also percent-encoded), backslashes, control characters, a leading `/` or more than 300 characters are rejected. Symlinks (mode `120000`) and submodules are skipped with a notice. A nested Manifest whose tree entry is over 256 KB, or has no valid size, is listed as not read without a request. Each path segment is encoded when requested.
 
-A Manifest beyond a limit is listed as found but not read, never as absent. Hitting the read cap or the depth limit makes the result partial. If GitHub truncates the tree, the result is partial and nested Manifests not listed are unknown. If the tree cannot be read, Studio falls back to the root contents listing, reads root Manifests only and marks the result partial. A branch head that cannot be read fails the repository as before; rate-limit and forbidden responses stop the scan.
+A Manifest beyond a limit is listed as found but not read, never as absent. Hitting the read cap or the depth limit makes the result partial. If GitHub truncates the tree, the result is partial, root Manifests and Workspace declaration files are found through the root contents listing instead (the truncated tree may not list them), and nested Manifests not listed are unknown. If the tree cannot be read, Studio falls back to the root contents listing, reads root Manifests only and marks the result partial. A branch head that cannot be read fails the repository as before; rate-limit and forbidden responses stop the scan.
 
-**Request budget:** at most 24 requests per repository (head, tree, five root Manifests, two Workspace declaration files and 15 nested Manifests). Root-only analysis keeps its budget of one listing plus five Manifests.
+**Request budget:** at most 24 requests per repository (head, tree, five root Manifests, two Workspace declaration files and 15 nested Manifests). The budget is counted: when a truncated tree also needs the root listing, at most 14 nested Manifests are read and the result says so. Every file is read at the head commit the tree came from, so the record describes one commit. Root-only analysis keeps its budget of one listing plus five Manifests.
 
 ### Results
 
