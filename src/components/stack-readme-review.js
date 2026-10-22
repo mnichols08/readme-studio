@@ -16,7 +16,7 @@ export class StackReadmeReview extends HTMLElement {
       <p>Repository: ${h(record.repository)}. Target draft: ${h(draft.name)}.</p>
       <p>Detected technology is repository evidence, not proficiency. Select each suggestion you want, review its evidence, and edit its Markdown. Nothing is selected automatically. Commands are text only; Studio never runs them.</p>
       ${record.status === "partial" ? '<p class="hint">Partial scan: suggestions cover only successfully read manifests.</p>' : ""}
-      <p>Observed: ${h(new Date(record.checkedAt).toLocaleString())}; branch: ${h(record.ref || "unknown")}. These session results may be outdated.</p>
+      <p>Observed: ${h(new Date(record.observedAt ?? record.checkedAt).toLocaleString())}; branch: ${h(record.ref || "unknown")}. These session results may be outdated.</p>
       <div data-items>${this.suggestions.map((item, index) => `<section><label><input type="checkbox" data-choice="${index}"> ${h(item.title)}</label><p>${h(item.caveat)}</p><ul>${item.evidence.map((e) => `<li>${h(e)}</li>`).join("")}</ul><label>${h(item.title)} Markdown<textarea data-source="${index}" rows="3"></textarea></label></section>`).join("")}</div>
       ${this.suggestions.length ? "" : "<p>No suggestions are available from this scan.</p>"}
       <p>Selected content is appended to the current draft. Existing sections are not replaced or deduplicated; review repeated headings before applying.</p>

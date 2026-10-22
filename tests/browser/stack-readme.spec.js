@@ -23,6 +23,7 @@ async function suggestions(page) {
           build: "globalThis.executed=true",
         },
         dependencies: { react: "19" },
+        peerDependencies: { vue: "3" },
       });
       return route.fulfill({
         json: {
@@ -156,4 +157,45 @@ test("stale draft cannot be overwritten and escape discards review", async ({
   await expect(
     page.getByRole("button", { name: "README audit", exact: true }),
   ).toBeFocused();
+});
+
+test("technologies with only uncertain evidence are offered separately with their basis", async ({
+  page,
+}) => {
+  await suggestions(page);
+  const review = page.locator("stack-readme-review");
+  const stack = review.locator("section").filter({
+    has: page.getByRole("checkbox", {
+      name: "Detected stack section",
+      exact: true,
+    }),
+  });
+  await expect(
+    stack.getByLabel("Detected stack section Markdown", { exact: true }),
+  ).toHaveValue("## Detected stack\n\n- Core: JavaScript · React");
+  await expect(stack).toContainText(
+    "React: package.json · dependencies · basis: explicit",
+  );
+  await expect(stack).not.toContainText("Vue:");
+  await expect(
+    review.getByRole("checkbox", { name: "Vue badge", exact: true }),
+  ).toHaveCount(0);
+  const uncertain = review.locator("section").filter({
+    has: page.getByRole("checkbox", {
+      name: "Technologies with only uncertain evidence",
+      exact: true,
+    }),
+  });
+  await expect(uncertain).toContainText(
+    "Vue: package.json · peerDependencies · basis: conditional",
+  );
+  await expect(uncertain).toContainText(
+    "every declaration of Vue is conditional or ambiguous",
+  );
+  await expect(
+    review.getByRole("checkbox", {
+      name: "Technologies with only uncertain evidence",
+      exact: true,
+    }),
+  ).not.toBeChecked();
 });

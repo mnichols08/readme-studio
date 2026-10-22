@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.9.2
+
+- Stack Intelligence shows the Provenance of every detected declaration (#84, #132): Manifest path, section, line, branch, shortened blob SHA and when it was observed. The full blob SHA is available to screen readers. A cached result keeps its original Observed at.
+- Each declaration has a named Confidence basis (explicit, inherited, conditional or ambiguous) with one fixed explanation. Bases are never a number or ranking and never describe skill. Poetry dependencies declared `optional = true` are conditional, like Cargo and PEP 621 optional dependencies.
+- Each repository result has an "Uncertain stack results (N)" list (#133). It holds conditional and ambiguous declarations with their reason, and manifests that were found but not read, listed as "Not read — unknown". The count includes unread manifests beyond the listed paths, so it matches the discovery summary. Uncertain results still appear in place in the dependency list.
+- Results are marked Stale when the loaded repository list shows a newer push than the one the scan started from, or when they were observed more than 24 hours ago. Both push times come from GitHub, so a wrong local clock does not change the result. The text badge points to Fetch fresh manifests, and the summary line includes "Stale". This is worked out when results are shown, with no timers or extra requests.
+- Stack DNA evidence shows the same provenance and basis, and labels technologies with only conditional or ambiguous evidence as "only uncertain evidence".
+- In Stack-to-README review, each evidence line names its Confidence basis. Technologies with only uncertain evidence are left out of the Detected stack section and get no badge suggestion. They are offered separately, unselected, as "Technologies with only uncertain evidence", with a caveat.
+- Stack scan records are now version 5 and session-only. `observedAt` replaces `checkedAt`, which remains as an alias for one release. Records gain `pushedAt`, and dependency evidence items carry full Provenance with a named Confidence basis. The basis explanation is looked up when shown and is not stored with each item.
+- The "Found, not read" heading in Project boundaries is now "Not read — unknown".
+
 ## 1.9.1
 
 - Add the usability scripts ([docs/usability-scripts.md](docs/usability-scripts.md)) (#76, #116): seven Usability scenarios (N1–N4 novice, E1–E3 experienced). Each has a start state, a success criterion and a step budget. The doc also has a facilitator protocol, consent and privacy statements, and a severity scale. There are no in-app analytics, telemetry or new storage (ADR 0006).

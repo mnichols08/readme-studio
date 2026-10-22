@@ -1,5 +1,15 @@
-import "./stack-dna.js";
+import { provenanceHTML } from "./stack-dna.js";
 import { html as h } from "../markdown/serialize.js";
+import {
+  CONFIDENCE_BASES,
+  basisExplanation,
+  staleness,
+  uncertainResults,
+} from "../stack-intelligence/dependencies.js";
+const STALE_TEXT = {
+  "pushed-since": "Stale: repository pushed after this scan",
+  age: "Stale: observed more than 24 hours ago",
+};
 const plural = (count, one, many = one + "s") =>
   `${count} ${count === 1 ? one : many}`;
 // Project boundaries in display order: root, Workspace members, Nested
@@ -56,14 +66,14 @@ function projectList(record) {
       : "<p>No project boundaries: no supported manifests were read.</p>"
   }${
     discovery?.skipped?.length
-      ? `<h4>Found, not read</h4><ul data-not-read>${discovery.skipped.map((entry) => `<li>${h(entry.path)} — ${h(entry.reason)}</li>`).join("")}</ul>${notRead > discovery.skipped.length ? `<p>${notRead - discovery.skipped.length} more not listed.</p>` : ""}`
+      ? `<h4>Not read — unknown</h4><ul data-not-read>${discovery.skipped.map((entry) => `<li>${h(entry.path)} — ${h(entry.reason)}</li>`).join("")}</ul>${notRead > discovery.skipped.length ? `<p>${notRead - discovery.skipped.length} more not listed.</p>` : ""}`
       : ""
   }</section>`;
 }
 function dependencyGroups(record) {
   const dependencies = record.dependencies || [];
   const entry = (entry) =>
-    `<li><strong>${h(entry.name)}</strong> — ${h(entry.ecosystem)} · ${h(entry.kind)} · ${h(entry.repository)}<ul>${entry.evidence.map((item) => `<li>${h(item.manifest)} — ${h(item.section)}${item.line ? ` (line ${item.line})` : ""}</li>`).join("")}</ul></li>`;
+    `<li><strong>${h(entry.name)}</strong> — ${h(entry.ecosystem)} · ${h(entry.kind)} · ${h(entry.repository)}<ul>${entry.evidence.map((item) => `<li>${provenanceHTML(item)}</li>`).join("")}</ul></li>`;
   const projects = boundaries(record).filter((project) =>
     dependencies.some((d) => (d.project || "") === project.path),
   );
@@ -79,23 +89,69 @@ function dependencyGroups(record) {
     )
     .join("");
 }
+// The Confidence basis legend: each basis with its one fixed explanation.
+const basisLegend = () =>
+  `<section data-basis-legend aria-label="Confidence basis"><h3>Confidence basis</h3><dl>${Object.entries(
+    CONFIDENCE_BASES,
+  )
+    .map(([basis, text]) => `<dt>${h(basis)}</dt><dd>${h(text)}</dd>`)
+    .join(
+      "",
+    )}</dl><p class="hint">A basis names why a declaration is believed. It is not a score, and it says nothing about anyone's skill.</p></section>`;
+// Uncertain stack results: conditional and ambiguous declarations with their
+// explanation, and manifests found but not read. They also stay in place in
+// the dependency list; this list never hides or promotes anything.
+function uncertainList(record) {
+  const { declarations, unread, unlisted } = uncertainResults(record);
+  const count = declarations.length + unread.length + unlisted;
+  return `<section data-uncertain aria-label="Uncertain stack results"><h3>Uncertain stack results (${count})</h3>${
+    count
+      ? `<ul data-uncertain-list>${declarations
+          .map(
+            (item) =>
+              `<li><strong>${h(item.name)}</strong> — ${h(item.ecosystem)} · ${h(item.kind)}${item.project ? ` · ${h(item.project)}` : ""} — ${provenanceHTML(item.evidence)}<br><span class="hint">${h(basisExplanation(item.evidence.basis))}</span></li>`,
+          )
+          .join("")}${unread
+          .map(
+            (entry) =>
+              `<li><strong>${h(entry.path)}</strong> — Not read — unknown: ${h(entry.reason)}</li>`,
+          )
+          .join(
+            "",
+          )}</ul>${unlisted ? `<p data-uncertain-unlisted>${plural(unlisted, "more manifest")} not read and not listed — unknown.</p>` : ""}`
+      : "<p>None: every declaration read is explicit or inherited, and every manifest found was read.</p>"
+  }</section>`;
+}
 export class StackResults extends HTMLElement {
-  setData(records) {
+  // `repositories` is the currently loaded repository list; its pushed_at
+  // marks a result Stale. Nothing here starts a request or a timer.
+  setData(records, repositories = []) {
     this.records = records;
+    this.current = new Map(
+      repositories.map((repo) => [String(repo.full_name).toLowerCase(), repo]),
+    );
     this.page = Math.min(
       this.page || 0,
       Math.max(0, Math.ceil(records.length / 25) - 1),
     );
     this.render();
   }
+  stale(record) {
+    if (record.status === "failed") return [];
+    return staleness(
+      record,
+      this.current?.get(String(record.repository).toLowerCase()),
+      Date.now(),
+    );
+  }
   render() {
     const records = this.records || [],
       pages = Math.max(1, Math.ceil(records.length / 25));
-    this.innerHTML = `<h2 tabindex="-1">Detected in selected repositories</h2><p>Direct dependency declarations are repository evidence, not developer skill or proof that a dependency runs in production. Root manifests only unless nested manifests were included for the scan. Indirect Go requirements and unused or unresolved Cargo workspace declarations are excluded. No transitive dependency resolution or executable configuration.</p><p>${records.length} selected repositories with results. Results stay in this tab; no README or profile is changed.</p><stack-dna></stack-dna><div>${records
+    this.innerHTML = `<h2 tabindex="-1">Detected in selected repositories</h2><p>Direct dependency declarations are repository evidence, not developer skill or proof that a dependency runs in production. Root manifests only unless nested manifests were included for the scan. Indirect Go requirements and unused or unresolved Cargo workspace declarations are excluded. No transitive dependency resolution or executable configuration.</p><p class="hint">Each declaration shows its manifest, section, line, confidence basis and when and on which branch it was observed. Conditional and ambiguous declarations, and manifests not read, are listed as uncertain stack results. A result is Stale when the repository list shows a newer push or it was observed more than 24 hours ago.</p><p>${records.length} selected repositories with results. Results stay in this tab; no README or profile is changed.</p><stack-dna></stack-dna><div>${records
       .slice(this.page * 25, (this.page + 1) * 25)
       .map(
         (record) =>
-          `<details data-stack-record="${records.indexOf(record)}"><summary>${h(record.repository)} — ${h({ read: "Manifests read", none: "No supported root manifests found", partial: "Partial results", failed: "Not assessed" }[record.status])}</summary><div data-stack-body></div></details>`,
+          `<details data-stack-record="${records.indexOf(record)}"><summary>${h(record.repository)} — ${h({ read: "Manifests read", none: "No supported root manifests found", partial: "Partial results", failed: "Not assessed" }[record.status])}${this.stale(record).length ? " — Stale" : ""}</summary><div data-stack-body></div></details>`,
       )
       .join(
         "",
@@ -106,7 +162,13 @@ export class StackResults extends HTMLElement {
         const body = details.querySelector("[data-stack-body]");
         if (!details.open || body.childElementCount) return;
         const record = records[Number(details.dataset.stackRecord)];
-        body.innerHTML = `<button data-readme-suggestions ${record.status === "failed" ? "disabled" : ""}>Review README suggestions</button><p>Observed: ${h(new Date(record.checkedAt).toLocaleString())}; branch: ${h(record.ref || "unknown")}</p>${record.status === "failed" ? "" : projectList(record)}${record.issues.map((issue) => `<p class="hint">Notice: ${h(issue)}</p>`).join("")}<h3>Direct dependencies</h3><p>${record.dependencies?.length || 0} normalized dependency records. The same name in different kinds or project boundaries remains separate.</p>${dependencyGroups(record)}${record.manifests.map((manifest) => `<section><h3>${h(manifest.ecosystem)} — ${h(manifest.path)}</h3><p>Manifest present.</p>${manifest.notes.map((note) => `<p class="hint">${h(note)}</p>`).join("")}</section>`).join("")}`;
+        const stale = this.stale(record);
+        const failed = record.status === "failed";
+        body.innerHTML = `<button data-readme-suggestions ${failed ? "disabled" : ""}>Review README suggestions</button><p>Observed: ${h(new Date(record.observedAt ?? record.checkedAt).toLocaleString())}; branch: ${h(record.ref || "unknown")}</p>${
+          stale.length
+            ? `<div class="stack-stale" data-stale>${stale.map((reason) => `<p><strong>${h(STALE_TEXT[reason])}</strong></p>`).join("")}<p class="hint">Stale is a reason to refresh, not a claim that anything changed. Check Fetch fresh manifests, then choose Analyze selected manifests to read the current files.</p></div>`
+            : ""
+        }${failed ? "" : projectList(record)}${record.issues.map((issue) => `<p class="hint">Notice: ${h(issue)}</p>`).join("")}${failed ? "" : uncertainList(record) + basisLegend()}<h3>Direct dependencies</h3><p>${record.dependencies?.length || 0} normalized dependency records. The same name in different kinds or project boundaries remains separate.</p>${dependencyGroups(record)}${record.manifests.map((manifest) => `<section><h3>${h(manifest.ecosystem)} — ${h(manifest.path)}</h3><p>Manifest present.</p>${manifest.notes.map((note) => `<p class="hint">${h(note)}</p>`).join("")}</section>`).join("")}`;
         body.querySelector("[data-readme-suggestions]").onclick = () =>
           this.dispatchEvent(
             new CustomEvent("stack-readme-review", {

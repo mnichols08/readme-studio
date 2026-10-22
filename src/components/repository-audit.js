@@ -134,6 +134,8 @@ export class RepositoryAudit extends HTMLElement {
           ? [this.state.stackResults.get(repo.full_name)]
           : [],
       ),
+      // The loaded repository list marks results Stale; no request is made.
+      this.state.repositories,
     );
     this.querySelector("[data-more]").disabled =
       !!this.busy || !this.state.next;

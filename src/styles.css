@@ -2418,6 +2418,19 @@ stack-results ul {
 stack-results li {
   margin-block: 6px;
 }
+stack-results .stack-stale {
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent-bg);
+  padding: 4px 10px;
+}
+stack-results dl {
+  margin-block: 4px;
+}
+stack-results dd {
+  margin-inline-start: 16px;
+  margin-block-end: 4px;
+}
 
 stack-dna {
   display: block;

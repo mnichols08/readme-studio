@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.1.** Usability scripts define seven novice and experienced scenarios with step budgets that scripted runs enforce, Guided start can restore a backup, and exports and backups now ask before leaving out unsaved section edits. No sessions with real participants have been run yet. [Usability scripts](docs/usability-scripts.md) · [Usability findings](docs/usability-findings.md) · [Guided start](docs/guided-start.md)
+**Version 1.9.2.** Stack Intelligence shows where each detected declaration came from and its named confidence basis, lists uncertain results separately, and marks results Stale after a newer push or 24 hours. [Stack Intelligence](docs/stack-intelligence.md#provenance-confidence-and-staleness) · [Stack DNA](docs/stack-dna.md) · [Stack-to-README](docs/stack-to-readme.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -23,7 +23,7 @@ Guided start asks whether you want to write a profile README, write a repository
 - Coordinate themes, generate local light/dark SVG banners, and configure attributed external widget embeds.
 - Import public GitHub data, review refreshes, analyze compatibility and apply explicit, undoable refactors.
 - Audit selected public repositories with advisory expectations for 14 project types, then choose the next README from the attention queue.
-- Analyze declared dependencies in repository manifests with explicit consent, including bounded monorepo discovery that maps Workspace members and Nested projects ([Stack Intelligence](docs/stack-intelligence.md)).
+- Analyze declared dependencies in repository manifests with explicit consent, including bounded monorepo discovery that maps Workspace members and Nested projects ([Stack Intelligence](docs/stack-intelligence.md)). Every declaration shows where and when it was observed and a named confidence basis, with uncertain and Stale results labelled ([Provenance, confidence and staleness](docs/stack-intelligence.md#provenance-confidence-and-staleness)).
 - Record read-only evidence snapshots of a repository's branch head, README, manifests and linked files, then check what changed since a pinned Baseline.
 - Check for stale scripts, missing files, broken links and anchors, and outdated config keys without running repository code or changing your Markdown.
 - Save portable `.readme-studio.json` projects or export Markdown, packs and full workspace backups.
