@@ -1600,11 +1600,13 @@ describe("drift false positives, round 3", () => {
       expect(plan(markdown).claims, definition).toEqual([]);
       expect(plan(markdown).notes, definition).toEqual([]);
     }
-    // Ordinary reference links are still checked, on the reference's line.
+    // Ordinary reference links are still checked, on their definition's
+    // line, where the URL is written (and a fix would go).
     const markdown =
       "Fast[^1]. See [the guide][g].\n\n[^1]: Benchmarks.\n[g]: docs/gone.md\n";
     expect(kinds(markdown)).toEqual(["link:docs/gone.md"]);
-    expect(plan(markdown).claims[0].line).toBe(1);
+    expect(plan(markdown).claims[0].line).toBe(4);
+    expect(plan(markdown).claims[0].unlocated).toBeUndefined();
     // Later claims keep their lines and text.
     const after = plan(
       "[^1]: Benchmarks.\n\n```bash\nnpm run lint\n```\n\n[g](docs/gone.md)\n",

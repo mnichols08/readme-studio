@@ -74,7 +74,10 @@ export function occurrences(text, find) {
       prev = text[at - 1] || "",
       next = text[end] || "";
     if (JOINED.test(prev)) continue;
-    if (WORD.test(find.at(-1)) && AFTER.test(next)) continue;
+    // A find ending in a word character or a separator (`docs/`) is part
+    // of a longer token when the name goes on (`docs/setup.md`).
+    const last = find.at(-1);
+    if ((WORD.test(last) || SEPARATOR.test(last)) && AFTER.test(next)) continue;
     if (SEPARATOR.test(next) && JOINED.test(text[end + 1] || "")) continue;
     found.push(at);
   }

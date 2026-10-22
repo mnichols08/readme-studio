@@ -289,7 +289,81 @@ describe("fix placement stays on its own claim", () => {
   });
 });
 
+describe("link fixes land on the link, not a prose mention", () => {
+  const repo = nested(["README.md", "docs", "docs/Guide.md"]);
+  it("fixes the inline link line, not an earlier mention of its path", () => {
+    const proposals = suggest(
+      "Read docs/guide.md first,\nthen see [the guide](docs/guide.md).\n",
+      repo,
+    );
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0]).toMatchObject({
+      line: 2,
+      before: "then see [the guide](docs/guide.md).",
+      suggested: "then see [the guide](docs/Guide.md).",
+    });
+  });
+
+  it("fixes a reference link at its definition", () => {
+    for (const [markdown, line, suggested] of [
+      [
+        "The docs/guide.md file explains setup.\n[![CI][badge]][guide]\n\n[guide]: docs/guide.md\n",
+        4,
+        "[guide]: docs/Guide.md",
+      ],
+      ["See [guide][g].\n\n[g]: docs/guide.md", 3, "[g]: docs/Guide.md"],
+    ]) {
+      const proposals = suggest(markdown, repo);
+      expect(proposals, markdown).toHaveLength(1);
+      expect(proposals[0], markdown).toMatchObject({ line, suggested });
+      expect(proposals[0].findings[0].suggestion.placed).toBe(true);
+    }
+  });
+
+  it("suggests nothing when the link's own text cannot be found", () => {
+    // The URL is entity-encoded in the source, so its line is a guess: the
+    // prose mention must not be rewritten in its place.
+    const markdown =
+      "Read docs/guide.md first,\nthen see [the guide](docs/guide&#46;md).\n";
+    const result = evaluateDrift(driftClaims(markdown, target), repo);
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].status).toBe("mismatch");
+    expect(result.results[0].fix).toBeUndefined();
+    for (const proposal of driftProposals(markdown, result).proposals)
+      expect(proposal.suggested).toBe(proposal.before);
+  });
+
+  it("does not place a directory fix inside a longer path", () => {
+    expect(occurrences("[d](docs/) and `docs/setup.md`", "docs/")).toEqual([4]);
+    expect(occurrences("See docs/. Or docs/-x", "docs/")).toEqual([4]);
+    const proposals = driftProposals(
+      "See [the docs folder](docs/) and `docs/setup.md` at the root.",
+      evaluateDrift(
+        driftClaims(
+          "See [the docs folder](docs/) and `docs/setup.md` at the root.",
+          { ...target, path: "pkg/README.md" },
+        ),
+        nested(["pkg", "pkg/README.md", "pkg/Docs", "docs", "docs/setup.md"]),
+      ),
+    ).proposals;
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0].suggested).toBe(
+      "See [the docs folder](Docs/) and `docs/setup.md` at the root.",
+    );
+  });
+});
+
 describe("Node version suggestions", () => {
+  const pkg = (node) =>
+    nested(
+      ["README.md", "package.json"],
+      [
+        [
+          "package.json",
+          { status: "read", text: JSON.stringify({ engines: { node } }) },
+        ],
+      ],
+    );
   it("uses the whole engines.node minimum, not only its major", () => {
     expect(minimumVersion(">=20.11")).toBe("20.11");
     expect(minimumVersion(">=20.11.1")).toBe("20.11.1");
@@ -298,16 +372,6 @@ describe("Node version suggestions", () => {
     expect(minimumVersion(">18")).toBe("19");
     expect(minimumVersion("20.x || ^18.17")).toBe("18.17");
     expect(minimumVersion("<20")).toBeNull();
-    const pkg = (node) =>
-      nested(
-        ["README.md", "package.json"],
-        [
-          [
-            "package.json",
-            { status: "read", text: JSON.stringify({ engines: { node } }) },
-          ],
-        ],
-      );
     const markdown = "Requires Node.js 18.17 or newer.";
     const result = evaluateDrift(driftClaims(markdown, target), pkg(">=20.11"));
     expect(result.results[0]).toMatchObject({
@@ -321,6 +385,30 @@ describe("Node version suggestions", () => {
     expect(suggest(markdown, pkg(">=20.11"))[0].suggested).toBe(
       "Requires Node.js 20.11 or newer.",
     );
+  });
+
+  it("places the whole minimum for every phrasing the check reads", () => {
+    const cases = [
+      ["Requires Node.js 18.17.", "Requires Node.js 20.11."],
+      ["Node.js >= 18.17 is needed.", "Node.js >= 20.11 is needed."],
+      ["Minimum Node v18.17.0 here.", "Minimum Node v20.11 here."],
+      ["Use Node 18.17+ please.", "Use Node 20.11+ please."],
+      // Two statements of the same old version on one line: both change,
+      // so the suggested line does not contradict itself.
+      [
+        "Requires Node 18+ and Node.js 18 or newer.",
+        "Requires Node 20.11+ and Node.js 20.11 or newer.",
+      ],
+    ];
+    for (const [markdown, expected] of cases) {
+      const [proposal] = suggest(markdown, pkg(">=20.11"));
+      expect(proposal.suggested, markdown).toBe(expected);
+      for (const finding of proposal.findings)
+        expect(finding.suggestion.placed, markdown).toBe(true);
+    }
+    // One statement matched by two patterns is still one claim.
+    const claims = driftClaims("Requires Node 18+ to run.", target).claims;
+    expect(claims.map((claim) => claim.text)).toEqual(["Node 18+"]);
   });
 });
 
