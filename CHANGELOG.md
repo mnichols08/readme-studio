@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.9.0
+
+- Stack Intelligence can include nested manifests in monorepos (#83). A separate, session-only **Include nested manifests (monorepo)** consent reads one repository tree listing. It maps Manifests to Project boundaries: the repository root, Workspace members (declared by package.json `workspaces`, `pnpm-workspace.yaml`, Cargo `[workspace]`, `go.work` or `[tool.uv.workspace]`) and Nested projects. Results list the boundaries, a "found / read / not read" summary, and dependencies grouped per boundary. Every file is read at the head commit the tree came from.
+- Bound Nested discovery (#130): at most 4 directory levels, dependency and build directories skipped, at most 15 nested Manifests read per repository (members first, deterministic order), at most 24 requests per repository and at most 25 repositories per nested run. If more repositories are selected, the scan is refused with an explanation rather than truncated. If GitHub truncates the tree, root Manifests and workspace declaration files are still found through the root listing, within the same 24-request budget.
+- Harden discovery against malicious paths, with tests (#131). Traversal, absolute, backslash, percent-encoded dot, control-character and over-long paths are rejected with notices. Symlinks, submodules, missing declared members and nested Manifests over 256 KB are never fetched. Workspace patterns that cannot be interpreted are reported, and matching takes bounded time for any pattern. Contents responses are checked for path, size, target and encoding.
+- The stack scan record is now version 4 (session-only). Manifests carry their full `path`, registry `file` and `project`. Dependencies merge per Project boundary. The cache separates nested and root-only results. Root-only analysis keeps its budget of one listing plus five Manifests.
+
+## 1.8.0
+
+- Add the publishing Preflight (#97): an explicit, read-only check of the exact repository, branch and path before any write. It checks the publishing service, GitHub session, GitHub App installation, Contents permission, your push access, archive state, branch existence, path support and, for workflows, server opt-in plus Workflows: write. Branch protection, rulesets and committing to the default branch show as advisory warnings that never block.
+- Add a **Re-check access** button and a Preflight check list with written Pass/Warning/Fail/Unknown status and an announced verdict.
+- Every publishing review now starts in Read-only mode. The confirmation and publish button appear only after a Preflight for the exact current target passes every blocking check. Changing the target, disconnecting or reloading clears the Preflight, and it is never saved.
+- **Load remote README** now runs the Preflight and then the read as one explicit action. A missing branch is reported instead of being loaded as a new file.
+- The publishing server enforces the same Preflight checks before every write and refuses with the same message the dialog showed. A 403 or 422 from GitHub at write time now opens **Publish on a new branch instead**. A refusal from the server's own Preflight does not, because branch creation would be refused the same way.
+- **Publish on a new branch instead** is offered only when the server would accept it: installation, Contents permission, push access, repository not archived, branch exists and, for workflows, server opt-in plus Workflows: write. Creating a workflow branch again requires the workflow opt-in.
+- An offline or failed Preflight leaves every check Unknown and keeps Read-only mode. Nothing is loaded and nothing is retried automatically.
+- Before a target is chosen, **Supported path** shows Unknown instead of a misleading Fail.
+- Add a manual verification checklist for a real GitHub App (read-only installation, removed Workflows permission, protected branch or ruleset, archived repository) to the publishing guide. These steps are manual and not run by CI.
+
 ## 1.7.1
 
 - Add the Next steps panel. After an import (new draft, replace, append, merge or Re-import), a README opened from the audit, a profile or repository template, a Studio project opened as a new draft or a blank start from Guided start, it shows up to three existing tools that usually come next, each with a one-line reason, and one sentence saying what happened (for example "Imported into a new local draft. Nothing changed on GitHub."). **All tools** opens workspace search; **Hide** removes the panel.

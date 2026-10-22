@@ -15,17 +15,27 @@ export function normalizeDependencyName(name, ecosystem) {
   throw Error("Unsupported dependency ecosystem.");
 }
 // A dependency is direct because it is explicitly declared, not because we
-// resolved a lockfile or executed a package manager. Keep evidence per kind.
+// resolved a lockfile or executed a package manager. Keep evidence per kind
+// and per Project boundary (`manifest.project`, "" for the root); evidence
+// names the full repository path of the Manifest.
 export function normalizeDependencies(repository, manifests) {
   const association = githubRepository(repository).toLowerCase();
   const dependencies = new Map();
   for (const manifest of manifests) {
     const ecosystem = ecosystems[manifest.ecosystem];
     if (!ecosystem) throw Error("Unsupported dependency ecosystem.");
+    const project =
+      typeof manifest.project === "string" ? manifest.project : "";
     for (const entry of manifest.entries) {
       if (!kinds.has(entry.role)) continue;
       const name = normalizeDependencyName(entry.name, ecosystem);
-      const key = JSON.stringify([association, ecosystem, name, entry.role]);
+      const key = JSON.stringify([
+        association,
+        project,
+        ecosystem,
+        name,
+        entry.role,
+      ]);
       let dependency = dependencies.get(key);
       if (!dependency) {
         dependency = {
@@ -33,6 +43,7 @@ export function normalizeDependencies(repository, manifests) {
           ecosystem,
           kind: entry.role,
           repository: association,
+          project,
           direct: true,
           evidence: [],
         };

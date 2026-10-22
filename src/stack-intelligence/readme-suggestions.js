@@ -45,8 +45,13 @@ export function readmeSuggestions(record) {
         "Optional presentation. Rendering this badge contacts Shields.io; it does not certify skill.",
       );
   }
-  for (const manifest of record.manifests || []) {
-    const { path, readme = {} } = manifest;
+  // Commands, managers and package links come from root Manifests only: a
+  // command for a Workspace member or Nested project would need its own
+  // working directory, which is not offered yet.
+  for (const manifest of (record.manifests || []).filter((m) => !m.project)) {
+    const { readme = {} } = manifest;
+    // `file` is the registry name; older records only carry `path`.
+    const path = manifest.file || manifest.path;
     const suggest = (
       key,
       title,
@@ -167,7 +172,7 @@ export function readmeSuggestions(record) {
   }
   if (
     (record.dependencies || []).some(
-      (d) => d.ecosystem === "python" && d.name === "pytest",
+      (d) => d.ecosystem === "python" && d.name === "pytest" && !d.project,
     )
   )
     add(

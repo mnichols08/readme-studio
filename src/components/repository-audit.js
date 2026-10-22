@@ -1,5 +1,10 @@
 import "./stack-results.js";
-import { stackClient, scanStacks } from "../stack-intelligence/client.js";
+import {
+  stackClient,
+  scanStacks,
+  NESTED_LIMIT_MESSAGE,
+} from "../stack-intelligence/client.js";
+import { DISCOVERY_LIMITS } from "../stack-intelligence/discovery.js";
 import "./readme-attention-queue.js";
 import { reviewReadme } from "../repository-audit/review.js";
 import { html as h } from "../markdown/serialize.js";
@@ -22,7 +27,7 @@ export class RepositoryAudit extends HTMLElement {
   connectedCallback() {
     this.state = auditSession;
     this.state.stackResults ||= new Map();
-    this.innerHTML = `<h1>Repository README audit</h1><p>Find documentation that needs attention using evidence, not scores. Only public owned repositories are listed. README content is analyzed locally; nothing is published.</p><form data-load><label>GitHub username<input name="username" autocomplete="off" required maxlength="200" value="${h(this.state.username)}"></label><button type="submit">Load repositories</button></form><p class="hint">100 repositories per page, up to 1,000. Three concurrent README requests. GitHub's unauthenticated rate limit may stop larger scans. Use Check history and links on a result for optional extra requests to GitHub and linked hosts (up to 20 URLs). Results and a bounded source cache stay in this tab; cached requests expire after five minutes.</p><div class="audit-controls"><label><input type="checkbox" data-forks ${this.state.includeForks ? "checked" : ""}> Include forks</label><label><input type="checkbox" data-archived ${this.state.includeArchived ? "checked" : ""}> Include archived repositories</label><label><input type="checkbox" data-fresh> Fetch fresh README content</label><button data-more>Load next 100 repositories</button><button data-select>Select all filtered repositories</button><button data-clear>Clear selection</button><button data-scan>Audit selected</button><button data-cancel disabled>Cancel audit</button></div><section class="audit-controls"><h2>Stack Intelligence</h2><p>Opt in to read root package.json, Cargo.toml, pyproject.toml, requirements.txt and go.mod files from selected public repositories. This contacts GitHub only. No dependency installation, package scripts, repository code or build tools are run. Up to six requests per repository; rate limits may pause scans.</p><label><input type="checkbox" data-stack-consent> Allow read-only manifest analysis for this session</label><label><input type="checkbox" data-stack-fresh> Fetch fresh manifests</label><button data-stack-scan disabled>Analyze selected manifests</button></section><p data-status role="status" aria-live="polite"></p><stack-results></stack-results><p data-count></p><div class="audit-pagination"><button data-audit-view="audit" aria-pressed="true">Audit results</button><button data-audit-view="queue" aria-pressed="false">README Attention Queue</button></div><section data-audit-results><h2 tabindex="-1">Repository audit results</h2><div class="audit-table-wrap"><table class="audit-table"><caption>Public repository documentation evidence</caption><thead><tr><th scope="col">Select / Repository</th><th scope="col">README state and evidence</th><th scope="col">Activity / Language</th><th scope="col">Actions</th></tr></thead><tbody></tbody></table></div><div class="audit-pagination"><button data-prev>Previous results</button><span data-page></span><button data-next>Next results</button></div></section><readme-attention-queue hidden></readme-attention-queue><p>Improve README opens a project-specific template with reviewed repository suggestions. Existing README source is preserved by default; missing READMEs can start from the template. Project types and English documentation signals are suggestions. Missing topics are commonly useful, never universally required; evidence is not a judgment of the project or its developer.</p>`;
+    this.innerHTML = `<h1>Repository README audit</h1><p>Find documentation that needs attention using evidence, not scores. Only public owned repositories are listed. README content is analyzed locally; nothing is published.</p><form data-load><label>GitHub username<input name="username" autocomplete="off" required maxlength="200" value="${h(this.state.username)}"></label><button type="submit">Load repositories</button></form><p class="hint">100 repositories per page, up to 1,000. Three concurrent README requests. GitHub's unauthenticated rate limit may stop larger scans. Use Check history and links on a result for optional extra requests to GitHub and linked hosts (up to 20 URLs). Results and a bounded source cache stay in this tab; cached requests expire after five minutes.</p><div class="audit-controls"><label><input type="checkbox" data-forks ${this.state.includeForks ? "checked" : ""}> Include forks</label><label><input type="checkbox" data-archived ${this.state.includeArchived ? "checked" : ""}> Include archived repositories</label><label><input type="checkbox" data-fresh> Fetch fresh README content</label><button data-more>Load next 100 repositories</button><button data-select>Select all filtered repositories</button><button data-clear>Clear selection</button><button data-scan>Audit selected</button><button data-cancel disabled>Cancel audit</button></div><section class="audit-controls"><h2>Stack Intelligence</h2><p>Opt in to read root package.json, Cargo.toml, pyproject.toml, requirements.txt and go.mod files from selected public repositories. This contacts GitHub only. No dependency installation, package scripts, repository code or build tools are run. Root manifests only: up to six requests per repository; rate limits may pause scans.</p><label><input type="checkbox" data-stack-consent> Allow read-only manifest analysis for this session</label><label><input type="checkbox" data-stack-nested disabled aria-describedby="stack-nested-hint"> Include nested manifests (monorepo)</label><p class="hint" id="stack-nested-hint">Reads the default branch head and one repository tree listing, the root pnpm-workspace.yaml and go.work workspace files when present, then manifests up to four directories deep, mapped to workspace members and nested projects. Dependency folders such as node_modules and vendor are skipped. Up to 24 requests per repository; at most 25 repositories per nested run.</p><label><input type="checkbox" data-stack-fresh> Fetch fresh manifests</label><button data-stack-scan disabled>Analyze selected manifests</button></section><p data-status role="status" aria-live="polite"></p><stack-results></stack-results><p data-count></p><div class="audit-pagination"><button data-audit-view="audit" aria-pressed="true">Audit results</button><button data-audit-view="queue" aria-pressed="false">README Attention Queue</button></div><section data-audit-results><h2 tabindex="-1">Repository audit results</h2><div class="audit-table-wrap"><table class="audit-table"><caption>Public repository documentation evidence</caption><thead><tr><th scope="col">Select / Repository</th><th scope="col">README state and evidence</th><th scope="col">Activity / Language</th><th scope="col">Actions</th></tr></thead><tbody></tbody></table></div><div class="audit-pagination"><button data-prev>Previous results</button><span data-page></span><button data-next>Next results</button></div></section><readme-attention-queue hidden></readme-attention-queue><p>Improve README opens a project-specific template with reviewed repository suggestions. Existing README source is preserved by default; missing READMEs can start from the template. Project types and English documentation signals are suggestions. Missing topics are commonly useful, never universally required; evidence is not a judgment of the project or its developer.</p>`;
     this.querySelectorAll("[data-audit-view]").forEach(
       (button) =>
         (button.onclick = () => this.showView(button.dataset.auditView, true)),
@@ -56,6 +61,7 @@ export class RepositoryAudit extends HTMLElement {
     };
     this.querySelector("[data-scan]").onclick = () => this.scan();
     this.querySelector("[data-stack-consent]").onchange = () => this.controls();
+    this.querySelector("[data-stack-nested]").onchange = () => this.controls();
     this.querySelector("[data-stack-scan]").onclick = () =>
       this.scanManifests();
     this.querySelector("[data-cancel]").onclick = () => this.cancel();
@@ -115,10 +121,13 @@ export class RepositoryAudit extends HTMLElement {
       el.disabled = !!this.busy;
     });
     this.querySelector("[data-cancel]").disabled = !this.busy;
+    const consent = this.querySelector("[data-stack-consent]").checked;
+    const nested = this.querySelector("[data-stack-nested]");
+    // Nested discovery is a second consent that only exists inside the first.
+    if (!consent) nested.checked = false;
+    nested.disabled = !!this.busy || !consent;
     this.querySelector("[data-stack-scan]").disabled =
-      !!this.busy ||
-      !this.selected().length ||
-      !this.querySelector("[data-stack-consent]").checked;
+      !!this.busy || !this.selected().length || !consent;
     this.querySelector("stack-results").setData(
       this.selected().flatMap((repo) =>
         this.state.stackResults.has(repo.full_name)
@@ -345,20 +354,28 @@ export class RepositoryAudit extends HTMLElement {
       !this.querySelector("[data-stack-consent]").checked
     )
       return;
+    const selected = this.selected();
+    const nested = this.querySelector("[data-stack-nested]").checked;
+    if (nested && selected.length > DISCOVERY_LIMITS.repositories) {
+      this.status(NESTED_LIMIT_MESSAGE(selected.length));
+      return;
+    }
     this.busy = true;
     this.controller = new AbortController();
     const signal = this.controller.signal;
-    const selected = this.selected();
     for (const repo of selected) this.state.stackResults.delete(repo.full_name);
     this.controls();
     this.status(
-      "Reading selected root manifests. Repository code is never executed.",
+      nested
+        ? "Reading selected root and nested manifests. Repository code is never executed."
+        : "Reading selected root manifests. Repository code is never executed.",
     );
     try {
       const summary = await scanStacks(selected, {
         client: stackClient,
         signal,
         force: this.querySelector("[data-stack-fresh]").checked,
+        nested,
         onResult: (record) => {
           if (!this.isConnected || signal.aborted) return;
           this.state.stackResults.set(record.repository, record);
