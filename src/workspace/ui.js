@@ -32,12 +32,19 @@ const goalHeadings = {
 // docs/privacy.md, and every other way data leaves the browser (link checks to
 // third-party sites, the Writing Assistant) must be stated; extend it when a
 // new network flow is added.
-function localityStatement(storageBlocked) {
-  return `<section class="guide-locality" aria-labelledby="guide-locality-title"><h2 id="guide-locality-title">Where your work is kept</h2><ul><li>${
-    storageBlocked
-      ? "Browser storage is unavailable, so this is a temporary workspace: drafts stay in memory only until this tab closes. Download all drafts backup to keep your work."
-      : "Drafts are saved only in this browser. They are not encrypted and clearing site data removes them, so download a backup to keep a copy."
-  }</li><li>GitHub is contacted only when you choose a GitHub action: import, autofill, audit, repository lookup, refresh and link checks, evidence and drift checks, or publishing. Link checks also contact the sites your links point to. Analysis runs in this browser: your Markdown is sent only when you publish it, or when you review and send text to the optional Writing assistant's provider. Images and badges in the preview load from their own sites.</li><li>Nothing is published without its own review.</li></ul><a href="${privacyDocs}" target="_blank" rel="noopener noreferrer">Privacy details</a></section>`;
+// Storage that works but holds an unreadable workspace is told apart from
+// blocked storage: the original is still there and only recovery data has it.
+function storageSentence(app) {
+  if (app.storageBlocked && app.recoveryRaw !== undefined)
+    return "Your saved workspace could not be read, so this is a temporary workspace: the original is left untouched in this browser, and nothing is saved over it until you restore a backup. Download original recovery data to keep the original; drafts you make now stay in memory only until this tab closes, so download all drafts backup to keep them.";
+  if (app.storageBlocked)
+    return "Browser storage is unavailable, so this is a temporary workspace: drafts stay in memory only until this tab closes. Download all drafts backup to keep your work.";
+  return "Drafts are saved only in this browser. They are not encrypted and clearing site data removes them, so download a backup to keep a copy.";
+}
+function localityStatement(app) {
+  return `<section class="guide-locality" aria-labelledby="guide-locality-title"><h2 id="guide-locality-title">Where your work is kept</h2><ul><li>${storageSentence(
+    app,
+  )}</li><li>GitHub is contacted only when you choose a GitHub action: import, autofill, audit, repository lookup, refresh and link checks, evidence and drift checks, or publishing. Link checks also contact the sites your links point to. Analysis runs in this browser: your Markdown is sent only when you publish it, or when you review and send text to the optional Writing assistant's provider. Images and badges in the preview load from their own sites.</li><li>Nothing is published without its own review.</li></ul><a href="${privacyDocs}" target="_blank" rel="noopener noreferrer">Privacy details</a></section>`;
 }
 
 // Guided start: step 1 asks for a Goal beside the earlier Start paths (their
@@ -56,7 +63,7 @@ function installGuidedStart(app) {
         )
         .join(
           "",
-        )}</ul><section class="guide-paths" aria-labelledby="guide-paths-title"><h2 id="guide-paths-title">Other ways to start</h2><div class="welcome-options"><button data-start="templates">Start from a template <span>→</span></button><button data-action="profile">Autofill from GitHub <span>↗</span></button><button data-start="import">Import GitHub README <span>↥</span></button><button data-action="open-project">Open Studio project <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button></div><button class="text-button" data-start="sample">Explore the sample profile →</button></section>${localityStatement(app.storageBlocked)}`,
+        )}</ul><section class="guide-paths" aria-labelledby="guide-paths-title"><h2 id="guide-paths-title">Other ways to start</h2><div class="welcome-options"><button data-start="templates">Start from a template <span>→</span></button><button data-action="profile">Autofill from GitHub <span>↗</span></button><button data-start="import">Import GitHub README <span>↥</span></button><button data-action="open-project">Open Studio project <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button></div><button class="text-button" data-start="sample">Explore the sample profile →</button></section>${localityStatement(app)}`,
     );
     content()
       .querySelectorAll("[data-goal]")
@@ -126,6 +133,10 @@ function installGuidedStart(app) {
               return;
             }
             app.action(id);
+            // The shared templates dialog lists the repository builder first;
+            // this option promised profile templates, so start on the first.
+            if (id === "templates")
+              content().querySelector("[data-template]")?.focus();
           }),
       );
     content().querySelector("[data-guide-back]").onclick = () => goalStep(goal);

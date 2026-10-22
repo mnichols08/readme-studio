@@ -289,6 +289,41 @@ test("each Goal step opens the existing flow or a blank document of its kind", a
   expect((await guide(page)).goal).toBe("audit");
 });
 
+test("Start from a profile template focuses a profile template, not the repository builder", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(goal(page, "Write my profile README")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(
+    dialog(page).getByRole("heading", { name: "Start your profile README" }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    dialog(page).getByRole("button", { name: "Start from a profile template" }),
+  ).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(
+    dialog(page).getByRole("heading", { name: "Choose your structure." }),
+  ).toBeVisible();
+  const first = dialog(page).locator("[data-template]").first();
+  await expect(first).toBeFocused();
+  // Focus stays there after the dialog's own focus fallback has run.
+  await page.evaluate(
+    () => new Promise((r) => requestAnimationFrame(() => r())),
+  );
+  await expect(first).toBeFocused();
+  await expect(
+    dialog(page).getByRole("button", { name: "Build a repository README" }),
+  ).not.toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(dialog(page)).toBeHidden();
+  expect((await drafts(page)).map((d) => d.name)).toEqual([
+    "My developer profile",
+    "Minimal",
+  ]);
+});
+
 test("offline, the audit stays focusable but unavailable and offers local ways to begin", async ({
   page,
   context,
@@ -365,6 +400,8 @@ test("blocked storage says the workspace is temporary and the Goal stays in memo
     name: "Where your work is kept",
   });
   await expect(locality).toContainText("temporary workspace");
+  await expect(locality).toContainText("Browser storage is unavailable");
+  await expect(locality).not.toContainText("could not be read");
   await expect(locality).not.toContainText("saved only in this browser");
   await goal(page, "Write my profile README").click();
   expect((await guide(page)).goal).toBe("profile");
@@ -372,6 +409,44 @@ test("blocked storage says the workspace is temporary and the Goal stays in memo
   await expect(page.locator(".save-status")).toHaveText(
     "Temporary workspace · export to keep work",
   );
+});
+
+test("an unreadable saved workspace skips the automatic Guided start and points to recovery data", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("seeded")) {
+      localStorage.setItem("readme-studio:v1", "{not json at all");
+      sessionStorage.setItem("seeded", "1");
+    }
+  });
+  await page.goto("/");
+  // The recovery notice is not hidden behind a modal first run.
+  await expect(page.locator(".recovery-notice")).toContainText(
+    "Saved workspace could not be read",
+  );
+  await expect(dialog(page)).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Download original recovery data" }),
+  ).toBeVisible();
+  // Opened by hand, the Locality statement names the real problem.
+  await page.locator('.workspace-tools [data-action="guided-start"]').click();
+  const locality = dialog(page).getByRole("region", {
+    name: "Where your work is kept",
+  });
+  await expect(locality).toContainText("saved workspace could not be read");
+  await expect(locality).toContainText("original is left untouched");
+  await expect(locality).toContainText("Download original recovery data");
+  await expect(locality).not.toContainText("Browser storage is unavailable");
+  await expect(locality).not.toContainText("saved only in this browser");
+  await goal(page, "Write my profile README").click();
+  expect((await guide(page)).goal).toBe("profile");
+  await page.keyboard.press("Escape");
+  await expect(dialog(page)).toBeHidden();
+  // Nothing was written over the original.
+  expect(
+    await page.evaluate(() => localStorage.getItem("readme-studio:v1")),
+  ).toBe("{not json at all");
 });
 
 test("the Goal is in all-drafts backups but never in README, draft JSON or project exports", async ({

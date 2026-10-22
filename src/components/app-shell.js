@@ -165,7 +165,10 @@ export class AppShell extends HTMLElement {
     this.load(this.data.active);
     this.mobile(this.data.settings.pane || "build", false);
     window.addEventListener("pagehide", () => this.save());
-    if (!saved) this.welcome();
+    // A saved workspace that could not be read is not a first run: its
+    // recovery notice (original recovery data, restore) comes first, and a
+    // modal Guided start would make that notice inert.
+    if (!saved && this.recoveryRaw === undefined) this.welcome();
     if (this.storageError) this.storageNotice(this.storageError);
     this.onRuntimeError = () => this.runtimeError();
     window.addEventListener("error", this.onRuntimeError);

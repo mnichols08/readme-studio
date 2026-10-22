@@ -137,8 +137,24 @@ describe("guide validation", () => {
     expect(kept).not.toBe(future);
     expect(guideGoal(kept)).toBeNull();
     expect(nextStepsEnabled(kept)).toBe(true);
-    for (const malformed of ["profile", 7, null, ["profile"], { goal: "x" }])
+    // Documented in docs/guided-start.md and docs/public-formats.md: any
+    // non-version-1 value, malformed ones included, is kept when it is small.
+    for (const malformed of [
+      "profile",
+      "hello",
+      7,
+      42,
+      true,
+      null,
+      [],
+      ["profile"],
+      { goal: "x" },
+      { goal: "audit" },
+      { version: "1", goal: "audit" },
+    ]) {
       expect(validateGuide(malformed)).toEqual(malformed);
+      expect(guideGoal(validateGuide(malformed))).toBeNull();
+    }
     expect(validateGuide(validateGuide(future))).toEqual(future);
   });
   it("replaces an unknown guide larger than 1 KB, or unserializable, with the default", () => {

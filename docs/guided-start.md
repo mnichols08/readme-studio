@@ -1,6 +1,6 @@
 # Guided start
 
-Guided start is the first screen of a new workspace. It asks what you want to do first, keeps every earlier way to begin and says plainly where your work is kept. It opens by itself only when this browser has no saved workspace. Reopen it at any time from **Create → Guided start** or by searching for "Guided start" with `Ctrl/Cmd+K`.
+Guided start is the first screen of a new workspace. It asks what you want to do first, keeps every earlier way to begin and says plainly where your work is kept. It opens by itself only when this browser has no saved workspace. When a saved workspace exists but cannot be read, Guided start does not open by itself, so the recovery notice (**Download original recovery data**, **Restore backup**) stays usable. Reopen it at any time from **Create → Guided start** or by searching for "Guided start" with `Ctrl/Cmd+K`.
 
 ## Choose a goal
 
@@ -35,7 +35,7 @@ The GitHub line names every flow listed under [Network requests](privacy.md#netw
 
 - Nothing is published without its own review.
 
-When browser storage is blocked, the first line instead says this is a temporary workspace that lasts only until the tab closes. The goal you choose then stays in memory only. The statement links to the [privacy notes](privacy.md).
+When browser storage is blocked, the first line instead says this is a temporary workspace that lasts only until the tab closes. When the saved workspace could not be read, it says the original is left untouched, that **Download original recovery data** keeps it, and that new drafts stay in memory until a backup is restored. In both cases the goal you choose stays in memory only. The statement links to the [privacy notes](privacy.md).
 
 ## What is saved, and where
 
@@ -49,4 +49,4 @@ The goal is stored in an optional `guide` field of the version-1 workspace (ADR 
 | Download draft backup (single-draft JSON) | No                                                                  |
 | Export README / Copy Markdown             | No                                                                  |
 
-A workspace from an earlier version gets the default (no goal). An unknown goal reads as no goal. A `guide` written by a newer version (another `version`) is kept unchanged if it is at most 1 KB of JSON and an all-drafts backup can carry it unchanged (no deeper than the backup allows and no credential-named key such as `token` or `session`); it is treated as no goal until you choose again. Any other one is replaced by the default. Guided start adds no network request, telemetry or storage key of its own.
+A workspace from an earlier version gets the default (no goal). An unknown goal reads as no goal. Any other `guide` that is not version 1, whether written by a newer version (another `version`) or malformed (for example `null`, a string, a list or an object without `version`), is kept unchanged if it is at most 1 KB of JSON and an all-drafts backup can carry it unchanged (no deeper than the backup allows and no credential-named key such as `token` or `session`); it is treated as no goal until you choose again. One that is larger, or that a backup could not carry unchanged, is replaced by the default. Guided start adds no network request, telemetry or storage key of its own.
