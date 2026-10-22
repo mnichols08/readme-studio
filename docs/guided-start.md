@@ -14,7 +14,7 @@ Step 1 offers three goals:
 
 Choosing a goal shows step 2 in the same dialog and moves keyboard focus to its heading. **Back** returns to step 1 with focus on the goal you chose. Every option in step 2 opens that tool's normal flow, with its usual review and Undo; the blank options create an empty document in the Profile or Repositories group without a GitHub target. Escape or an outside click closes Guided start at either step and returns focus as other dialogs do.
 
-Your goal is saved in this browser's workspace when you choose it. It never changes a document. When you reopen Guided start, your current goal is marked ("Your current goal") and focused. A saved goal never opens a dialog by itself; later releases use it to suggest next steps.
+Your goal is saved in this browser's workspace when you choose it. It never changes a document. When you reopen Guided start, your current goal is marked ("Your current goal") and focused. A saved goal never opens a dialog by itself. After you start from a template, an import, the audit or a blank document, the [Next steps](next-steps.md) panel suggests what to do next.
 
 ### Offline
 

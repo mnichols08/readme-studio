@@ -73,13 +73,13 @@ export class Store extends EventTarget {
     this.future.push(structuredClone(this.draft));
     this.draft = this.past.pop();
     this.trimHistory();
-    this.emit("history");
+    this.emit("undo");
   }
   redo() {
     if (!this.future.length) return;
     this.past.push(structuredClone(this.draft));
     this.draft = this.future.pop();
     this.trimHistory();
-    this.emit("history");
+    this.emit("redo");
   }
 }
