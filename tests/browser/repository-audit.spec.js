@@ -510,3 +510,134 @@ test("optional history and link review preserves assessments and explains uncert
   expect(historyCalls).toBe(2);
   expect(linkCalls).toBe(2);
 });
+
+test("audit rows open improvement plans by keyboard, offline, with evidence, empty and not-assessed states", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  const paragraph = (topic) =>
+    `The ${topic} part explains clearly how people prepare their machines, which tools they need, where the files live, and why each choice keeps the project predictable for new contributors arriving later.`;
+  const complete = [
+    "# Notes tool",
+    paragraph("overview"),
+    paragraph("purpose"),
+    "## Installation",
+    `${paragraph("installation")} Install it with the package manager before you continue.`,
+    "```sh\nnpm install notes-tool\n```",
+    "## Usage",
+    `${paragraph("usage")} Run the command from any folder that contains notes.`,
+    "## Links",
+    `${paragraph("links")} Read the [full guide](https://example.org/guide) for more detail.`,
+    paragraph("closing"),
+    paragraph("support"),
+  ].join("\n\n");
+  await page.route("https://api.github.com/**", (route) => {
+    const url = route.request().url();
+    if (url.includes("/users/"))
+      return route.fulfill({
+        json: [
+          metadata("cli-notes", { topics: ["cli"] }),
+          metadata("complete"),
+          metadata("offline"),
+          metadata("unversioned", { topics: ["cli"] }),
+        ],
+      });
+    if (url.includes("/offline/")) return route.abort();
+    if (url.includes("/complete/"))
+      return route.fulfill({ json: file(complete) });
+    if (url.includes("/unversioned/"))
+      return route.fulfill({ json: { ...file(), sha: "" } });
+    return route.fulfill({ json: file() });
+  });
+  await open(page);
+  await page
+    .getByRole("button", { name: "Select all filtered repositories" })
+    .click();
+  await page
+    .getByRole("button", { name: "Audit selected", exact: true })
+    .click();
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "Audit complete: 4 of 4",
+  );
+  const row = (name) =>
+    page.locator("repository-audit tr").filter({
+      has: page.getByLabel(`Select example/${name}`, { exact: true }),
+    });
+  // Plans are built from session results only.
+  await page.context().setOffline(true);
+  const plan = row("cli-notes").locator("improvement-plan");
+  await plan.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(plan).toContainText("Based on README revision aaaaaaa read");
+  const installation = plan
+    .locator("li[data-rec]")
+    .filter({ hasText: "Add an Installation section" });
+  await expect(installation).toContainText(
+    "Installation: no populated heading matched",
+  );
+  await expect(installation).toContainText(
+    "Key topic for CLI (type from repository topic “cli”)",
+  );
+  await expect(
+    installation.getByRole("link", { name: "Open README on GitHub" }),
+  ).toHaveAttribute(
+    "href",
+    "https://github.com/example/cli-notes/blob/main/README.md",
+  );
+  await installation
+    .getByRole("button", { name: "Dismiss for this session", exact: true })
+    .focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("repository-audit [data-status]")).toContainText(
+    "Dismissed “Add an Installation section” for example/cli-notes for this session and README revision aaaaaaa",
+  );
+  await expect(
+    plan
+      .locator("li[data-rec]")
+      .filter({ hasText: "Add a Commands section" })
+      .getByRole("button", { name: "Improve README", exact: true }),
+  ).toBeFocused();
+  await expect(plan).toContainText("Dismissed for this session (1)");
+  // Skipping the last recommendation moves focus to the summary.
+  const last = plan.locator("li[data-rec]").last();
+  await last.getByRole("button", { name: "Skip", exact: true }).click();
+  await expect(plan.locator("summary")).toBeFocused();
+
+  const unversioned = row("unversioned").locator("improvement-plan");
+  await unversioned.locator("summary").click();
+  await expect(
+    unversioned
+      .getByRole("button", { name: "Dismiss for this session" })
+      .first(),
+  ).toBeDisabled();
+  await expect(unversioned).toContainText(
+    "Refresh the audit to obtain a README revision",
+  );
+  const empty = row("complete").locator("improvement-plan");
+  await expect(empty.locator("summary")).toHaveText(
+    "Improvement plan · 0 recommendations",
+  );
+  await empty.locator("summary").click();
+  await expect(empty).toContainText(
+    "No recommendations from the current evidence. This is not a quality verdict.",
+  );
+  const failed = row("offline").locator("improvement-plan");
+  await expect(failed.locator("summary")).toHaveText(
+    "Improvement plan · not assessed",
+  );
+  await failed.locator("summary").click();
+  await expect(failed).toContainText(
+    "Not assessed - audit this repository to build a plan.",
+  );
+  await expect(row("offline")).not.toContainText("Missing README");
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(320);
+  await page.context().setOffline(false);
+  await plan
+    .locator("li[data-rec]")
+    .first()
+    .getByRole("button", { name: "Improve README", exact: true })
+    .click();
+  await expect(page.getByLabel("Repository template")).toBeVisible();
+});

@@ -8,6 +8,49 @@ Select repositories individually or select all currently filtered repositories, 
 
 ![Repository README audit with synthetic data](screenshots/repository-audit.png)
 
+## Improvement plans
+
+Every audited row, and every README Attention Queue entry, has an **Improvement plan** disclosure. Open it with a click or Enter/Space on its summary, **Improvement plan · N recommendations**. A plan is calculated from the audit results already in this tab: it makes no request, reads no README source again and works offline. It is not a score, and nothing changes until you open a reviewed flow.
+
+The plan begins with **Based on README revision abc1234 read …**, the README revision and time the evidence came from. Each Recommendation comes from exactly one Audit finding and shows:
+
+- **A title** that names what to add or review, for example **Add an Installation section**, **Replace Vite starter text** or **Review unavailable link**. Studio never writes the section, a command, a URL or a fact for you.
+- **Evidence** quoting only what the audit observed: the classification metrics, the topic and "no populated heading matched", the URL and "HTTP 404/410 at check time", the README history dates and commit count, and always the README revision and observation time.
+- **Applicability**: the project type and where it came from (chosen by you, a repository topic, README prose, a name hint or the generic fallback), plus caveats. Every topic may be covered under another heading or linked elsewhere. Authentication does not apply to APIs without authentication. A license may already be covered by a LICENSE file, which the audit does not read. When the README links to external documentation, an API reference may be a deliberate alternative.
+
+Recommendations are grouped into three **Plan bands**. Bands order the work; they are not ratings.
+
+| Band       | Recommendations                                                                                                                                |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Start here | Missing README, stub or minimal README, starter text (Create React App, Vite, Next.js), placeholders (TODO, your-project-name)                 |
+| Next       | Key project-type topics that were not detected (the same subset the queue uses), unavailable links and images from **Check history and links** |
+| Optional   | Other profile topics, README history that predates significant activity, and topics downgraded by a caveat below                               |
+
+When the README is missing or a stub, a single Start-here Recommendation lists the type's undetected key topics as sections to consider when writing it, instead of one Recommendation per topic. Within a band the order is fixed: README, starter, placeholder, topic, link, image, history, then the type's topic order, then the finding ID. A plan lists at most 30 Recommendations and says how many more were not shown.
+
+Topic Recommendations move to Optional, with a caveat at the top of the plan, when:
+
+- the project type is a weak inference (a name hint or the generic fallback) and you have not chosen one: "Project type is a weak inference; choose a type if this is wrong";
+- the README has at least 80 prose words and two headings, yet no heading matched any English topic term and no setup or usage was recognised: "Headings may not be in English; topic detection uses English terms".
+
+An Experiment's findings topic and an API reference next to external documentation links are always Optional. Repository activity, stars and archive state never change a plan.
+
+### Plan actions and decisions
+
+Each Recommendation offers **Improve README** (the repository README builder, which already preselects missing sections), **Open in Studio**, **Open README on GitHub**, **Skip** and **Dismiss for this session**. A missing or thin README cannot be dismissed; it offers **Mark intentionally minimal**, the queue's existing decision, instead.
+
+- **Skip** sets a Recommendation aside for this session. It moves into **Skipped (n)** with **Restore** and never changes the queue.
+- **Dismiss for this session** states the Recommendation does not apply to this README revision. It moves into **Dismissed for this session (n)** with **Restore**, and its gap or finding also leaves the queue's reasons and eligibility. Dismiss needs a known README revision; without one it is disabled with "Refresh the audit to obtain a README revision".
+- A dismissal made for an earlier README revision is not applied after a fresh audit sees a different revision. The Recommendation returns with "Dismissed for an earlier README revision", **Dismiss again** and **Forget earlier dismissal**.
+
+After Skip or Dismiss, focus moves to the next Recommendation's first button, or to the plan summary when none is left. Status messages use the audit or queue status region. Skip and Dismiss decisions last for this tab session only and are cleared when you load another account or reload. Improve README and Open in Studio keep their existing fetch and error behavior.
+
+Empty states are explicit. A repository that could not be read shows **Not assessed - audit this repository to build a plan**; a failed fetch never produces a missing-README plan. A plan with nothing to suggest says "No recommendations from the current evidence. This is not a quality verdict." When everything is skipped or dismissed, the counts and Restore buttons remain.
+
+![Improvement plan with Next and Optional recommendations, synthetic data](screenshots/improvement-plan.png)
+
+`tests/improvement-plan.test.js` covers every finding kind and band, order and the 30 cap, evidence and applicability, failed records, empty and folded plans, session decisions, queue reasons and stable finding IDs, plus type-specific false positives (CLI usage, external API docs, public APIs, experiments, documentation and game repositories, weak and non-English types, fenced TODOs, badge-only and archived repositories). Browser coverage in `attention-queue.spec.js` and `repository-audit.spec.js` opens plans by keyboard at 320px, checks evidence, focus after Skip and Dismiss, queue reasons, offline use and Improve README.
+
 ## Choosing the next README (1.1.2)
 
 Switch to **README Attention Queue** after auditing. It uses these assessments to offer descriptive priorities, combined filters, new-draft actions and revision-bound local dismissals. The [queue guide](readme-attention-queue.md) documents the rules and recovery behavior. Audit results remain in repository-name order; the queue is a separate view.

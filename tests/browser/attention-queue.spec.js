@@ -291,3 +291,144 @@ test("damaged and unwritable attention storage stays visible and does not lose d
   await expect(queue).toContainText("Your decision was not applied");
   await expect(queue.locator("[data-item]")).toHaveCount(1);
 });
+
+test("improvement plans explain evidence, move focus after Skip and Dismiss, and drop dismissed gaps from the queue at 320px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.route("https://api.github.com/**", (route) =>
+    route.fulfill({
+      json: route.request().url().includes("/users/")
+        ? [repo("swing")]
+        : file(prose),
+    }),
+  );
+  await audit(page);
+  await scan(page);
+  const queue = page.locator("readme-attention-queue");
+  const item = queue.locator("[data-item]").first();
+  const summary = item.locator("improvement-plan summary");
+  await expect(summary).toHaveText("Improvement plan · 6 recommendations");
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  const plan = item.locator("improvement-plan");
+  await expect(plan).toContainText("Based on README revision aaaaaaa read");
+  await expect(plan).toContainText("Recommendations are advisory");
+  await expect(plan.getByRole("heading", { name: "Start here" })).toBeVisible();
+  const controls = plan
+    .locator("li[data-rec]")
+    .filter({ hasText: "Add a Controls section" });
+  await expect(controls).toContainText(
+    "Controls: no populated heading matched",
+  );
+  await expect(controls).toContainText("type from repository topic “game”");
+  await expect(controls).toContainText("README revision aaaaaaa");
+  await controls.getByRole("button", { name: "Skip", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(queue.locator("[data-queue-status]")).toContainText(
+    "Skipped “Add a Controls section” for example/swing",
+  );
+  // Focus moves to the recommendation that took the skipped one's place.
+  const setup = plan
+    .locator("li[data-rec]")
+    .filter({ hasText: "Add setup or how-to-run instructions" });
+  await expect(
+    setup.getByRole("button", { name: "Improve README", exact: true }),
+  ).toBeFocused();
+  await expect(plan).toContainText("Skipped (1)");
+  await expect(summary).toHaveText("Improvement plan · 5 recommendations");
+  // Skip never changes the queue.
+  await expect(item).toContainText("Game controls not detected");
+  await setup
+    .getByRole("button", { name: "Dismiss for this session", exact: true })
+    .click();
+  await expect(item).not.toContainText(
+    "Build/run or setup instructions not detected",
+  );
+  await expect(queue.locator("[data-queue-count]")).toContainText(
+    "1 recommendation dismissed",
+  );
+  await expect(
+    plan
+      .locator("li[data-rec]")
+      .filter({ hasText: "Add a Gameplay section" })
+      .getByRole("button", { name: "Improve README", exact: true }),
+  ).toBeFocused();
+  await expect(plan).toContainText("Dismissed for this session (1)");
+  // Thin READMEs offer Intentionally minimal instead of Dismiss.
+  const thin = plan
+    .locator("li[data-rec]")
+    .filter({ hasText: "Expand the README" });
+  await expect(
+    thin.getByRole("button", { name: "Mark intentionally minimal" }),
+  ).toBeVisible();
+  await expect(
+    thin.getByRole("button", { name: "Dismiss for this session" }),
+  ).toHaveCount(0);
+  await plan
+    .getByRole("button", {
+      name: "Restore Add setup or how-to-run instructions",
+    })
+    .click();
+  await expect(item).toContainText(
+    "Build/run or setup instructions not detected",
+  );
+  await expect(
+    plan
+      .locator("li[data-rec]")
+      .filter({ hasText: "Add setup or how-to-run instructions" })
+      .getByRole("button", { name: "Improve README", exact: true }),
+  ).toBeFocused();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(320);
+  await thin
+    .getByRole("button", { name: "Improve README", exact: true })
+    .click();
+  await expect(page.getByLabel("Repository template")).toHaveValue("game");
+});
+
+test("dismissing every key gap removes the item from the queue and the plan says so", async ({
+  page,
+}) => {
+  await page.route("https://api.github.com/**", (route) =>
+    route.fulfill({
+      json: route.request().url().includes("/users/")
+        ? [repo("basic")]
+        : file(basic),
+    }),
+  );
+  await audit(page);
+  await scan(page);
+  const queue = page.locator("readme-attention-queue");
+  await expect(queue.locator("[data-item]")).toHaveCount(1);
+  const plan = queue.locator("improvement-plan");
+  await plan.locator("summary").click();
+  await expect(plan).toContainText("Add Build instructions");
+  if (test.info().project.name === "chromium")
+    await plan.screenshot({ path: "docs/screenshots/improvement-plan.png" });
+  for (const title of [
+    "Add setup or how-to-run instructions",
+    "Add Build instructions",
+  ])
+    await plan
+      .locator("li[data-rec]")
+      .filter({ hasText: title })
+      .getByRole("button", { name: "Dismiss for this session" })
+      .click();
+  await expect(queue.locator("[data-item]")).toHaveCount(0);
+  await expect(
+    queue.getByRole("heading", { name: "README Attention Queue", exact: true }),
+  ).toBeFocused();
+  await expect(queue.locator("[data-queue-count]")).toContainText(
+    "2 recommendations dismissed",
+  );
+  // Audit results still show the plan with the dismissed recommendations.
+  await page
+    .locator("repository-audit")
+    .getByRole("button", { name: "Audit results", exact: true })
+    .click();
+  const rowPlan = page.locator("repository-audit tbody improvement-plan");
+  await rowPlan.locator("summary").click();
+  await expect(rowPlan).toContainText("Dismissed for this session (2)");
+});

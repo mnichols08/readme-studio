@@ -46,6 +46,10 @@ function prose(tokens, out = []) {
   return out.filter((text) => words(text).length);
 }
 
+// "Evidence and rules (version 2)" in docs/repository-auditing.md. Bump only
+// when classification or finding rules change; Audit snapshots record it.
+export const AUDIT_RULES_VERSION = 2;
+
 // Explainable rules, not a score. Activity and popularity never affect the state.
 export function classifyReadme(source, repo = {}) {
   if (source === null)

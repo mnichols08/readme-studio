@@ -22,7 +22,7 @@ Guided start asks whether you want to write a profile README, write a repository
 - Compose sections, badges and collections, project showcases, components and reusable snippets.
 - Coordinate themes, generate local light/dark SVG banners, and configure attributed external widget embeds.
 - Import public GitHub data, review refreshes, analyze compatibility and apply explicit, undoable refactors.
-- Audit selected public repositories with advisory expectations for 14 project types, then choose the next README from the attention queue.
+- Audit selected public repositories with advisory expectations for 14 project types, review an evidence-backed [Improvement plan](docs/repository-auditing.md#improvement-plans) for each, then choose the next README from the attention queue.
 - Record read-only evidence snapshots of a repository's branch head, README, manifests and linked files, then check what changed since a pinned Baseline.
 - Check for stale scripts, missing files, broken links and anchors, and outdated config keys without running repository code or changing your Markdown.
 - Save portable `.readme-studio.json` projects or export Markdown, packs and full workspace backups.

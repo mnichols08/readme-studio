@@ -1,22 +1,6 @@
 import { assessProjectType } from "./project-types.js";
 
 const DAY = 86400000;
-const keyTopics = {
-  "web-app": ["overview", "visuals", "setup", "configuration"],
-  library: ["overview", "installation", "usage", "api", "examples"],
-  cli: ["installation", "commands", "options", "examples"],
-  api: ["setup", "authentication", "endpoints", "requests"],
-  "npm-package": ["overview", "installation", "usage", "api"],
-  "rust-crate": ["overview", "installation", "usage", "api"],
-  "python-package": ["overview", "installation", "usage", "api"],
-  game: ["overview", "controls", "setup", "gameplay", "build"],
-  pwa: ["overview", "setup", "offline"],
-  documentation: ["overview", "navigation"],
-  "open-source": ["overview", "setup", "usage", "contributing"],
-  tutorial: ["overview", "prerequisites", "steps"],
-  experiment: ["overview"],
-  generic: ["overview", "setup", "usage"],
-};
 const topicNames = {
   overview: "Purpose / overview",
   visuals: "Screenshot / demo",
@@ -62,6 +46,12 @@ export function readmeRevision(record) {
     : "";
 }
 
+// A Dismissal applies only to the README revision it was made against (ADR
+// epic64-03). `dismissed` maps finding ID -> Observed revision.
+export function dismissalApplies(dismissed, id, revision) {
+  return !!revision && dismissed?.get(id) === revision;
+}
+
 export function suppressionFor(entry, record, now) {
   if (!entry) return "";
   const revision = readmeRevision(record);
@@ -75,19 +65,22 @@ export function suppressionFor(entry, record, now) {
 
 export function attentionItem(
   record,
-  { override = "auto", now = Date.now(), preference } = {},
+  { override = "auto", now = Date.now(), preference, dismissed } = {},
 ) {
   if (!record?.result) return null; // A fetch failure is never missing documentation.
   const repo = record.repo;
+  const revision = readmeRevision(record);
+  // Thin/missing READMEs cannot be dismissed, so High attention is never dropped.
+  const kept = (id) => !dismissalApplies(dismissed, id, revision);
   const assessment = assessProjectType(record.result, override);
-  const gaps = assessment.missing.filter((key) =>
-    keyTopics[assessment.type.id].includes(key),
+  const gaps = assessment.missing.filter(
+    (key) => assessment.type.key.includes(key) && kept(`topic:${key}`),
   );
   const thin = ["missing", "stub", "minimal"].includes(assessment.state);
   const findings = [
     ...(record.result.findings || []),
     ...(record.review?.findings || []),
-  ];
+  ].filter((finding) => kept(finding.id));
   if (!thin && !gaps.length && !findings.length) return null;
   const pushed = Date.parse(repo.pushed_at);
   const days =
@@ -104,7 +97,7 @@ export function attentionItem(
     !!repo.homepage;
   const reasons = [
     assessment.label,
-    ...findings,
+    ...findings.map((finding) => finding.message),
     repo.archived
       ? "Archived repository; placed below active work."
       : days === null
@@ -137,14 +130,20 @@ export function attentionItem(
     active,
     days,
     interest,
-    revision: readmeRevision(record),
+    revision,
     suppressed: suppressionFor(preference, record, now),
   };
 }
 
+// `dismissals` maps canonical owner/name -> Map(finding ID -> revision).
 export function attentionQueue(
   records,
-  { overrides = new Map(), preferences = [], now = Date.now() } = {},
+  {
+    overrides = new Map(),
+    preferences = [],
+    dismissals = new Map(),
+    now = Date.now(),
+  } = {},
 ) {
   const saved = new Map(preferences.map((entry) => [entry.repository, entry]));
   return records
@@ -152,6 +151,7 @@ export function attentionQueue(
       attentionItem(record, {
         override: overrides.get(record.repo.full_name) || "auto",
         preference: saved.get(record.repo.full_name.toLowerCase()),
+        dismissed: dismissals.get(record.repo.full_name.toLowerCase()),
         now,
       }),
     )

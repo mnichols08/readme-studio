@@ -1,6 +1,7 @@
 import "./stack-results.js";
 import { stackClient, scanStacks } from "../stack-intelligence/client.js";
 import "./readme-attention-queue.js";
+import "./improvement-plan.js";
 import { reviewReadme } from "../repository-audit/review.js";
 import { html as h } from "../markdown/serialize.js";
 import { githubUsername } from "../state/github-profile.js";
@@ -16,7 +17,13 @@ import {
   suggestProjectType,
 } from "../repository-audit/project-types.js";
 import { auditAnalyzer } from "../repository-audit/analyzer.js";
-import { activityStatus } from "../repository-audit/presentation.js";
+import {
+  activityStatus,
+  readmeUrl,
+  repositoryUrl,
+} from "../repository-audit/presentation.js";
+import { planDecision } from "../repository-audit/improvement-plan.js";
+import { readmeRevision } from "../repository-audit/attention.js";
 
 export class RepositoryAudit extends HTMLElement {
   connectedCallback() {
@@ -30,6 +37,16 @@ export class RepositoryAudit extends HTMLElement {
     this.addEventListener("attention-open", (event) =>
       this.improve(event.detail.repo, event.detail.builder),
     );
+    // Plans in audit rows; the queue handles plans inside it.
+    this.addEventListener("plan-action", (event) =>
+      this.planAction(event.detail),
+    );
+    this.addEventListener("plan-decision", (event) => {
+      const repo = this.visible?.find(
+        (r) => r.full_name === event.detail.repository,
+      );
+      if (repo) this.result(repo);
+    });
     this.showView(this.getAttribute("data-start-view") || "audit");
     this.querySelector("form").onsubmit = (e) => {
       e.preventDefault();
@@ -131,6 +148,10 @@ export class RepositoryAudit extends HTMLElement {
     this.querySelector("[data-scan]").disabled =
       !!this.busy || !this.selected().length;
     this.querySelector("readme-attention-queue").setData(this.state, this.busy);
+    // The blanket toggle above ignores per-action rules inside plans.
+    this.querySelectorAll("tbody improvement-plan").forEach((plan) => {
+      plan.busy = this.busy;
+    });
     this.querySelector("[data-count]").textContent =
       `${this.filtered().length} included of ${this.state.repositories.length} loaded · ${this.selected().length} selected`;
   }
@@ -169,10 +190,11 @@ export class RepositoryAudit extends HTMLElement {
     const index = this.visible.findIndex((r) => r.full_name === repo.full_name);
     if (index < 0) return;
     const row = this.querySelector(`[data-row="${index}"]`),
-      record = this.state.results.get(repo.full_name);
+      record = this.state.results.get(repo.full_name),
+      queue = this.querySelector("readme-attention-queue");
     const cell = row.querySelector("[data-result]");
     if (!cell.querySelector("[data-type]")) {
-      cell.innerHTML = `<div data-assessment></div><p data-suggestion></p><label for="audit-type-${index}">Project type for ${h(repo.full_name)}</label><select id="audit-type-${index}" data-type><option value="auto">Automatic suggestion</option>${projectTypes.map((type) => `<option value="${type.id}">${h(type.name)}</option>`).join("")}</select><p class="hint" data-type-mode></p>`;
+      cell.innerHTML = `<div data-assessment></div><p data-suggestion></p><label for="audit-type-${index}">Project type for ${h(repo.full_name)}</label><select id="audit-type-${index}" data-type><option value="auto">Automatic suggestion</option>${projectTypes.map((type) => `<option value="${type.id}">${h(type.name)}</option>`).join("")}</select><p class="hint" data-type-mode></p><improvement-plan data-plan hidden></improvement-plan>`;
       cell.querySelector("[data-type]").onchange = (event) => {
         const choice = event.target.value;
         if (choice === "auto") this.state.typeOverrides.delete(repo.full_name);
@@ -196,7 +218,7 @@ export class RepositoryAudit extends HTMLElement {
       (type) => type.id === suggestion.id,
     ).name;
     cell.querySelector("[data-assessment]").innerHTML = assessment
-      ? `<strong>${h(assessment.label)}</strong><ul>${[...assessment.evidence, ...(record.result.findings || []), ...(record.review?.findings || []), ...(record.review?.notes || [])].map((v) => `<li>${h(v)}</li>`).join("")}</ul><small>Checked ${h(new Date(record.checkedAt).toLocaleString())}</small>`
+      ? `<strong>${h(assessment.label)}</strong><ul>${[...assessment.evidence, ...[...(record.result.findings || []), ...(record.review?.findings || [])].map((finding) => finding.message), ...(record.review?.notes || [])].map((v) => `<li>${h(v)}</li>`).join("")}</ul><small>Checked ${h(new Date(record.checkedAt).toLocaleString())}</small>`
       : `<strong>Not assessed</strong><p>${h(record?.error || "Select this repository to fetch and analyze its README.")}</p>`;
     cell.querySelector("[data-suggestion]").textContent =
       `Suggested type: ${suggestedName}. ${suggestion.reason} This is an inference, not a certainty.${suggestion.alternatives.length ? ` Other signals: ${suggestion.alternatives.map((id) => projectTypes.find((t) => t.id === id).name).join(", ")}.` : ""}`;
@@ -206,14 +228,50 @@ export class RepositoryAudit extends HTMLElement {
       choice === "auto"
         ? "Using the automatic suggestion. You can choose another type."
         : "Manual override; retained in this tab. Choose Automatic suggestion to reset.";
-    const url = `https://github.com/${repo.full_name.split("/").map(encodeURIComponent).join("/")}`;
+    const plan = cell.querySelector("[data-plan]");
+    plan.hidden = !record;
+    if (record) {
+      plan.plan = queue.plan({ ...record, repo });
+      plan.readmeUrl = readmeUrl(repo, record.readme);
+      plan.minimalUnavailable = !!queue.preferences?.error;
+      plan.busy = this.busy;
+    }
+    const url = repositoryUrl(repo);
     const readme = record?.readme;
     row.querySelector("[data-actions]").innerHTML =
-      `<a href="${h(url)}" target="_blank" rel="noopener noreferrer">Open repository</a>${readme?.path ? `<a href="${h(`${url}/blob/${encodeURIComponent(repo.default_branch || "HEAD")}/${encodeURIComponent(readme.path)}`)}" target="_blank" rel="noopener noreferrer">Open README</a>` : ""}${record?.result ? `<button data-improve ${this.busy ? "disabled" : ""}>Improve README</button>${readme?.path ? `<button data-review ${this.busy ? "disabled" : ""}>Check history and links</button>` : ""}` : ""}`;
+      `<a href="${h(url)}" target="_blank" rel="noopener noreferrer">Open repository</a>${readme?.path ? `<a href="${h(readmeUrl(repo, readme))}" target="_blank" rel="noopener noreferrer">Open README</a>` : ""}${record?.result ? `<button data-improve ${this.busy ? "disabled" : ""}>Improve README</button>${readme?.path ? `<button data-review ${this.busy ? "disabled" : ""}>Check history and links</button>` : ""}` : ""}`;
     const review = row.querySelector("[data-review]");
     if (review) review.onclick = () => this.review(repo);
     const improve = row.querySelector("[data-improve]");
     if (improve) improve.onclick = () => this.improve(repo);
+  }
+  planAction({ action, id, repository, focus }) {
+    const repo = this.visible?.find((r) => r.full_name === repository);
+    const record = repo && this.state.results.get(repository);
+    if (this.busy || !record?.result) return;
+    if (action === "improve" || action === "open") {
+      this.improve(repo, action === "improve");
+      return;
+    }
+    const queue = this.querySelector("readme-attention-queue");
+    const plan = () =>
+      this.querySelector(
+        `[data-row="${this.visible.indexOf(repo)}"] improvement-plan`,
+      );
+    try {
+      const revision = readmeRevision(record);
+      const message =
+        action === "minimal"
+          ? queue.remember(repo, "minimal", revision)
+          : planDecision(this.state, { repository, id, action, revision });
+      this.result(repo);
+      queue.setData(this.state, this.busy);
+      this.status(message);
+      plan().focusAfter(focus);
+    } catch (error) {
+      if (action === "minimal") queue.setData(this.state, this.busy);
+      this.status(error.message);
+    }
   }
   async load(more) {
     if (this.busy) return;
@@ -238,6 +296,8 @@ export class RepositoryAudit extends HTMLElement {
         selected: new Set(),
         results: new Map(),
         typeOverrides: new Map(),
+        skipped: new Map(),
+        dismissed: new Map(),
         stackResults: new Map(),
       });
       this.list();
