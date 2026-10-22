@@ -6,7 +6,7 @@ Run `npm ci` and `npm run dev` with Node 22.12+. First launch opens [Guided star
 2. Use **Build** to select and reorder sections. Open the relevant studio to configure badges, projects, themes or components.
 3. Switch to **Markdown** at any time. Your source is authoritative; visual ownership may detach after manual changes.
 4. Inspect **Preview** in light/dark and narrow widths, then **Health** for advisory findings.
-5. Use **Save → Save Studio project** for continued editing, **Download README** for GitHub, or **Manage drafts → Download all drafts backup** for the complete workspace.
+5. Use **Save → Save Studio project** for continued editing, **Download README** for GitHub, or **Manage drafts → Download all drafts backup** for the complete workspace. Export asks first if an open section form has edits you have not saved yet. To get a backup back in a browser whose data was cleared, choose **Restore a backup** in Guided start.
 
 On mobile, select a pane using its tab. On desktop, collapse Build or adjust preview width. `Ctrl/Cmd+K` searches tools and content. `Ctrl/Cmd+S` saves locally; it does not publish. Dialogs close with Escape or an outside click, subject to unsaved-change confirmation.
 

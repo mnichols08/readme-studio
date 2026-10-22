@@ -136,9 +136,12 @@ export function restoreWorkspace(current, backup, mode) {
     throw new Error(
       "Merged workspace exceeds the 500 draft limit. Export smaller backups first.",
     );
+  // A merge opens the backup's own active draft: restoring is how an author
+  // gets back to that work, and their other drafts stay under Current draft.
   return {
     ...current,
     drafts,
+    active: incoming.active,
     sharedComponents,
     evidenceSnapshots: mergeSnapshots(
       current.evidenceSnapshots,

@@ -112,6 +112,7 @@ import {
   BACKUP_LIMIT,
 } from "../state/workspace-backup.js";
 import { safeFilename } from "../state/download.js";
+import { unsavedSectionPrompt } from "../workspace/unsaved-section.js";
 import { contextForBlock } from "../markdown/source-context.js";
 export class AppShell extends HTMLElement {
   connectedCallback() {
@@ -2273,6 +2274,54 @@ export class AppShell extends HTMLElement {
       }
     }
   }
+  // Export README and Copy Markdown use the saved Source. While the open
+  // section form has edits that are not saved yet, ask instead of leaving them
+  // out silently; saving them stays the author's explicit choice.
+  unsavedSectionGuard(action) {
+    const form = this.content?.querySelector("builder-form");
+    if (!form?.isDirty()) return false;
+    const prompt = unsavedSectionPrompt(action, {
+      title: blockTypes[form.value.type],
+      added: !!form.value.id,
+    });
+    this.modal(
+      `<h1>${html(prompt.heading)}</h1><p>${html(prompt.body)}</p><div class="row-actions"><button class="primary" data-unsaved="save">${html(prompt.save)}</button><button data-unsaved="skip">${html(prompt.skip)}</button><button data-unsaved="keep">${html(prompt.keep)}</button></div>`,
+    );
+    const run = () =>
+      action === "copy"
+        ? this.copy(this.store.draft.markdown)
+        : this.download(this.store.draft.markdown, "README.md");
+    this.querySelectorAll("[data-unsaved]").forEach(
+      (button) =>
+        (button.onclick = () => {
+          const choice = button.dataset.unsaved;
+          if (choice === "keep") {
+            this.closeDialog(form.querySelector("[type=submit]"));
+            return;
+          }
+          this.closeDialog();
+          if (choice === "save") {
+            if (!form.save()) {
+              this.notify(
+                "The section could not be saved. Check its fields, then save it.",
+              );
+              this.afterDialogFocus = form.querySelector(
+                "input,textarea,select",
+              );
+              return;
+            }
+            // The commit handler explained why the section was not saved.
+            if (form.isConnected) return;
+            if (!this.dialogTrigger?.isConnected)
+              this.afterDialogFocus = this.content.querySelector(
+                `[data-id="${form.value.id}"]`,
+              );
+          }
+          run();
+        }),
+    );
+    return true;
+  }
   async copy(value) {
     try {
       await navigator.clipboard.writeText(value);
@@ -2588,7 +2637,9 @@ export class AppShell extends HTMLElement {
             this.notify(
               notRestored
                 ? `Workspace backup restored. Local evidence snapshots were kept; ${notRestored} incoming evidence snapshot(s) did not fit the ${WORKSPACE_RETENTION}-snapshot workspace limit and remain only in the backup file.`
-                : "Workspace backup restored.",
+                : mode === "merge"
+                  ? `Workspace backup restored. Opened ${this.store.draft.name}; your other drafts are still under Current draft.`
+                  : "Workspace backup restored.",
             );
           } catch (e) {
             this.querySelector("#restore-status").textContent =
@@ -2737,10 +2788,12 @@ export class AppShell extends HTMLElement {
         this.importDialog();
         break;
       case "copy":
-        this.copy(this.store.draft.markdown);
+        if (!this.unsavedSectionGuard("copy"))
+          this.copy(this.store.draft.markdown);
         break;
       case "download":
-        this.download(this.store.draft.markdown, "README.md");
+        if (!this.unsavedSectionGuard("download"))
+          this.download(this.store.draft.markdown, "README.md");
         break;
       case "theme":
         this.data.settings.theme =
