@@ -47,31 +47,40 @@ test("first run asks for a Goal, keeps every Start path and states where work is
   await expect(
     goal(page, "Audit my repository READMEs"),
   ).toHaveAccessibleDescription(/Needs a GitHub connection/);
-  // Earlier Start paths keep their names (one renamed: imports take files too).
+  // Earlier Start paths keep their existing names.
   const paths = dialog(page).getByRole("region", {
     name: "Other ways to start",
   });
   for (const name of [
     "Start from a template",
     "Autofill from GitHub",
-    "Import existing README",
+    "Import GitHub README",
     "Open Studio project",
     "Start blank",
     "Explore the sample profile",
   ])
     await expect(paths.getByRole("button", { name })).toBeVisible();
-  await expect(
-    dialog(page).getByRole("button", { name: "Import GitHub README" }),
-  ).toHaveCount(0);
   const locality = dialog(page).getByRole("region", {
     name: "Where your work is kept",
   });
   await expect(locality).toContainText("saved only in this browser");
   await expect(locality).toContainText("not encrypted");
   await expect(locality).toContainText("download a backup");
+  // Every GitHub-contacting flow in docs/privacy.md is named, not just three.
   await expect(locality).toContainText(
-    "GitHub is contacted only when you choose import, autofill or audit",
+    "GitHub is contacted only when you choose a GitHub action",
   );
+  for (const flow of [
+    "import",
+    "autofill",
+    "audit",
+    "repository lookup",
+    "refresh and link checks",
+    "evidence and drift checks",
+    "publishing",
+  ])
+    await expect(locality).toContainText(flow);
+  await expect(locality).not.toContainText("import, autofill or audit");
   await expect(locality).toContainText("not uploaded for analysis");
   await expect(locality).toContainText(
     "Nothing is published without its own review.",
@@ -295,6 +304,21 @@ test("offline, the audit stays focusable but unavailable and offers local ways t
     }),
   ).toBeVisible();
   await expect(page.locator("repository-audit")).toHaveCount(0);
+  // Back online while the step is open: the button is still announced as
+  // unavailable, so activating it must still do nothing.
+  await context.setOffline(false);
+  await expect(audit).toHaveAttribute("aria-disabled", "true");
+  await audit.focus();
+  await page.keyboard.press("Enter");
+  await audit.click({ force: true });
+  await expect(page.locator("repository-audit")).toHaveCount(0);
+  await expect(
+    dialog(page).getByRole("heading", {
+      name: "Audit your repository READMEs",
+    }),
+  ).toBeVisible();
+  await context.setOffline(true);
+  await audit.focus();
   await page.keyboard.press("Tab");
   await expect(
     dialog(page).getByRole("button", { name: "Import existing README" }),
@@ -393,4 +417,117 @@ test("the Goal is in all-drafts backups but never in README, draft JSON or proje
   expect(JSON.parse(project).schemaVersion).toBe(1);
   expect(project).not.toContain('"guide"');
   expect(project).not.toContain('"nextSteps"');
+});
+
+const editor = (page) =>
+  page.getByRole("textbox", { name: "Markdown editor", exact: true });
+const drafts = (page) =>
+  page.evaluate(() =>
+    document
+      .querySelector("app-shell")
+      .data.drafts.map((d) => ({ name: d.name, markdown: d.markdown })),
+  );
+// Loads a synthetic local README in the open import dialog and imports it as a
+// new draft, checking the preview leaves the current draft alone.
+async function importLocal(page, markdown) {
+  const before = await drafts(page);
+  await dialog(page)
+    .getByRole("button", { name: "Local file", exact: true })
+    .click();
+  await expect(
+    dialog(page).getByLabel("Import mode", { exact: true }),
+  ).toHaveValue("new");
+  await page.locator("#file-import").setInputFiles({
+    name: "README.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(markdown),
+  });
+  await expect(
+    dialog(page).getByRole("heading", { name: "README found", exact: true }),
+  ).toBeVisible();
+  expect(await drafts(page)).toEqual(before);
+  await dialog(page)
+    .getByRole("button", { name: "Import as new draft" })
+    .click();
+  await expect(dialog(page)).toBeHidden();
+  await expect(editor(page)).toHaveValue(markdown);
+  const after = await drafts(page);
+  expect(after).toHaveLength(before.length + 1);
+  expect(after.slice(0, before.length)).toEqual(before);
+}
+
+test("import journey: a local README imported from Guided start becomes a new draft", async ({
+  page,
+}) => {
+  const requests = watchGitHub(page);
+  await page.goto("/");
+  await goal(page, "Write a repository README").click();
+  await dialog(page)
+    .getByRole("button", { name: "Import existing README", exact: true })
+    .click();
+  await expect(
+    dialog(page).getByRole("heading", { name: "Import README" }),
+  ).toBeVisible();
+  await importLocal(page, "# Widget\n\nA tool.\n\n## Install\n\nnpm i\n");
+  // The earlier Start path reaches the same import under its existing name.
+  await page.locator('.workspace-tools [data-action="guided-start"]').click();
+  await dialog(page)
+    .getByRole("region", { name: "Other ways to start" })
+    .getByRole("button", { name: "Import GitHub README" })
+    .click();
+  await importLocal(page, "# Second\n\nAnother local README.\n");
+  expect(await drafts(page)).toHaveLength(3);
+  expect(requests).toEqual([]);
+});
+
+test("offline, the audit's Import existing README fallback imports a local file", async ({
+  page,
+  context,
+}) => {
+  const requests = watchGitHub(page);
+  await page.goto("/");
+  await context.setOffline(true);
+  await goal(page, "Audit my repository READMEs").click();
+  await dialog(page)
+    .getByRole("button", { name: "Import existing README", exact: true })
+    .click();
+  await expect(
+    dialog(page).getByRole("heading", { name: "Import README" }),
+  ).toBeVisible();
+  await importLocal(page, "# Offline\n\nImported without a connection.\n");
+  expect((await guide(page)).goal).toBe("audit");
+  expect(requests).toEqual([]);
+});
+
+test("Explore the sample profile closes on first run and adds a copy when reopened", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await dialog(page)
+    .getByRole("button", { name: "Explore the sample profile" })
+    .click();
+  await expect(dialog(page)).toBeHidden();
+  const first = await drafts(page);
+  expect(first.map((d) => d.name)).toEqual(["My developer profile"]);
+  await page.locator('.workspace-tools [data-action="guided-start"]').click();
+  await dialog(page)
+    .getByRole("button", { name: "Explore the sample profile" })
+    .click();
+  await expect(dialog(page)).toBeHidden();
+  const after = await drafts(page);
+  expect(after.map((d) => d.name)).toEqual([
+    "My developer profile",
+    "My developer profile (2)",
+  ]);
+  expect(after[1].markdown).toBe(first[0].markdown);
+  expect(
+    await page.evaluate(
+      () =>
+        document.querySelector("app-shell").store.draft.metadata
+          .workspaceDocument,
+    ),
+  ).toEqual({ version: 1, kind: "profile", target: null });
+  await expect(
+    page.getByLabel("Current draft").locator("optgroup[label=Profile] option"),
+  ).toHaveCount(2);
 });

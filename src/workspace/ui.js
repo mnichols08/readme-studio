@@ -11,6 +11,7 @@ import { template } from "../data/templates.js";
 import {
   GOALS,
   goalIds,
+  knownGoal,
   guideGoal,
   chooseGoal,
   goalOptions,
@@ -26,12 +27,14 @@ const goalHeadings = {
 };
 // The Locality statement. It describes what this browser does today and must
 // stay true: no upload of Markdown and no publishing without its own review.
+// The GitHub sentence must name every flow listed under "Network requests" in
+// docs/privacy.md; extend it when a new GitHub-contacting flow is added.
 function localityStatement(storageBlocked) {
   return `<section class="guide-locality" aria-labelledby="guide-locality-title"><h2 id="guide-locality-title">Where your work is kept</h2><ul><li>${
     storageBlocked
       ? "Browser storage is unavailable, so this is a temporary workspace: drafts stay in memory only until this tab closes. Download all drafts backup to keep your work."
       : "Drafts are saved only in this browser. They are not encrypted and clearing site data removes them, so download a backup to keep a copy."
-  }</li><li>GitHub is contacted only when you choose import, autofill or audit. Your Markdown is not uploaded for analysis.</li><li>Nothing is published without its own review.</li></ul><a href="${privacyDocs}" target="_blank" rel="noopener noreferrer">Privacy details</a></section>`;
+  }</li><li>GitHub is contacted only when you choose a GitHub action: import, autofill, audit, repository lookup, refresh and link checks, evidence and drift checks, or publishing. Your Markdown is not uploaded for analysis. Images and badges in the preview load from their own sites.</li><li>Nothing is published without its own review.</li></ul><a href="${privacyDocs}" target="_blank" rel="noopener noreferrer">Privacy details</a></section>`;
 }
 
 // Guided start: step 1 asks for a Goal beside the earlier Start paths (their
@@ -50,7 +53,7 @@ function installGuidedStart(app) {
         )
         .join(
           "",
-        )}</ul><section class="guide-paths" aria-labelledby="guide-paths-title"><h2 id="guide-paths-title">Other ways to start</h2><div class="welcome-options"><button data-start="templates">Start from a template <span>→</span></button><button data-action="profile">Autofill from GitHub <span>↗</span></button><button data-start="import">Import existing README <span>↥</span></button><button data-action="open-project">Open Studio project <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button></div><button class="text-button" data-start="sample">Explore the sample profile →</button></section>${localityStatement(app.storageBlocked)}`,
+        )}</ul><section class="guide-paths" aria-labelledby="guide-paths-title"><h2 id="guide-paths-title">Other ways to start</h2><div class="welcome-options"><button data-start="templates">Start from a template <span>→</span></button><button data-action="profile">Autofill from GitHub <span>↗</span></button><button data-start="import">Import GitHub README <span>↥</span></button><button data-action="open-project">Open Studio project <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button></div><button class="text-button" data-start="sample">Explore the sample profile →</button></section>${localityStatement(app.storageBlocked)}`,
     );
     content()
       .querySelectorAll("[data-goal]")
@@ -106,11 +109,9 @@ function installGuidedStart(app) {
         (b) =>
           (b.onclick = () => {
             const id = b.dataset.option;
-            if (
-              b.getAttribute("aria-disabled") === "true" &&
-              navigator.onLine === false
-            )
-              return;
+            // Unavailable means unavailable: what is announced is what happens,
+            // even if the connection returns while this step is open.
+            if (b.getAttribute("aria-disabled") === "true") return;
             if (id.startsWith("blank-")) {
               const kind = id.slice(6);
               app.closeDialog();
@@ -133,7 +134,7 @@ function installGuidedStart(app) {
       app.closeDialog();
       if (app.dialog.open) return;
     }
-    if (Object.hasOwn(GOALS, goal || "")) optionStep(goal);
+    if (knownGoal(goal)) optionStep(goal);
     else goalStep();
   };
 }

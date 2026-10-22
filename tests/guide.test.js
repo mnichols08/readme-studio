@@ -122,6 +122,13 @@ describe("guide validation", () => {
       validateGuide({ version: 1, goal: "profile", nextSteps: false }),
     ).toEqual({ version: 1, goal: "profile", nextSteps: false });
     expect(validateGuide({ version: 1, goal: "toString" }).goal).toBeNull();
+    // Property-key coercion must not let a non-string through as a Goal.
+    for (const goal of [["audit"], ["profile"], { toString: () => "audit" }])
+      expect(validateGuide({ version: 1, goal, nextSteps: true })).toEqual({
+        version: 1,
+        goal: null,
+        nextSteps: true,
+      });
   });
   it("keeps a small unknown or malformed guide unchanged and reads it as no Goal", () => {
     const future = { version: 2, goal: "profile", steps: ["a", "b"] };
@@ -154,6 +161,7 @@ describe("guide validation", () => {
     expect(guideGoal({ version: 1, goal: "repository" })).toBe("repository");
     expect(guideGoal({ version: 2, goal: "repository" })).toBeNull();
     expect(guideGoal(undefined)).toBeNull();
+    expect(guideGoal({ version: 1, goal: ["audit"] })).toBeNull();
     expect(nextStepsEnabled({ version: 1, nextSteps: false })).toBe(false);
   });
   it("replaces any guide only through an explicit choice", () => {
@@ -172,6 +180,7 @@ describe("guide validation", () => {
     });
     expect(() => chooseGoal(defaultGuide(), "publish")).toThrow(/known Goal/);
     expect(() => chooseGoal(defaultGuide(), "__proto__")).toThrow();
+    expect(() => chooseGoal(defaultGuide(), ["audit"])).toThrow(/known Goal/);
   });
 });
 

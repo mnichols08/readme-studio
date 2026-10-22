@@ -23,6 +23,9 @@ export const GOALS = Object.freeze({
   }),
 });
 export const goalIds = Object.keys(GOALS);
+// Only a Goal id string counts: Object.hasOwn alone would coerce ["audit"].
+export const knownGoal = (goal) =>
+  typeof goal === "string" && Object.hasOwn(GOALS, goal);
 export const defaultGuide = () => ({
   version: GUIDE_VERSION,
   goal: null,
@@ -42,7 +45,7 @@ export function validateGuide(value) {
   if (object(value) && value.version === GUIDE_VERSION)
     return {
       version: GUIDE_VERSION,
-      goal: Object.hasOwn(GOALS, value.goal) ? value.goal : null,
+      goal: knownGoal(value.goal) ? value.goal : null,
       nextSteps: value.nextSteps !== false,
     };
   // Another version, or a damaged value, is kept as it is so a newer app can
@@ -60,9 +63,7 @@ export function recoverGuide(value) {
 }
 // The Goal only counts in a version-1 guide; anything else means "no Goal".
 export const guideGoal = (guide) =>
-  object(guide) &&
-  guide.version === GUIDE_VERSION &&
-  Object.hasOwn(GOALS, guide.goal)
+  object(guide) && guide.version === GUIDE_VERSION && knownGoal(guide.goal)
     ? guide.goal
     : null;
 export const nextStepsEnabled = (guide) =>
@@ -70,7 +71,7 @@ export const nextStepsEnabled = (guide) =>
   guide.nextSteps !== false;
 // An explicit choice is the only thing that replaces an unknown guide.
 export function chooseGoal(guide, goal) {
-  if (!Object.hasOwn(GOALS, goal)) throw Error("Choose a known Goal.");
+  if (!knownGoal(goal)) throw Error("Choose a known Goal.");
   return {
     version: GUIDE_VERSION,
     goal,

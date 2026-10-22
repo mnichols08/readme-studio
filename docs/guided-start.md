@@ -18,18 +18,21 @@ Your goal is saved in this browser's workspace when you choose it. It never chan
 
 ### Offline
 
-When the browser reports that it is offline, **Open README audit** stays visible and focusable but is marked unavailable (`aria-disabled`), with the reason read as its description. Activating it does nothing. Step 2 then offers **Import existing README** (local files work offline) and **Start a blank repository README** instead. Reopen Guided start once you are back online to open the audit. The profile and repository goals work offline, apart from options that read GitHub (Autofill and GitHub import), which report their own network errors.
+When the browser reports that it is offline, **Open README audit** stays visible and focusable but is marked unavailable (`aria-disabled`), with the reason read as its description. Activating it does nothing, even if the connection returns while step 2 is open. Step 2 then offers **Import existing README** (local files work offline) and **Start a blank repository README** instead. Reopen Guided start once you are back online to open the audit. The profile and repository goals work offline, apart from options that read GitHub (Autofill and GitHub import), which report their own network errors.
 
 ## Other ways to start
 
-The Start paths from earlier versions stay in step 1 under their existing names: **Start from a template**, **Autofill from GitHub**, **Import existing README** (named "Import GitHub README" before 1.7.0; the import dialog also accepts files), **Open Studio project**, **Start blank** and **Explore the sample profile**. On first run the sample profile is already open, so Explore closes the dialog; when Guided start is reopened later it adds a fresh copy of the sample.
+The Start paths from earlier versions stay in step 1 under their existing names: **Start from a template**, **Autofill from GitHub**, **Import GitHub README** (the import dialog also accepts local files and Studio backups), **Open Studio project**, **Start blank** and **Explore the sample profile**. On first run the sample profile is already open, so Explore closes the dialog; when Guided start is reopened later it adds a fresh copy of the sample.
 
 ## Where your work is kept
 
 Guided start always shows the Locality statement:
 
 - Drafts are saved only in this browser. They are not encrypted and clearing site data removes them, so download a backup (**Manage drafts → Download all drafts backup**) to keep a copy.
-- GitHub is contacted only when you choose import, autofill or audit. Your Markdown is not uploaded for analysis.
+- GitHub is contacted only when you choose a GitHub action: import, autofill, audit, repository lookup, refresh and link checks, evidence and drift checks, or publishing. Your Markdown is not uploaded for analysis. Images and badges in the preview load from their own sites.
+
+The GitHub line names every flow listed under [Network requests](privacy.md#network-requests); Guided start itself makes no request.
+
 - Nothing is published without its own review.
 
 When browser storage is blocked, the first line instead says this is a temporary workspace that lasts only until the tab closes. The goal you choose then stays in memory only. The statement links to the [privacy notes](privacy.md).
