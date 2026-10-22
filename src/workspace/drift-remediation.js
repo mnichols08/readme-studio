@@ -47,11 +47,21 @@ export function sourceLines(source) {
 }
 
 const WORD = /[\p{L}\p{N}_]/u,
-  BEFORE = /[\p{L}\p{N}_-]/u,
-  AFTER = /[\p{L}\p{N}_:-]/u;
-// Where `find` occurs in `text` as a whole: a match that starts (or ends)
-// with a letter, digit or underscore must not continue a longer word, so
-// `lint` is not found in `lint:fix` and `guide.md` not in `myguide.md`.
+  // Characters that continue a word, path or URL. A match right after one
+  // is part of a longer token: `guide.md` inside `docs/guide.md`,
+  // `myguide.md` or `../guide.md`, or `#setup` inside `docs/x.md#setup`.
+  JOINED = /[\p{L}\p{N}_\-./\\~%@+#?&:]/u,
+  AFTER = /[\p{L}\p{N}_:-]/u,
+  // Separators that join a longer path or URL when more of it follows
+  // (`docs/guide.md#x`, `guide.md.bak`); at the end of a token they are
+  // punctuation (`See docs/guide.md.`).
+  SEPARATOR = /[/.\\#?%@~+]/;
+// Where `find` occurs in `text` as a whole token: not inside a longer word,
+// path or URL. So `lint` is not found in `lint:fix`, `guide.md` not in
+// `myguide.md` or `docs/guide.md`, `docs/guide.md` not in
+// `other/docs/guide.md`, and `#setup` not in `docs/x.md#setup`. A
+// suggestion therefore lands only on its own claim, never on a longer,
+// different link, path or anchor that shares its text.
 export function occurrences(text, find) {
   const found = [];
   if (!find) return found;
@@ -60,10 +70,12 @@ export function occurrences(text, find) {
     at !== -1;
     at = text.indexOf(find, at + 1)
   ) {
-    const prev = text[at - 1] || "",
-      next = text[at + find.length] || "";
-    if (WORD.test(find[0]) && BEFORE.test(prev)) continue;
+    const end = at + find.length,
+      prev = text[at - 1] || "",
+      next = text[end] || "";
+    if (JOINED.test(prev)) continue;
     if (WORD.test(find.at(-1)) && AFTER.test(next)) continue;
+    if (SEPARATOR.test(next) && JOINED.test(text[end + 1] || "")) continue;
     found.push(at);
   }
   return found;
@@ -193,4 +205,22 @@ export function applyDriftProposals(checked, current, changes) {
   if (!result.applied)
     throw Error("No approved change differs from the current Markdown.");
   return result;
+}
+
+// Whether applying would change the draft's structure, not only its
+// Markdown. Applying records the new Markdown as manual source (Store.raw),
+// which keeps a draft that is already one Custom Markdown block as it is but
+// converts builder sections, components and generated or autofilled content
+// to a single Custom Markdown block. Undo restores them.
+export function convertsBuilder(draft) {
+  const blocks = draft?.blocks || [];
+  if (!blocks.length) return false;
+  const [only] = blocks;
+  return !(
+    blocks.length === 1 &&
+    only.type === "custom" &&
+    !only.sharedComponent &&
+    !only.githubGenerated &&
+    !only.profileAutofill
+  );
 }

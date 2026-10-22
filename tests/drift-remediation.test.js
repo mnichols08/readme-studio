@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { driftClaims, evaluateDrift } from "../src/workspace/drift-check.js";
+import {
+  driftClaims,
+  evaluateDrift,
+  minimumVersion,
+} from "../src/workspace/drift-check.js";
 import {
   driftProposals,
   applyDriftProposals,
@@ -9,6 +13,7 @@ import {
   sourceLines,
   DriftConflict,
   REMEDIABLE,
+  convertsBuilder,
 } from "../src/workspace/drift-remediation.js";
 import "../src/components/evidence-snapshots.js";
 
@@ -158,6 +163,164 @@ describe("fix placement", () => {
       null,
     );
     expect(placeFix("same", { find: "same", replace: "same" })).toBeNull();
+  });
+});
+
+// A repository with case-only near misses next to correct, longer paths
+// that end the same way.
+const nested = (paths, files = []) => ({
+  head: sha("1"),
+  tree: "complete",
+  listing: new Map(
+    paths.map((path, index) => [
+      path,
+      {
+        path,
+        type: /\.\w+$/.test(path) ? "blob" : "tree",
+        sha: (index + 10).toString(16).padStart(40, "0"),
+        size: 9,
+      },
+    ]),
+  ),
+  files: new Map(files),
+  notes: [],
+});
+const suggest = (markdown, read) =>
+  driftProposals(markdown, evaluateDrift(driftClaims(markdown, target), read))
+    .proposals;
+
+describe("fix placement stays on its own claim", () => {
+  it("never matches inside a longer path, URL or cross-file anchor", () => {
+    const fix = { find: "docs/guide.md", replace: "docs/Guide.md" };
+    expect(
+      occurrences("[a](docs/guide.md) [b](other/docs/guide.md)", fix.find),
+    ).toEqual([4]);
+    expect(
+      placeFix(
+        "`docs/guide.md` or `other/docs/guide.md` or ../docs/guide.md",
+        fix,
+      ),
+    ).toBe("`docs/Guide.md` or `other/docs/guide.md` or ../docs/guide.md");
+    // Not the start of a longer path or URL either; end-of-sentence
+    // punctuation is fine.
+    expect(occurrences("docs/guide.md.bak docs/guide.md#x", fix.find)).toEqual(
+      [],
+    );
+    expect(
+      occurrences("See docs/guide.md. Or docs/guide.md/", fix.find),
+    ).toEqual([4, 22]);
+    expect(
+      occurrences(
+        "(#set-up--the-cli) (docs/x.md#set-up--the-cli)",
+        "#set-up--the-cli",
+      ),
+    ).toEqual([1]);
+    expect(occurrences("(./guide.md) (sub/guide.md)", "./guide.md")).toEqual([
+      1,
+    ]);
+    expect(occurrences("(../guide.md)", "./guide.md")).toEqual([]);
+  });
+
+  it("leaves correct links, inline paths and commands that share a suffix untouched", () => {
+    const repo = nested([
+      "README.md",
+      "Guide.md",
+      "docs",
+      "docs/Guide.md",
+      "docs/guide.md",
+      "other",
+      "other/docs",
+      "other/docs/guide.md",
+      "scripts",
+      "scripts/Seed.js",
+      "tools",
+      "tools/scripts",
+      "tools/scripts/seed.js",
+      "Seed.js",
+      "sub",
+      "sub/seed.js",
+    ]);
+    const cases = [
+      ["See [guide](docs/Guide.md) and [other](other/docs/guide.md).", null],
+      [
+        "See [root guide](guide.md) and [docs guide](docs/guide.md).",
+        "See [root guide](Guide.md) and [docs guide](docs/guide.md).",
+      ],
+      [
+        "Edit `scripts/seed.js` or `tools/scripts/seed.js`.",
+        "Edit `scripts/Seed.js` or `tools/scripts/seed.js`.",
+      ],
+      [
+        fence("bash", "node scripts/seed.js && node tools/scripts/seed.js"),
+        "node scripts/Seed.js && node tools/scripts/seed.js",
+      ],
+      [
+        fence("bash", "node ./seed.js && node sub/seed.js"),
+        "node ./Seed.js && node sub/seed.js",
+      ],
+    ];
+    for (const [markdown, expected] of cases) {
+      const proposals = suggest(markdown, repo);
+      if (expected === null) expect(proposals).toEqual([]);
+      else {
+        expect(proposals).toHaveLength(1);
+        expect(proposals[0].suggested).toBe(expected);
+        expect(proposals[0].findings).toHaveLength(1);
+        expect(proposals[0].findings[0].suggestion.placed).toBe(true);
+      }
+    }
+  });
+
+  it("does not rewrite a matching cross-file anchor for an in-document one", () => {
+    const repo = nested(
+      ["README.md", "docs", "docs/guide.md"],
+      [["docs/guide.md", { status: "read", text: "## Set up & the CLI\n" }]],
+    );
+    const markdown =
+      "## Set up the CLI\n\nSee [here](#set-up--the-cli) and [there](docs/guide.md#set-up--the-cli).\n";
+    const result = evaluateDrift(driftClaims(markdown, target), repo);
+    expect(byText(result, "docs/guide.md#set-up--the-cli").status).toBe(
+      "matches",
+    );
+    const [proposal] = suggest(markdown, repo);
+    expect(proposal.suggested).toBe(
+      "See [here](#set-up-the-cli) and [there](docs/guide.md#set-up--the-cli).",
+    );
+  });
+});
+
+describe("Node version suggestions", () => {
+  it("uses the whole engines.node minimum, not only its major", () => {
+    expect(minimumVersion(">=20.11")).toBe("20.11");
+    expect(minimumVersion(">=20.11.1")).toBe("20.11.1");
+    expect(minimumVersion("^20.0.0 || >=22")).toBe("20");
+    expect(minimumVersion(">20.11")).toBe("20.12");
+    expect(minimumVersion(">18")).toBe("19");
+    expect(minimumVersion("20.x || ^18.17")).toBe("18.17");
+    expect(minimumVersion("<20")).toBeNull();
+    const pkg = (node) =>
+      nested(
+        ["README.md", "package.json"],
+        [
+          [
+            "package.json",
+            { status: "read", text: JSON.stringify({ engines: { node } }) },
+          ],
+        ],
+      );
+    const markdown = "Requires Node.js 18.17 or newer.";
+    const result = evaluateDrift(driftClaims(markdown, target), pkg(">=20.11"));
+    expect(result.results[0]).toMatchObject({
+      status: "uncertain",
+      fix: {
+        find: "Node.js 18.17 or newer",
+        replace: "Node.js 20.11 or newer",
+      },
+    });
+    expect(result.results[0].message).toContain("(Node 20.11 or newer)");
+    expect(suggest(markdown, pkg(">=20.11"))[0].suggested).toBe(
+      "Requires Node.js 20.11 or newer.",
+    );
   });
 });
 
@@ -380,6 +543,31 @@ describe("drift fix review dialog", () => {
     // The source is unchanged by the dialog itself.
     expect(el.drift.source).toBe(source);
     el.remove();
+  });
+
+  it("says before Apply when applying converts builder sections to Custom Markdown", () => {
+    const custom = { type: "custom", settings: { markdown: source } };
+    expect(convertsBuilder({ blocks: [] })).toBe(false);
+    expect(convertsBuilder({ blocks: [custom] })).toBe(false);
+    expect(
+      convertsBuilder({ blocks: [{ ...custom, githubGenerated: {} }] }),
+    ).toBe(true);
+    expect(convertsBuilder({ blocks: [{ type: "hero" }, custom] })).toBe(true);
+    const review = (blocks) => {
+      const el = document.createElement("evidence-snapshots");
+      document.body.append(el);
+      el.configure({
+        draft: { id: "doc-1", markdown: source, blocks },
+        target,
+      });
+      el.showDrift(check(source), null, source);
+      el.querySelector("[data-fix-review]").click();
+      return el.querySelector("[data-fix-builder]");
+    };
+    expect(review([custom])).toBeNull();
+    expect(review([{ type: "hero" }, custom]).textContent).toContain(
+      "Applying converts this draft to one Custom Markdown block",
+    );
   });
 
   it("escapes Markdown and evidence text and discards proposals on request", () => {

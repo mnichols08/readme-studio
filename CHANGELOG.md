@@ -3,8 +3,8 @@
 ## 1.6.2
 
 - Add reviewed drift fixes: after a drift check, **Review fixes** turns observed mismatches and uncertain findings into one proposal per Markdown line, each with its findings' evidence, the current and proposed line, an exact diff and its own approval checkbox. Unknown results and matches are never proposed.
-- Suggest a correction only when the evidence supplies one: a path's case-sensitive spelling, a punctuation-only near anchor, a single near script name and the `engines.node` minimum for a prose Node version. Other proposals start unchanged for the author to edit; suggestions are placed only on whole-word matches.
-- Nothing is approved by default, editing a proposal withdraws its approval and unapproved lines are kept byte for byte, including line endings. Apply refuses any Markdown, document or target change since the check, keeping the manual edit. One Undo step restores the previous Markdown.
+- Suggest a correction only when the evidence supplies one: a path's case-sensitive spelling, a punctuation-only near anchor, a single near script name and the whole `engines.node` minimum (`20.11`, not `20`) for a prose Node version. Other proposals start unchanged for the author to edit; suggestions are placed only on whole-word, whole-path matches, never inside a longer link, path or anchor on the same line.
+- Nothing is approved by default, editing a proposal withdraws its approval and unapproved lines are kept byte for byte, including line endings. Apply refuses any Markdown, document or target change since the check, keeping the manual edit. One Undo step restores the previous Markdown. Applying to a builder draft converts it to one Custom Markdown block; the review says so before Apply and Undo restores builder ownership.
 - Applying writes only the local document. No request is made and nothing is published; Publish to GitHub stays a separate reviewed action. Proposals are not saved (ADR 0003).
 
 ## 1.6.1

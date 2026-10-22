@@ -12,20 +12,22 @@ Version 1.6.2 lets you turn the findings of a [drift check](drift-checks.md) int
 
 After applying, the drift result and proposals are cleared because they describe the previous Markdown, and focus returns to **Run drift check** so you can check the updated text. **Undo** in the editor restores the Markdown as it was before the fixes, as one step.
 
+Applying records the new Markdown as manual source, like editing it in the Markdown pane. A draft that is already one Custom Markdown block stays as it is. A draft built from builder sections, components or generated content is converted to one Custom Markdown block, so stale builder settings cannot overwrite the fixes; the review says so before **Apply**, and the status says so after. **Undo** restores the previous Markdown and builder ownership.
+
 ## What is proposed
 
 Only **observed mismatches** and **uncertain findings** become proposals. **Unknown** results (evidence that could not be read) and matches never do, so a failed, truncated or offline check offers no fixes for the claims it could not check.
 
 A proposal starts with a suggestion only when the evidence itself supplies one:
 
-| Finding                                                                                     | Suggestion                                                        |
-| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| A linked, commanded or inline path that differs from the repository's in case               | The repository's spelling, e.g. `docs/guide.md` → `docs/Guide.md` |
-| An anchor that differs from a heading only in punctuation (uncertain)                       | The heading's anchor, e.g. `#set-up--the-cli` → `#set-up-the-cli` |
-| A missing `package.json` script when exactly one script differs only in punctuation or case | That script, e.g. `npm run test-unit` → `npm run test:unit`       |
-| A Node version in prose older than `engines.node` (uncertain)                               | The `engines.node` minimum, e.g. `Node 18+` → `Node 20+`          |
+| Finding                                                                                     | Suggestion                                                                                                         |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| A linked, commanded or inline path that differs from the repository's in case               | The repository's spelling, e.g. `docs/guide.md` → `docs/Guide.md`                                                  |
+| An anchor that differs from a heading only in punctuation (uncertain)                       | The heading's anchor, e.g. `#set-up--the-cli` → `#set-up-the-cli`                                                  |
+| A missing `package.json` script when exactly one script differs only in punctuation or case | That script, e.g. `npm run test-unit` → `npm run test:unit`                                                        |
+| A Node version in prose older than `engines.node` (uncertain)                               | The whole `engines.node` minimum, e.g. `Node 18+` → `Node 20+`, or `Node.js 18.17` → `Node.js 20.11` for `>=20.11` |
 
-Everything else (a missing file with no similar path, a missing script with no similar name, a lockfile or `.env` key finding) starts as the unchanged line with the note "No suggestion from the evidence"; edit the **Proposed line** yourself if it needs a change, or leave it. A suggestion is placed only where it matches whole words on its line (`lint` is not found inside `lint:fix`); a script suggestion that could match twice on the line is not placed, and the proposal says so.
+Everything else (a missing file with no similar path, a missing script with no similar name, a lockfile or `.env` key finding) starts as the unchanged line with the note "No suggestion from the evidence"; edit the **Proposed line** yourself if it needs a change, or leave it. A suggestion is placed only where it matches a whole word, path or URL on its line, never inside a longer one that shares its text: `lint` is not found inside `lint:fix`, `docs/guide.md` not inside `other/docs/guide.md`, and `#set-up--the-cli` not inside `docs/Guide.md#set-up--the-cli`, so a fix for one claim never changes another link or path on the same line. A script suggestion that could match twice on the line is not placed, and the proposal says so.
 
 Uncertain findings are labelled **Uncertain — may be correct as written** and are never approved by default. Line breaks you type in a proposed line are written with that line's own line ending, so a CRLF document stays CRLF.
 

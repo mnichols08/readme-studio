@@ -1555,7 +1555,7 @@ export class AppShell extends HTMLElement {
     const checked = panel.driftChecked;
     const run = () => panel.querySelector("[data-drift-run]")?.focus();
     try {
-      const { applyDriftProposals, DriftConflict } =
+      const { applyDriftProposals, convertsBuilder, DriftConflict } =
         await import("../workspace/drift-remediation.js");
       const draft = this.store.draft;
       if (
@@ -1571,12 +1571,15 @@ export class AppShell extends HTMLElement {
         draft.markdown,
         changes,
       );
+      // Store.raw converts builder sections to one Custom Markdown block, as
+      // the review said before Apply; Undo restores them.
+      const converted = convertsBuilder(draft);
       this.store.raw(markdown);
       const saved = this.save();
       panel.driftChecked = null;
       panel.configure(this.evidenceState());
       panel.status(
-        `Applied ${applied} reviewed change${applied === 1 ? "" : "s"} to your Markdown${saved ? " and saved it in this browser" : ""}. Undo in the editor restores the previous Markdown. Nothing was published or written to GitHub; use Publish to GitHub to review and publish separately. Run the drift check again to check the updated Markdown.`,
+        `Applied ${applied} reviewed change${applied === 1 ? "" : "s"} to your Markdown${saved ? " and saved it in this browser" : ""}.${converted ? " The draft is now one Custom Markdown block." : ""} Undo in the editor restores the previous Markdown${converted ? " and builder ownership" : ""}. Nothing was published or written to GitHub; use Publish to GitHub to review and publish separately. Run the drift check again to check the updated Markdown.`,
       );
       run();
     } catch (error) {

@@ -258,3 +258,105 @@ test("discarding proposals or failing a new check applies nothing", async ({
   await context.setOffline(false);
   expect(await markdown(page)).toBe(source);
 });
+
+test("rejects reviewed fixes when the document's target changed since the check", async ({
+  page,
+}) => {
+  await start(page);
+  const { panel, fixes } = await checkAndReview(page);
+  await fixes.locator('[data-proposal="7"]').getByRole("checkbox").check();
+  // The target is retargeted after the check, for example from Documents;
+  // the Markdown itself is unchanged.
+  await page.evaluate(() => {
+    const { metadata } = document.querySelector("app-shell").store.draft;
+    metadata.workspaceDocument.target = {
+      ...metadata.workspaceDocument.target,
+      branch: "release",
+    };
+  });
+  await fixes.locator("[data-fix-apply]").click();
+  await expect(panel.locator("[data-status]")).toContainText(
+    "The document or its target changed since the drift check, so the reviewed changes were not applied.",
+  );
+  await expect(panel.locator("[data-status]")).toContainText(
+    "Your Markdown is unchanged.",
+  );
+  expect(await markdown(page)).toBe(source);
+  await expect(panel.locator("[data-fixes]")).toBeHidden();
+  await expect(
+    panel.getByRole("button", { name: "Run drift check" }),
+  ).toBeFocused();
+});
+
+test("says before and after Apply that a builder draft becomes Custom Markdown, and Undo restores its sections", async ({
+  page,
+}) => {
+  // The sample profile's builder sections plus one Custom Markdown block
+  // with a drifting command.
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Explore the sample profile" })
+    .click();
+  const types = () =>
+    page.evaluate(() =>
+      document
+        .querySelector("app-shell")
+        .store.draft.blocks.map((block) => block.type),
+    );
+  await page.evaluate(() => {
+    const { store } = document.querySelector("app-shell");
+    store.blocks([
+      ...structuredClone(store.draft.blocks),
+      {
+        id: "drift-command",
+        type: "custom",
+        settings: { markdown: "```bash\nnpm run test-unit\n```" },
+      },
+    ]);
+  });
+  const before = await types();
+  expect(before.filter((type) => type !== "custom").length).toBeGreaterThan(0);
+  const original = await markdown(page);
+  await page.getByRole("button", { name: "Documents", exact: true }).click();
+  const documents = page.locator("workspace-documents");
+  await documents.getByLabel("Document group").selectOption("repository");
+  await documents.getByLabel("Document repository").fill("example/widget");
+  await documents.getByLabel("Document branch").fill("main");
+  await documents
+    .getByRole("button", { name: "Save document settings" })
+    .click();
+  await page.keyboard.press("Escape");
+  await mockGitHub(page);
+
+  await page
+    .locator(".workspace-tools")
+    .getByRole("button", { name: "Drift check", exact: true })
+    .click();
+  const panel = page.locator("evidence-snapshots");
+  await panel.getByRole("button", { name: "Run drift check" }).click();
+  await panel.getByRole("button", { name: /Review fixes/ }).click(firstRead);
+  const fixes = panel.locator("[data-fixes]");
+  await expect(fixes.locator("[data-fix-builder]")).toContainText(
+    "Applying converts this draft to one Custom Markdown block",
+  );
+  const proposal = fixes
+    .locator("[data-proposal]")
+    .filter({ hasText: "npm run test-unit" });
+  await proposal.getByRole("checkbox").check();
+  await fixes.locator("[data-fix-apply]").click();
+  await expect(panel.locator("[data-status]")).toContainText(
+    "The draft is now one Custom Markdown block.",
+  );
+  await expect(panel.locator("[data-status]")).toContainText(
+    "Undo in the editor restores the previous Markdown and builder ownership.",
+  );
+  expect(await types()).toEqual(["custom"]);
+  expect(await markdown(page)).toBe(
+    original.replace("npm run test-unit", "npm run test:unit"),
+  );
+
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Undo" }).click();
+  expect(await types()).toEqual(before);
+  expect(await markdown(page)).toBe(original);
+});

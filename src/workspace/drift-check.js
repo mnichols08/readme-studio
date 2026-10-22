@@ -866,20 +866,34 @@ export function envKeys(text) {
   }
   return [...keys];
 }
-// The smallest major version an engines.node range accepts, or null.
-export function minimumMajor(range) {
+// The smallest version an engines.node range accepts, written as short as
+// it can be (`20`, `20.11`, `20.11.1`), or null. `>20` accepts 21 and later
+// and `>20.11` accepts 20.12 and later, as semver ranges do.
+export function minimumVersion(range) {
   let min = null;
   for (const part of String(range).split("||")) {
     const trimmed = part.trim();
     // An upper bound alone (`<20`, `<=20`) has no minimum.
     if (!trimmed || trimmed === "*" || /^</.test(trimmed)) return null;
-    const match = trimmed.match(/(\d+)/);
+    const match = trimmed.match(/(\d+)(?:\.(\d+|[xX*]))?(?:\.(\d+|[xX*]))?/);
     if (!match) return null;
-    let major = Number(match[1]);
-    if (/^>(?!=)/.test(trimmed) && !/\d+\.\d+/.test(trimmed)) major += 1;
-    min = min === null ? major : Math.min(min, major);
+    const given = [];
+    for (const value of match.slice(1)) {
+      if (!/^\d+$/.test(value || "")) break;
+      given.push(Number(value));
+    }
+    if (/^>(?!=)/.test(trimmed)) given[given.length - 1] += 1;
+    const version = [0, 1, 2].map((index) => given[index] || 0);
+    const lower = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+    if (!min || lower(version, min) < 0) min = version;
   }
-  return min;
+  if (!min) return null;
+  return (min[2] ? min : min[1] ? min.slice(0, 2) : min.slice(0, 1)).join(".");
+}
+// The smallest major version an engines.node range accepts, or null.
+export function minimumMajor(range) {
+  const version = minimumVersion(range);
+  return version === null ? null : Number(version.split(".")[0]);
 }
 const NODE_CLAIMS = [
   /\bnode(?:\.?js)?\s*(?:version\s*)?v?(\d{1,2})(?:\.\d+){0,2}\s*(?:\+|or (?:later|newer|higher|above|greater))/gi,
@@ -1798,7 +1812,8 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
         continue;
       }
       if (!pkg.data.node) continue;
-      const minimum = minimumMajor(pkg.data.node);
+      const minimum = minimumMajor(pkg.data.node),
+        version = minimumVersion(pkg.data.node);
       if (minimum === null)
         result(
           claim,
@@ -1810,13 +1825,15 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
         result(
           claim,
           "uncertain",
-          `This text suggests Node ${claim.major}; package.json engines.node is "${pkg.data.node}" (Node ${minimum} or newer). Reading prose is a heuristic.`,
+          `This text suggests Node ${claim.major}; package.json engines.node is "${pkg.data.node}" (Node ${version} or newer). Reading prose is a heuristic.`,
           "package.json",
+          // The whole minimum: for `>=20.11`, `Node.js 18.17` becomes
+          // `Node.js 20.11`, not `Node.js 20`, which would still understate it.
           {
             find: claim.text,
             replace: claim.text.replace(
               new RegExp(`(?<!\\d)${claim.major}(?:\\.\\d+)*`),
-              String(minimum),
+              version,
             ),
           },
         );
@@ -1936,10 +1953,18 @@ function caseFix(written, path, near) {
     written.includes(from.slice(-(size + 1)).join("/"))
   )
     size++;
-  return {
-    find: from.slice(-size).join("/"),
-    replace: to.slice(-size).join("/"),
-  };
+  const find = from.slice(-size).join("/"),
+    replace = to.slice(-size).join("/");
+  // A written `./` or `../` stays part of the find, so the suggestion is
+  // placed on this claim as a whole token and never inside a longer path
+  // that ends the same way (`sub/guide.md` next to `./guide.md`).
+  const lead =
+    written.match(
+      new RegExp(
+        `(?<![^\\s"'(<=\`])((?:\\.\\.?/)+)${find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+      ),
+    )?.[1] || "";
+  return { find: lead + find, replace: lead + replace };
 }
 // A link's whole URL with its path corrected, so only that link changes.
 function urlFix(url, path, near) {
