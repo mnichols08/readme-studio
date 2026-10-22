@@ -13,8 +13,21 @@ import {
   documentGroup,
   documentGroups,
   findDocument,
+  targetIdentity,
   DocumentHistories,
 } from "../workspace/documents.js";
+import {
+  validateSnapshots,
+  createSnapshot,
+  addSnapshot,
+  pinBaseline,
+  unpinBaseline,
+  deleteSnapshot,
+  forgetDocument,
+  compareEvidence,
+  documentSnapshots,
+  differentTarget,
+} from "../workspace/evidence-snapshots.js";
 import { portableData } from "../state/portable-data.js";
 import {
   documentationProfiles,
@@ -191,6 +204,7 @@ export class AppShell extends HTMLElement {
       this.querySelector("refactor-dialog")?.cancel();
       this.querySelector("writing-assistant")?.cancel();
       this.querySelector("batch-review")?.controller?.abort();
+      this.querySelector("evidence-snapshots")?.controller?.abort();
       this.querySelector("repository-health")?.controller?.abort();
       this.querySelector("repository-audit")?.cancel();
       this.querySelector("repository-authoring")?.controller?.abort();
@@ -1265,6 +1279,181 @@ export class AppShell extends HTMLElement {
       }
     });
   }
+  setSnapshots(value) {
+    if (this.storageBlocked)
+      throw Error(
+        "Restore workspace storage before changing evidence snapshots.",
+      );
+    const evidenceSnapshots = validateSnapshots(value);
+    try {
+      saveDrafts({ ...this.data, evidenceSnapshots });
+    } catch {
+      throw Error(
+        "Browser storage is full or unavailable; download all drafts backup to keep your work.",
+      );
+    }
+    this.data.evidenceSnapshots = evidenceSnapshots;
+  }
+  async evidenceSnapshots() {
+    await import("./evidence-snapshots.js");
+    this.modal("<evidence-snapshots></evidence-snapshots>");
+    const panel = this.querySelector("evidence-snapshots");
+    panel.configure(this.evidenceState());
+    panel.addEventListener("evidence-action", ({ detail }) =>
+      this.evidenceAction(panel, detail.action, detail.id),
+    );
+  }
+  evidenceState() {
+    return {
+      draft: this.store.draft,
+      target: documentTarget(this.store.draft),
+      snapshots: this.data.evidenceSnapshots,
+      storageBlocked: this.storageBlocked,
+    };
+  }
+  // Capture and Change check only read public GitHub data. Capture persists a
+  // record of revisions; a Change check saves nothing. Neither touches Source.
+  async evidenceAction(panel, action, id) {
+    if (panel.working) return;
+    const draft = this.store.draft,
+      destination = documentTarget(draft);
+    const snapshot = documentSnapshots(
+      this.data.evidenceSnapshots,
+      draft.id,
+    ).find((item) => item.id === id);
+    const refresh = (message, focus) => {
+      panel.configure(this.evidenceState());
+      panel.status(message);
+      (
+        (focus && panel.querySelector(focus)) ||
+        panel.querySelector("[data-capture],[data-set-target]")
+      )?.focus();
+    };
+    try {
+      if (action === "target") {
+        await this.documents();
+        return;
+      }
+      if (action === "pin" || action === "unpin") {
+        this.setSnapshots(
+          action === "pin"
+            ? pinBaseline(this.data.evidenceSnapshots, id, destination)
+            : unpinBaseline(this.data.evidenceSnapshots, id),
+        );
+        refresh(
+          action === "pin"
+            ? "Pinned as Baseline. Retention keeps it until you unpin or delete it."
+            : "Baseline unpinned. It now follows normal retention.",
+          `[data-snapshot-action][data-id="${CSS.escape(id)}"]`,
+        );
+        return;
+      }
+      if (action === "delete") {
+        if (
+          snapshot?.baseline &&
+          !confirm("Delete this Baseline snapshot? This cannot be undone.")
+        )
+          return;
+        this.setSnapshots(deleteSnapshot(this.data.evidenceSnapshots, id));
+        refresh("Snapshot deleted. Your Markdown is unchanged.");
+        return;
+      }
+      if (action !== "capture" && action !== "check") return;
+      if (action === "capture" && !destination)
+        throw Error("Set a repository, branch and README path first.");
+      if (action === "capture" && this.storageBlocked)
+        throw Error("Restore workspace storage before capturing.");
+      if (action === "check" && !snapshot)
+        throw Error("That evidence snapshot no longer exists.");
+      if (action === "check" && differentTarget(snapshot, destination))
+        throw Error(
+          "This snapshot has a different target from the document. Capture a new snapshot for the current target.",
+        );
+      const source = draft.markdown,
+        identity = targetIdentity(destination);
+      panel.working = true;
+      panel.controller = new AbortController();
+      const signal = panel.controller.signal;
+      panel.busy(true);
+      panel.status(
+        "Reading the branch head and repository tree from GitHub. Nothing is written.",
+      );
+      const [{ auditClient }, { readEvidence, linkedPaths }] =
+        await Promise.all([
+          import("../repository-audit/github.js"),
+          import("../github/evidence.js"),
+        ]);
+      signal.throwIfAborted();
+      const links =
+        action === "capture"
+          ? linkedPaths(source, destination.path)
+          : {
+              paths: snapshot.entries
+                .filter((entry) => entry.kind === "linked")
+                .map((entry) => entry.path),
+              notes: [],
+            };
+      const evidence = await readEvidence({
+        client: auditClient,
+        target: destination,
+        linked: links.paths,
+        notes: links.notes,
+        signal,
+      });
+      signal.throwIfAborted();
+      if (
+        this.store.draft.id !== draft.id ||
+        targetIdentity(documentTarget(this.store.draft)) !== identity
+      )
+        throw Error(
+          "The document or its target changed while GitHub was being read.",
+        );
+      panel.working = false;
+      panel.controller = null;
+      if (action === "check") {
+        panel.busy(false);
+        panel.status("Change check complete. Nothing was saved.");
+        panel.showCheck(snapshot, compareEvidence(snapshot, evidence));
+        return;
+      }
+      const { snapshots, evicted } = addSnapshot(
+        this.data.evidenceSnapshots,
+        createSnapshot({
+          documentId: draft.id,
+          target: destination,
+          source,
+          evidence,
+        }),
+      );
+      this.setSnapshots(snapshots);
+      const unknown = evidence.entries.filter(
+        (entry) => entry.status === "failed",
+      ).length;
+      refresh(
+        `Snapshot captured.${evidence.tree === "complete" ? "" : " Partial snapshot: the repository tree was not fully read."}${unknown ? ` ${unknown} evidence file(s) could not be read and are unknown.` : ""}${evicted.length ? ` Retention removed ${evicted.length} older snapshot(s).` : ""} Your Markdown is unchanged.`,
+        null,
+      );
+    } catch (error) {
+      if (!panel.isConnected) return;
+      const what = action === "check" ? "Change check" : "Capture";
+      panel.status(
+        error.name === "AbortError"
+          ? `${what} cancelled. Nothing was saved; existing snapshots are unchanged.`
+          : ["capture", "check"].includes(action)
+            ? `${what} failed: ${error.message} Nothing was saved; existing snapshots are unchanged.`
+            : `${error.message} Nothing was changed.`,
+      );
+    } finally {
+      if (panel.working) {
+        panel.working = false;
+        panel.controller = null;
+        if (panel.isConnected) {
+          panel.busy(false);
+          panel.querySelector("[data-capture],[data-set-target]")?.focus();
+        }
+      }
+    }
+  }
   async documents() {
     await import("./workspace-documents.js");
     this.modal("<workspace-documents></workspace-documents>");
@@ -1275,6 +1464,7 @@ export class AppShell extends HTMLElement {
       this.closeDialog(this.querySelector("#draft-select"));
       this.notify(`Opened ${this.store.draft.name}.`);
     });
+    panel.addEventListener("document-evidence", () => this.evidenceSnapshots());
     panel.addEventListener("document-new", () => {
       this.addDraft("Untitled document", []);
       this.closeDialog();
@@ -2149,6 +2339,10 @@ export class AppShell extends HTMLElement {
             this.querySelector("#keep-draft").onclick = () =>
               this.closeDialog();
             this.querySelector("#confirm-delete").onclick = () => {
+              this.data.evidenceSnapshots = forgetDocument(
+                this.data.evidenceSnapshots,
+                this.data.active,
+              );
               this.data.drafts = this.data.drafts.filter(
                 (d) => d.id !== this.data.active,
               );
@@ -2181,7 +2375,7 @@ export class AppShell extends HTMLElement {
         if (ticket !== generation || !input.isConnected) return;
         const snapshot = JSON.stringify(this.data);
         this.querySelector("#restore-status").textContent =
-          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.badgeCollections.items.length} badge collections · ${backup.visualLibrary.themes.length} themes · ${backup.visualLibrary.banners.length} banner presets · ${backup.visualLibrary.bundles.length} visual bundles · ${backup.componentLibrary.snippets.length} reusable snippets · ${backup.sharedComponents.items.length} shared components`;
+          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.badgeCollections.items.length} badge collections · ${backup.visualLibrary.themes.length} themes · ${backup.visualLibrary.banners.length} banner presets · ${backup.visualLibrary.bundles.length} visual bundles · ${backup.componentLibrary.snippets.length} reusable snippets · ${backup.sharedComponents.items.length} shared components · ${backup.evidenceSnapshots.items.length} evidence snapshots`;
         this.querySelector("#restore-review").innerHTML =
           '<label>Restore mode<select id="restore-mode" aria-label="Restore mode"><option value="merge">Merge with local drafts</option><option value="replace">Replace local drafts</option></select></label><label class="check"><input id="restore-confirm" type="checkbox"> I confirm replacing local drafts, collections, or original recovery data</label><button id="apply-restore" class="primary">Restore backup</button>';
         this.querySelector("#restore-mode").focus();
@@ -2323,6 +2517,9 @@ export class AppShell extends HTMLElement {
         break;
       case "documents":
         this.documents();
+        break;
+      case "evidence-snapshots":
+        this.evidenceSnapshots();
         break;
       case "backup-all":
         this.download(

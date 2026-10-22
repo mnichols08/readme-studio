@@ -2443,3 +2443,43 @@ batch-review li {
   margin-block: 12px;
   overflow-wrap: anywhere;
 }
+
+evidence-snapshots [data-snapshot] {
+  margin-block: 12px;
+  padding-block-end: 12px;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+evidence-snapshots h3 {
+  font-size: 15px;
+  margin-block: 0 4px;
+}
+.evidence-label {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--text);
+  font-size: 12px;
+}
+.evidence-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.evidence-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.evidence-table table {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.evidence-table th,
+.evidence-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}

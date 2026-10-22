@@ -9,6 +9,8 @@ import { validateCollections } from "../badges/collections.js";
 import { validateVisualLibrary } from "../themes/visual-library.js";
 import { bannerFiles } from "../banners/export.js";
 import { safeFilename } from "../state/download.js";
+import { sourceHash } from "../state/source-hash.js";
+export { sourceHash } from "../state/source-hash.js";
 
 export const PROJECT_SCHEMA = 1,
   PROJECT_LIMIT = 10_000_000;
@@ -34,14 +36,6 @@ const metadata = (v) =>
       .filter((k) => Object.hasOwn(v || {}, k))
       .map((k) => [k, portableData(v[k])]),
   );
-export function sourceHash(source) {
-  let hash = 2166136261;
-  for (const byte of new TextEncoder().encode(source)) {
-    hash ^= byte;
-    hash = Math.imul(hash, 16777619);
-  }
-  return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, "0")}`;
-}
 function assetsFor(meta) {
   return meta.bannerSettings
     ? bannerFiles(meta.bannerSettings).map((f) => ({

@@ -33,11 +33,41 @@ const decode = (s) =>
         n[0].toLowerCase() === "x" ? parseInt(n.slice(1), 16) : Number(n);
       return v > 0 && v <= 0x10ffff ? String.fromCodePoint(v) : "";
     });
+// URL values written in one Markdown source, in source order: link and image
+// tokens plus a/img/source attributes in raw HTML. Entities are decoded;
+// nothing is resolved, fetched or rewritten.
+export function sourceUrls(source) {
+  const urls = [];
+  const add = (value, image) =>
+    urls.push({ value: decode(value || ""), image });
+  visitTokens(marked.lexer(source), (t) => {
+    if (t.type === "link") add(t.href, false);
+    if (t.type === "image") add(t.href, true);
+    if (t.type === "html") {
+      const s = t.text.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+      for (const tag of s.match(/<(?:a|img|source)\b[^>]*>/gi) || []) {
+        const attr = (name) => {
+          const match = [
+            ...tag.matchAll(
+              /([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g,
+            ),
+          ].find((m) => m[1].toLowerCase() === name);
+          return match?.slice(2).find((v) => v !== undefined) || "";
+        };
+        if (/^<a\b/i.test(tag)) add(attr("href"), false);
+        else {
+          add(attr("src"), true);
+          for (const c of srcsetCandidates(attr("srcset"))) add(c.url, true);
+        }
+      }
+    }
+  });
+  return urls;
+}
 export function healthTargets(draft) {
   const results = new Map(),
     repos = contextRepositories(draft);
   const add = (value, image, context) => {
-    value = decode(value || "");
     if (!value || value.startsWith("#") || /^mailto:/i.test(value)) return;
     let url = (image ? resolveImageUrl : resolveLinkUrl)(value, context);
     if (url.startsWith("//")) url = "https:" + url;
@@ -73,32 +103,9 @@ export function healthTargets(draft) {
         snapshot: repos.find((r) => r.fullName.toLowerCase() === repo) || null,
       });
   };
-  for (const segment of documentSegments(draft)) {
-    visitTokens(marked.lexer(segment.source), (t) => {
-      if (t.type === "link") add(t.href, false, segment.sourceContext);
-      if (t.type === "image") add(t.href, true, segment.sourceContext);
-      if (t.type === "html") {
-        const s = t.text.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
-        for (const tag of s.match(/<(?:a|img|source)\b[^>]*>/gi) || []) {
-          const attr = (name) => {
-            const match = [
-              ...tag.matchAll(
-                /([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g,
-              ),
-            ].find((m) => m[1].toLowerCase() === name);
-            return match?.slice(2).find((v) => v !== undefined) || "";
-          };
-          if (/^<a\b/i.test(tag))
-            add(attr("href"), false, segment.sourceContext);
-          else {
-            add(attr("src"), true, segment.sourceContext);
-            for (const c of srcsetCandidates(attr("srcset")))
-              add(c.url, true, segment.sourceContext);
-          }
-        }
-      }
-    });
-  }
+  for (const segment of documentSegments(draft))
+    for (const { value, image } of sourceUrls(segment.source))
+      add(value, image, segment.sourceContext);
   return [...results.values()].slice(0, 300);
 }
 export async function readBounded(response, max = 100000) {
