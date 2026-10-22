@@ -89,7 +89,7 @@ The first task an author chose in Guided start: a **Profile README**, a **Reposi
 _Avoid_: Mode, persona, track, intent
 
 **Start path**:
-A way to begin that is not a Goal: start blank, import an existing README, pick a template, open a Studio project, autofill from GitHub or explore the sample. Every Start path that existed before Guided start stays reachable under its existing name.
+A way to begin that is not a Goal: start blank, import an existing README, pick a template, open a Studio project, autofill from GitHub, restore a backup or explore the sample. Every Start path that existed before Guided start stays reachable under its existing name.
 _Avoid_: Shortcut, quick start, advanced entry route
 
 **Locality statement**:

@@ -24,6 +24,8 @@ When the browser reports that it is offline, **Open README audit** stays visible
 
 The Start paths from earlier versions stay in step 1 under their existing names: **Start from a template**, **Autofill from GitHub**, **Import GitHub README** (the import dialog also accepts local files and Studio backups), **Open Studio project**, **Start blank** and **Explore the sample profile**. On first run the sample profile is already open, so Explore closes the dialog; when Guided start is reopened later it adds a fresh copy of the sample.
 
+**Restore a backup** opens the existing restore dialog, so an author whose browser data was cleared can get a downloaded all-drafts backup back from the first screen. The dialog validates the file before anything changes, and a damaged file changes nothing. A merge restore opens the backup's own active draft; see [Editing and recovery](editing.md).
+
 ## Where your work is kept
 
 Guided start always shows the Locality statement:
