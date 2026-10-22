@@ -37,7 +37,9 @@ test("raw edits keep untouched builder sections visual and announce detachment",
   });
   await page.getByRole("button", { name: "Import as new draft" }).click();
   await expect(editor(page)).toHaveValue(fixture);
+  // The Next steps panel offers the same split; use the builder's button.
   await page
+    .getByRole("complementary", { name: "Builder" })
     .getByRole("button", { name: "Split into sections", exact: true })
     .click();
   await page.locator("#apply-split").click();
