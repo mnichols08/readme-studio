@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.1
+
+- Add the usability scripts ([docs/usability-scripts.md](docs/usability-scripts.md)) (#76, #116): seven Usability scenarios (N1–N4 novice, E1–E3 experienced). Each has a start state, a success criterion and a step budget. The doc also has a facilitator protocol, consent and privacy statements, and a severity scale. There are no in-app analytics, telemetry or new storage (ADR 0006).
+- Add the Friction tracker ([docs/usability-findings.md](docs/usability-findings.md)). Scripted run, heuristic walkthrough and Participant session findings are kept in separate sections. No Participant sessions are recorded yet.
+- Add scripted runs (`tests/browser/usability-scenarios.spec.js`) that count author actions in each scenario. They attach a JSON result and fail when a scenario stops completing or goes over the step budget in the scripts doc. The E2 run also fails if any write request reaches GitHub. `tests/usability.test.js` checks that the scripts doc and tracker stay consistent, including findings tables placed under any other heading.
+- Guided start offers **Restore a backup** among its other ways to start (#117). It opens the existing restore dialog, which checks the file before anything changes.
+- A merge restore of a workspace backup now opens the backup's active draft and says which draft it opened, also when some incoming evidence snapshots did not fit the workspace limit. Every local draft is kept.
+- **Export README**, **Copy Markdown**, **Save Studio project**, **Download all drafts backup** and **Download draft backup** no longer silently leave out section edits that have not been saved. They ask first: save the section and continue, continue without the edits, or keep editing. Saving happens only on that choice and Undo reverses it. If the section's fields are invalid, no save is offered and Keep editing returns to the form's fields. If the form closes while the question is open, nothing is saved or exported and a notification says so.
+
 ## 1.9.0
 
 - Stack Intelligence can include nested manifests in monorepos (#83). A separate, session-only **Include nested manifests (monorepo)** consent reads one repository tree listing. It maps Manifests to Project boundaries: the repository root, Workspace members (declared by package.json `workspaces`, `pnpm-workspace.yaml`, Cargo `[workspace]`, `go.work` or `[tool.uv.workspace]`) and Nested projects. Results list the boundaries, a "found / read / not read" summary, and dependencies grouped per boundary. Every file is read at the head commit the tree came from.

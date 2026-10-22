@@ -55,8 +55,9 @@ function localityStatement(app) {
 }
 
 // Guided start: step 1 asks for a Goal beside the earlier Start paths (their
-// accessible names are kept); step 2 offers existing flows for that Goal. Every
-// option opens its tool's normal flow, so no document is changed here.
+// accessible names are kept) and Restore a backup, the first thing an author
+// needs after losing browser data; step 2 offers existing flows for that Goal.
+// Every option opens its tool's normal flow, so no document is changed here.
 function installGuidedStart(app) {
   let firstRun = false;
   const content = () => app.querySelector(".dialog-content");
@@ -70,7 +71,7 @@ function installGuidedStart(app) {
         )
         .join(
           "",
-        )}</ul><section class="guide-paths" aria-labelledby="guide-paths-title"><h2 id="guide-paths-title">Other ways to start</h2><div class="welcome-options"><button data-start="templates">Start from a template <span>→</span></button><button data-action="profile">Autofill from GitHub <span>↗</span></button><button data-start="import">Import GitHub README <span>↥</span></button><button data-action="open-project">Open Studio project <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button></div><button class="text-button" data-start="sample">Explore the sample profile →</button></section>${localityStatement(app)}`,
+        )}</ul><section class="guide-paths" aria-labelledby="guide-paths-title"><h2 id="guide-paths-title">Other ways to start</h2><div class="welcome-options"><button data-start="templates">Start from a template <span>→</span></button><button data-action="profile">Autofill from GitHub <span>↗</span></button><button data-start="import">Import GitHub README <span>↥</span></button><button data-action="open-project">Open Studio project <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button><button data-action="restore">Restore a backup <span>↥</span></button></div><button class="text-button" data-start="sample">Explore the sample profile →</button></section>${localityStatement(app)}`,
     );
     content()
       .querySelectorAll("[data-goal]")

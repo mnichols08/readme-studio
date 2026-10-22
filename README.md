@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.0.** Stack Intelligence can include nested manifests in monorepos with a separate, session-only consent, mapping each Manifest to the repository root, a Workspace member or a Nested project. Discovery reads one tree at the head commit, stays within depth, read and request limits, and rejects unsafe paths, symlinks and submodules with notices. [Stack Intelligence](docs/stack-intelligence.md#nested-discovery-monorepos) · [Stack-to-README](docs/stack-to-readme.md) · [GitHub publishing](docs/github-publishing.md)
+**Version 1.9.1.** Usability scripts define seven novice and experienced scenarios with step budgets that scripted runs enforce, Guided start can restore a backup, and exports and backups now ask before leaving out unsaved section edits. No sessions with real participants have been run yet. [Usability scripts](docs/usability-scripts.md) · [Usability findings](docs/usability-findings.md) · [Guided start](docs/guided-start.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -15,7 +15,7 @@ npm ci
 npm run dev
 ```
 
-Guided start asks whether you want to write a profile README, write a repository README or audit your repository READMEs, and says where your work is kept; templates, Markdown import, Studio projects and blank drafts remain one click away. After you start, [Next steps](docs/next-steps.md) suggests what usually comes next without changing anything. Use the Create, Design, Review, GitHub and Save groups; `Ctrl/Cmd+K` searches tools and content. [Getting started](docs/getting-started.md) · [Task tutorials](docs/tutorials.md) · [All documentation](docs/index.md)
+Guided start asks whether you want to write a profile README, write a repository README or audit your repository READMEs, and says where your work is kept; templates, Markdown import, Studio projects and blank drafts remain one click away. After you start, [Next steps](docs/next-steps.md) suggests what usually comes next without changing anything. Use the Create, Design, Review, GitHub and Save groups; `Ctrl/Cmd+K` searches tools and content. [Getting started](docs/getting-started.md) · [Task tutorials](docs/tutorials.md) · [Usability scripts](docs/usability-scripts.md) · [All documentation](docs/index.md)
 
 ## What you can do
 
@@ -33,7 +33,7 @@ Manual Markdown remains available. Raw edits detach structured ownership when sy
 
 ## Your data
 
-Drafts autosave to this browser. **Download a backup before clearing browser storage.** Storage failures remain visible, and damaged data opens a temporary workspace with recovery downloads rather than silently replacing originals. Portable projects retain source and supported editing metadata; Markdown exports retain source only. [Editing and recovery](docs/editing.md) · [Project files](docs/studio-projects.md)
+Drafts autosave to this browser. **Download a backup before clearing browser storage**; **Restore a backup** in Guided start brings it back and opens your restored draft. Export README, Copy Markdown, Save Studio project and the backup downloads ask before leaving out section edits you have not saved. Storage failures remain visible, and damaged data opens a temporary workspace with recovery downloads rather than silently replacing originals. Portable projects retain source and supported editing metadata; Markdown exports retain source only. [Editing and recovery](docs/editing.md) · [Project files](docs/studio-projects.md)
 
 Core editing, analysis and export work offline after the production app has successfully cached. Public GitHub fetches, publishing and remote images need a connection. Remote previews contact their providers directly. [Offline behavior](docs/offline.md) · [Privacy](docs/privacy.md) · [Security](docs/security.md)
 
