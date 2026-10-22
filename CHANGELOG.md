@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.8.0
+
+- Add the publishing Preflight (#97): an explicit, read-only check of the exact repository, branch and path before any write. It checks the publishing service, GitHub session, GitHub App installation, Contents permission, your push access, archive state, branch existence, path support and, for workflows, server opt-in plus Workflows: write. Branch protection, rulesets and committing to the default branch show as advisory warnings that never block.
+- Add a **Re-check access** button and a Preflight check list with written Pass/Warning/Fail/Unknown status and an announced verdict.
+- Every publishing review now starts in Read-only mode. The confirmation and publish button appear only after a Preflight for the exact current target passes every blocking check. Changing the target, disconnecting or reloading clears the Preflight, and it is never saved.
+- **Load remote README** now runs the Preflight and then the read as one explicit action. A missing branch is reported instead of being loaded as a new file.
+- The publishing server enforces the same Preflight checks before every write and refuses with the same message the dialog showed. A 403 or 422 from GitHub at write time now opens **Publish on a new branch instead**. A refusal from the server's own Preflight does not, because branch creation would be refused the same way.
+- **Publish on a new branch instead** is offered only when the server would accept it: installation, Contents permission, push access, repository not archived, branch exists and, for workflows, server opt-in plus Workflows: write. Creating a workflow branch again requires the workflow opt-in.
+- An offline or failed Preflight leaves every check Unknown and keeps Read-only mode. Nothing is loaded and nothing is retried automatically.
+- Before a target is chosen, **Supported path** shows Unknown instead of a misleading Fail.
+- Add a manual verification checklist for a real GitHub App (read-only installation, removed Workflows permission, protected branch or ruleset, archived repository) to the publishing guide. These steps are manual and not run by CI.
+
+## 1.7.1
+
+- Add the Next steps panel. After an import (new draft, replace, append, merge or Re-import), a README opened from the audit, a profile or repository template, a Studio project opened as a new draft or a blank start from Guided start, it shows up to three existing tools that usually come next, each with a one-line reason, and one sentence saying what happened (for example "Imported into a new local draft. Nothing changed on GitHub."). **All tools** opens workspace search; **Hide** removes the panel.
+- Choose the steps with a pure, deterministic rule from how the document arrived, your goal and cheap facts (section shape, repository target, import source, online state). For example, an imported single Markdown block offers Split into sections, README Health and a Drift check when the document has a target; an audit offers README Health, a Drift check with a target and the README Attention Queue. Offline, GitHub steps are hidden and the panel says so; with blocked storage, or after a save fails (for example storage full), the last step is Export README. Undo and Redo recompute the steps.
+- A step only opens its tool through the same action as the visible control, so review, stale-draft checks and Undo stay with the tool. No step edits Markdown, applies a change, fetches or publishes, and choosing steps runs no Health or drift analysis.
+- The panel sits above the panes (also on mobile), never takes focus or announces itself (the Arrival's own notification does, including new "template opened" and "Blank draft created." messages), returns focus to a step when the step's dialog closes, and is unreachable while a dialog is open. Hide moves focus to the editor, or to Current draft when the editor is hidden. It is forgotten on Hide, a document switch, a workspace restore, a new Arrival, undoing the import that changed the document, or a reload; it is never stored (ADR 0005).
+- Add **Save → Settings → Guidance → Show next steps after imports, audits and templates**, saved as `guide.nextSteps` in the workspace (ADR 0004), included in all-drafts backups and never in Studio projects or exports. Workspace version and project schema stay at 1. No new request, dependency or telemetry.
+
 ## 1.7.0
 
 - Add Guided start, the first screen of a new workspace. It asks what you want to do first: **Write my profile README**, **Write a repository README** or **Audit my repository READMEs**, each with a one-line description; the audit says it needs a GitHub connection. Reopen it from **Create → Guided start** or workspace search. A saved workspace never opens it by itself.

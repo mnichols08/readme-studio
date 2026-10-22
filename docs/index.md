@@ -4,6 +4,7 @@ README Studio exports ordinary Markdown/HTML. Its preview is an approximation of
 
 - [Getting started](getting-started.md)
 - [Guided start](guided-start.md) — choose a profile README, repository README or audit goal, keep every earlier Start path, and see where your work is kept
+- [Next steps](next-steps.md) — up to three suggested tools after an import, audit, template or blank start; they only open existing reviewed flows
 - [Editing and recovery](editing.md)
 - [Importing source](imports.md)
 - [Task tutorials](tutorials.md)
