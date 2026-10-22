@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.7.0.** Start from a goal: the first screen asks whether you want to write a profile README, write a repository README or audit your repository READMEs, keeps every earlier way to start and says where your work is kept. Your goal is saved in this browser and never changes a document. [Guided start](docs/guided-start.md) · [Reviewed drift fixes](docs/drift-remediation.md) · [Drift checks](docs/drift-checks.md)
+**Version 1.7.1.** After an import, an audit, a template or a blank start, a Next steps panel suggests up to three tools that usually come next, such as Split into sections or README Health. Each step only opens that tool's normal reviewed flow; hide the panel or turn it off in Settings. [Next steps](docs/next-steps.md) · [Guided start](docs/guided-start.md) · [Reviewed drift fixes](docs/drift-remediation.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -15,7 +15,7 @@ npm ci
 npm run dev
 ```
 
-Guided start asks whether you want to write a profile README, write a repository README or audit your repository READMEs, and says where your work is kept; templates, Markdown import, Studio projects and blank drafts remain one click away. Use the Create, Design, Review, GitHub and Save groups; `Ctrl/Cmd+K` searches tools and content. [Getting started](docs/getting-started.md) · [Task tutorials](docs/tutorials.md) · [All documentation](docs/index.md)
+Guided start asks whether you want to write a profile README, write a repository README or audit your repository READMEs, and says where your work is kept; templates, Markdown import, Studio projects and blank drafts remain one click away. After you start, [Next steps](docs/next-steps.md) suggests what usually comes next without changing anything. Use the Create, Design, Review, GitHub and Save groups; `Ctrl/Cmd+K` searches tools and content. [Getting started](docs/getting-started.md) · [Task tutorials](docs/tutorials.md) · [All documentation](docs/index.md)
 
 ## What you can do
 

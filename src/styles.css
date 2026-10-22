@@ -2493,6 +2493,67 @@ shared-components [data-diffs] {
 .batch-bar[hidden] {
   display: none;
 }
+.next-steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 16px;
+  padding: 10px 16px;
+  background: var(--accent-bg);
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.next-steps[hidden] {
+  display: none;
+}
+.next-steps h2 {
+  flex: 0 0 auto;
+  margin: 6px 0 0;
+  font-size: 14px;
+}
+.next-steps > p {
+  flex: 1 1 260px;
+  min-width: 0;
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+.next-steps > p[hidden] {
+  display: none;
+}
+.next-step-list {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.next-step-list li {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.next-step-list button {
+  text-align: left;
+}
+.next-step-list span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.next-steps-tools {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (max-width: 780px) {
+  .next-steps button {
+    min-height: 44px;
+  }
+}
 batch-review li {
   margin-block: 12px;
   overflow-wrap: anywhere;
