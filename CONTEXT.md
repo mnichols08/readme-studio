@@ -131,3 +131,71 @@ _Avoid_: Score, time on task, effort
 **Friction**:
 A recorded obstacle in one Usability scenario at a named step, with a severity from 1 (cannot complete) to 4 (cosmetic) and the kind of run that found it.
 _Avoid_: Bug, complaint, pain point
+
+## Language: safe GitHub publishing (Epic 08)
+
+### Preflight
+
+**Publish target**:
+The exact repository, branch and file path one publishing review writes to. Chosen explicitly by the author; a suggested or saved target is never used until the author loads it.
+_Avoid_: Destination, remote, upstream
+
+**Preflight**:
+An explicit, read-only check of whether the signed-in author can write to a Publish target now: publishing service, session, GitHub App installation and its permissions, the author's own repository access, archive state, branch existence and branch rules. Changes nothing on GitHub and is forgotten when the target changes.
+_Avoid_: Permission scan, access test, dry run
+
+**Preflight check**:
+One named question in a Preflight with a status of `pass`, `warn`, `fail` or `unknown`. A blocking check that is not `pass` makes the target Read-only; an advisory check (branch rules, default branch) only warns, because GitHub decides at write time.
+_Avoid_: Rule, validation, gate
+
+**Read-only mode**:
+The default state of every publishing review. Remote content can be loaded, reviewed and downloaded, but no write can be approved until a Preflight for that exact Publish target has every blocking check `pass`.
+_Avoid_: Dry run, preview mode, locked
+
+### Change sets
+
+**Change set**:
+The complete, reviewed list of file writes one publish will make to one Publish target and branch: each file's action, Base SHA and Result SHA, plus the commit message. Any change to any of these makes a different Change set.
+_Avoid_: Patch, batch, plan, commit
+
+**File change**:
+One entry in a Change set: a `create` (the file must not exist), an `update` (from a named Base SHA) or `unchanged` (nothing is written). There is no delete and no overwrite without a Base SHA.
+_Avoid_: Asset row, diff, operation
+
+**Base SHA**:
+The Git blob SHA of a remote file as loaded for review, or none for a file that does not exist. A write is allowed only while the remote file still has this SHA.
+_Avoid_: Old SHA, parent, ETag
+
+**Result SHA**:
+The Git blob SHA that a File change's prepared content will have once written. It identifies the reviewed content exactly and is how a later check recognises the author's own write.
+_Avoid_: Content hash, checksum, new SHA
+
+**Publish approval**:
+The author's explicit confirmation of one Change set, naming its target, branch and file count. It belongs to that Change set only and is withdrawn the moment the Change set changes or goes stale.
+_Avoid_: Consent checkbox, sign-off, accept
+
+**Stale change set**:
+A Change set in which at least one remote file no longer has its Base SHA. Nothing is written; the author reviews the remote change and builds a new Change set.
+_Avoid_: Conflict (reserved for merge sections), out of date, race
+
+### Recovery
+
+**Publish attempt**:
+The execution of one approved Change set, writing its File changes one at a time. Can end complete, partial (some files written, the rest not attempted) or with an Ambiguous write.
+_Avoid_: Run, job, transaction
+
+**Write outcome**:
+What is known about one File change after a Publish attempt: `written`, `not written`, `unknown` or `not attempted`.
+_Avoid_: Status code, result, error
+
+**Ambiguous write**:
+A File change whose request may have reached GitHub but whose answer was lost: a dropped connection, a timeout or an unreadable reply. Its Write outcome is `unknown` until Reconciliation, and it is never retried blindly.
+_Avoid_: Failed write, timeout error, network error
+
+**Reconciliation**:
+The explicit, read-only check that settles an `unknown` Write outcome by reading the remote file: its Result SHA means `written`, its Base SHA (or absence, for a create) means `not written`, and anything else means **diverged**, which needs a fresh review.
+_Avoid_: Sync, retry, repair, rollback
+
+**Publish journal**:
+The machine-local record of the latest Publish attempt that is not yet settled: its target, File changes and their Write outcomes, without file content or credentials. It lets Reconciliation happen after a reload and is cleared once every outcome is settled or the author dismisses it.
+_Avoid_: Publishing history, log, outbox, queue
