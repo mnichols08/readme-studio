@@ -6,6 +6,7 @@ import {
   DOCUMENT_RETENTION,
   WORKSPACE_RETENTION,
 } from "../workspace/evidence-snapshots.js";
+import { driftStatuses, ANCHOR_FILE_LIMIT } from "../workspace/drift-check.js";
 
 const short = (sha) => (sha ? sha.slice(0, 7) : "");
 const kinds = {
@@ -23,6 +24,25 @@ const statuses = {
   added: "Added",
   removed: "Removed",
   unknown: "Unknown",
+};
+const driftGroups = {
+  mismatch: "Observed mismatches",
+  uncertain: "Uncertain findings",
+  unknown: "Unknown — not checked",
+  matches: "Matches",
+};
+const categories = {
+  command: "Command",
+  path: "Path",
+  link: "Link",
+  config: "Config",
+};
+const since = {
+  changed: "Changed since Baseline.",
+  unchanged: "Unchanged since Baseline.",
+  added: "Added since Baseline.",
+  removed: "Removed since Baseline.",
+  unknown: "Baseline comparison unknown.",
 };
 const when = (iso) => new Date(iso).toLocaleString();
 const targetText = (t) =>
@@ -44,12 +64,12 @@ export class EvidenceSnapshots extends HTMLElement {
       `<h1>Evidence snapshots</h1><p>An evidence snapshot records what GitHub reports for this document's repository at one moment: the branch head commit, the README revision, recognised manifests and lockfiles, and files your Markdown links to by relative path, plus a fingerprint of your local Markdown. Capture and change checks only read public GitHub data. They never change your Markdown or write to GitHub.</p>
       ${
         target
-          ? `<p data-target-line>Target: ${targetText(target)}</p><button class="primary" data-capture>Capture evidence snapshot</button>`
+          ? `<p data-target-line>Target: ${targetText(target)}</p><p>A drift check compares commands, paths, links and config keys in your Markdown with the repository now. It reads the tree plus at most package.json, one .env example and ${ANCHOR_FILE_LIMIT} linked Markdown files (256 KB each). Nothing is run, saved or written.</p><button class="primary" data-capture>Capture evidence snapshot</button><button data-drift-run>Run drift check</button>`
           : `<p data-target-line>This document has no repository, branch and README path target, so it cannot be captured. Saved snapshots remain readable.</p><button data-set-target>Set document target</button>`
       }<button data-cancel hidden>Cancel</button>
       ${storageBlocked ? '<p role="alert">Storage recovery is active. Snapshots can be viewed and checked, but capture, Baseline and delete need restored workspace storage.</p>' : ""}`;
     this.querySelector("[data-body]").innerHTML =
-      `<h2>Saved snapshots (${items.length})</h2>
+      `<section data-drift hidden aria-label="Drift check result"></section><h2>Saved snapshots (${items.length})</h2>
       <p class="hint">Kept in this browser and in all-drafts backups, not in Studio projects or README exports. Retention keeps each document's newest ${DOCUMENT_RETENTION} snapshots plus its Baseline, up to ${WORKSPACE_RETENTION} in this workspace; a Baseline is never removed automatically.</p>
       ${
         items.length
@@ -59,6 +79,9 @@ export class EvidenceSnapshots extends HTMLElement {
       <section data-check hidden aria-label="Change check result"></section>`;
     this.querySelector("[data-capture]")?.addEventListener("click", () =>
       this.send("capture"),
+    );
+    this.querySelector("[data-drift-run]")?.addEventListener("click", () =>
+      this.send("drift"),
     );
     this.querySelector("[data-set-target]")?.addEventListener("click", () =>
       this.send("target"),
@@ -126,6 +149,55 @@ export class EvidenceSnapshots extends HTMLElement {
         )
         .join("")}</tbody></table></div>`;
     section.querySelector("h2").focus();
+  }
+  // Renders a Drift check result. Every value from the repository or the
+  // Markdown is escaped; findings are grouped by status so observed
+  // mismatches are never mixed with heuristics or unknowns.
+  showDrift(result, baseline = null) {
+    const section = this.querySelector("[data-drift]");
+    const { counts } = result;
+    const table = (items) =>
+      `<div class="evidence-table"><table><thead><tr><th scope="col">Claim</th><th scope="col">Line</th><th scope="col">Type</th><th scope="col">Evidence</th></tr></thead><tbody>${items
+        .map(
+          (item) =>
+            `<tr data-drift-result="${item.status}"><td><code>${html(item.text)}</code></td><td>${item.line}</td><td>${categories[item.category]}</td><td>${html(item.message)}${item.baseline ? ` ${since[item.baseline]}` : ""}</td></tr>`,
+        )
+        .join("")}</tbody></table></div>`;
+    const group = (status) => {
+      const items = result.results.filter((item) => item.status === status);
+      if (!items.length) return "";
+      const heading = `${driftGroups[status]} (${items.length})`;
+      return status === "matches"
+        ? `<details data-drift-group="matches"><summary>${heading}</summary>${table(items)}</details>`
+        : `<div data-drift-group="${status}"><h3>${heading}</h3>${table(items)}</div>`;
+    };
+    section.hidden = false;
+    section.innerHTML = `<h2 tabindex="-1">Drift check</h2>
+      <p>${
+        result.head
+          ? `Compared your Markdown with GitHub at commit ${short(result.head)}.`
+          : "Checked anchors within your Markdown only; GitHub was not read."
+      } Nothing was run, saved or written, and your Markdown is unchanged.</p>
+      <p data-drift-counts>${counts.mismatch} observed mismatch${counts.mismatch === 1 ? "" : "es"} · ${counts.uncertain} uncertain · ${counts.unknown} unknown · ${counts.matches} match${counts.matches === 1 ? "" : "es"}</p>
+      <p class="hint">Observed mismatches are contradicted by repository evidence. Uncertain findings come from heuristics and may be fine. Unknown means the evidence could not be read; it is never treated as drift.</p>
+      ${result.tree && result.tree !== "complete" ? `<p data-drift-partial>The repository tree was ${result.tree === "truncated" ? "truncated by GitHub" : "not read"}, so paths it does not list are unknown.</p>` : ""}
+      ${baseline ? `<p>Evidence files are also compared with the Baseline captured ${html(when(baseline.capturedAt))}.</p>` : ""}
+      ${result.notes.length ? `<ul data-drift-notes>${result.notes.map((note) => `<li>${html(note)}</li>`).join("")}</ul>` : ""}
+      ${
+        result.results.length
+          ? driftStatuses.map(group).join("")
+          : "<p data-drift-empty>No checkable commands, paths, links or config keys were found in your Markdown.</p>"
+      }`;
+    section.querySelector("h2").focus();
+  }
+  // Hides the last Drift check result. A new run starts from nothing, so a
+  // run that fails, is cancelled or is discarded leaves no earlier result
+  // (possibly for Markdown that has since changed) on screen.
+  clearDrift() {
+    const section = this.querySelector("[data-drift]");
+    if (!section) return;
+    section.hidden = true;
+    section.innerHTML = "";
   }
   send(action, id) {
     this.dispatchEvent(

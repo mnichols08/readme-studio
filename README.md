@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.6.0.** Capture explicit, read-only evidence snapshots of a document's repository revisions, pin a Baseline and run change checks to spot documentation drift. [Evidence snapshots](docs/evidence-snapshots.md)
+**Version 1.6.1.** Run a read-only drift check to find commands, paths, links and config keys in your README that no longer match the repository, with observed mismatches kept apart from heuristics. [Drift checks](docs/drift-checks.md) · [Evidence snapshots](docs/evidence-snapshots.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -24,6 +24,7 @@ Choose a template, import Markdown, open a Studio project, or start blank. Use t
 - Import public GitHub data, review refreshes, analyze compatibility and apply explicit, undoable refactors.
 - Audit selected public repositories with advisory expectations for 14 project types, then choose the next README from the attention queue.
 - Record read-only evidence snapshots of a repository's branch head, README, manifests and linked files, then check what changed since a pinned Baseline.
+- Check for stale scripts, missing files, broken links and anchors, and outdated config keys without running repository code or changing your Markdown.
 - Save portable `.readme-studio.json` projects or export Markdown, packs and full workspace backups.
 - Optionally publish reviewed README, asset and workflow changes through a separately configured GitHub App service.
 

@@ -1295,7 +1295,7 @@ export class AppShell extends HTMLElement {
     }
     this.data.evidenceSnapshots = evidenceSnapshots;
   }
-  async evidenceSnapshots() {
+  async evidenceSnapshots(focus = "") {
     await import("./evidence-snapshots.js");
     this.modal("<evidence-snapshots></evidence-snapshots>");
     const panel = this.querySelector("evidence-snapshots");
@@ -1303,6 +1303,8 @@ export class AppShell extends HTMLElement {
     panel.addEventListener("evidence-action", ({ detail }) =>
       this.evidenceAction(panel, detail.action, detail.id),
     );
+    // The Drift check command only moves focus; checking stays explicit.
+    if (focus) panel.querySelector(focus)?.focus();
   }
   evidenceState() {
     return {
@@ -1312,8 +1314,9 @@ export class AppShell extends HTMLElement {
       storageBlocked: this.storageBlocked,
     };
   }
-  // Capture and Change check only read public GitHub data. Capture persists a
-  // record of revisions; a Change check saves nothing. Neither touches Source.
+  // Capture, Change check and Drift check only read public GitHub data.
+  // Capture persists a record of revisions; the checks save nothing. None of
+  // them touches Source or runs anything from the repository.
   async evidenceAction(panel, action, id) {
     if (panel.working) return;
     const draft = this.store.draft,
@@ -1362,6 +1365,10 @@ export class AppShell extends HTMLElement {
           return;
         this.setSnapshots(deleteSnapshot(this.data.evidenceSnapshots, id));
         refresh("Snapshot deleted. Your Markdown is unchanged.");
+        return;
+      }
+      if (action === "drift") {
+        await this.driftCheck(panel, draft, destination);
         return;
       }
       if (action !== "capture" && action !== "check") return;
@@ -1442,20 +1449,89 @@ export class AppShell extends HTMLElement {
       );
     } catch (error) {
       if (!panel.isConnected) return;
-      const what = action === "check" ? "Change check" : "Capture";
+      const what =
+        action === "check"
+          ? "Change check"
+          : action === "drift"
+            ? "Drift check"
+            : "Capture";
       panel.status(
         error.name === "AbortError"
           ? `${what} cancelled. Nothing was saved; existing snapshots are unchanged.`
-          : ["capture", "check"].includes(action)
+          : ["capture", "check", "drift"].includes(action)
             ? `${what} failed: ${error.message} Nothing was saved; existing snapshots are unchanged.`
             : `${error.message} Nothing was changed.`,
       );
     } finally {
       if (panel.working) {
         settle();
-        panel.querySelector("[data-capture],[data-set-target]")?.focus();
+        panel
+          .querySelector(
+            action === "drift"
+              ? "[data-drift-run]"
+              : "[data-capture],[data-set-target]",
+          )
+          ?.focus();
       }
     }
+  }
+  // Drift check: Claims come from the Source as it is now; evidence is the
+  // repository tree plus a bounded set of file contents, read once and then
+  // discarded. Nothing is saved, run or written. Anchors within the document
+  // need no GitHub request, so a document with only those works offline.
+  // Called from evidenceAction, whose catch/finally report and settle.
+  async driftCheck(panel, draft, destination) {
+    panel.clearDrift();
+    if (!destination)
+      throw Error("Set a repository, branch and README path first.");
+    const source = draft.markdown,
+      identity = targetIdentity(destination);
+    panel.working = true;
+    panel.controller = new AbortController();
+    const signal = panel.controller.signal;
+    panel.busy(true);
+    panel.status(
+      "Reading your Markdown and, if needed, the repository tree and a few files from GitHub. Nothing is run or written.",
+    );
+    const drift = await import("../workspace/drift-check.js");
+    signal.throwIfAborted();
+    const plan = drift.driftClaims(source, destination);
+    let evidence = null;
+    if (drift.needsGitHub(plan)) {
+      const [{ auditClient }, { readDriftEvidence }] = await Promise.all([
+        import("../repository-audit/github.js"),
+        import("../github/evidence.js"),
+      ]);
+      signal.throwIfAborted();
+      evidence = await readDriftEvidence({
+        client: auditClient,
+        target: destination,
+        plan,
+        signal,
+      });
+    }
+    signal.throwIfAborted();
+    if (
+      this.store.draft.id !== draft.id ||
+      this.store.draft.markdown !== source ||
+      targetIdentity(documentTarget(this.store.draft)) !== identity
+    )
+      throw Error(
+        "The document, its Markdown or its target changed while the check ran.",
+      );
+    const baseline = documentSnapshots(
+      this.data.evidenceSnapshots,
+      draft.id,
+    ).find((item) => item.baseline && !differentTarget(item, destination));
+    const result = drift.evaluateDrift(plan, evidence, { baseline });
+    panel.working = false;
+    panel.controller = null;
+    panel.busy(false);
+    const { counts } = result;
+    panel.status(
+      `Drift check complete: ${counts.mismatch} observed mismatch(es), ${counts.uncertain} uncertain, ${counts.unknown} unknown.${evidence ? "" : " Only anchors within your Markdown were checked; GitHub was not read."} Nothing was saved and your Markdown is unchanged.`,
+    );
+    panel.showDrift(result, baseline && evidence ? baseline : null);
   }
   async documents() {
     await import("./workspace-documents.js");
@@ -2544,6 +2620,9 @@ export class AppShell extends HTMLElement {
         break;
       case "evidence-snapshots":
         this.evidenceSnapshots();
+        break;
+      case "drift-check":
+        this.evidenceSnapshots("[data-drift-run],[data-set-target]");
         break;
       case "backup-all":
         this.download(

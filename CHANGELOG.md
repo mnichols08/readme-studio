@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.1
+
+- Add read-only drift checks for documents with a GitHub target: package scripts, lockfiles and package managers, files named in shell commands, inline paths, relative and same-repository GitHub links, heading anchors, Node version statements and `.env` keys are compared with the repository now.
+- Report each claim as an observed mismatch, an uncertain finding (inline mentions, fallback-capable commands, generated or ignored paths, ambiguous working directories, prose and near anchors) or unknown when evidence is missing, failed or truncated; unknown is never drift.
+- Read at most the tree, the root `package.json`, one `.env` example and ten anchored Markdown files by blob revision, 256 KB each, through the shared public client. Content is parsed as data and discarded; nothing is run, saved or written, and in-document anchors are checked offline without requests.
+- Annotate results with what changed since a same-target Baseline. Share the tree reader, relative path resolution and URL walk with evidence snapshot capture.
+- Fewer false observed mismatches: interpreter options and their values, extensionless Node.js entry points, version/help commands, files earlier commands may create, other repositories' clones, submodule paths, npm's echoed output in `console` sessions and possible longer branch names are no longer reported as contradictions. Raw HTML headings produce anchors; programs that earlier build, unpack or setup steps may produce, build output folders themselves, `cd <repo-name>` into a same-named folder, `pushd`, subshells, heredoc bodies, settings and prose in untagged fences are no longer observed mismatches, and a missing `.env.example` template is. Absolute links to the document itself use local headings; BOM-prefixed files, HTML entities and commented-out anchors are handled; each linked file is parsed once.
+
 ## 1.6.0
 
 - Add explicit, read-only evidence snapshots for documents with a GitHub target: branch head, README revision, recognised root manifests/lockfiles, relatively linked files and a local Markdown fingerprint. Revisions only; no repository file content is stored.

@@ -33,6 +33,23 @@ export function evidencePath(value) {
     throw Error("Invalid evidence file path.");
   return value;
 }
+// Resolves a relative URL path against a directory (an array of segments),
+// segment by segment rather than with URL against a synthetic origin, so a
+// path that climbs above the repository root throws OUTSIDE_ROOT instead of
+// being clamped onto a root file. Undecodable segments throw URIError.
+export const OUTSIDE_ROOT = Symbol("outside repository root");
+export function resolveRelativePath(raw, directory = []) {
+  const segments = raw.startsWith("/") ? [] : [...directory];
+  for (const encoded of raw.split("/")) {
+    const part = decodeURIComponent(encoded);
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      if (!segments.length) throw OUTSIDE_ROOT;
+      segments.pop();
+    } else segments.push(part);
+  }
+  return evidencePath(segments.join("/"));
+}
 function validateEntry(entry) {
   if (
     !object(entry) ||

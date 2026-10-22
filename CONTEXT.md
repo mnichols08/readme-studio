@@ -47,3 +47,23 @@ _Avoid_: Diff, sync, refresh
 **Different target**:
 The label on an Evidence Snapshot whose repository, branch or path no longer matches its document's current target. Such a snapshot cannot be used as a Baseline for comparison.
 _Avoid_: Stale, orphaned
+
+**Claim**:
+A checkable statement in a document's Source: a shell command, a repository path, a link or anchor, or a config key or version. Claims are read from the user's local Source, never from the README on GitHub.
+_Avoid_: Assertion, fact
+
+**Drift check**:
+An explicit, read-only comparison of a document's Claims with Evidence read from the repository now, including the bounded content of a few Evidence files. Saves nothing, runs nothing and never edits Source.
+_Avoid_: Lint, scan, audit, validation
+
+**Observed mismatch**:
+A Drift check result where Evidence directly contradicts a Claim, for example `npm run lint` when the repository's root `package.json` has no `lint` script.
+_Avoid_: Error, broken, stale
+
+**Uncertain finding**:
+A Drift check result where a heuristic suggests drift but the Claim may still be correct, for example a missing file under `dist/` or a Node version in prose. Never presented as an Observed mismatch.
+_Avoid_: Warning, false positive
+
+**Unknown** (Drift check):
+A Claim whose Evidence could not be read or does not cover it (failed or truncated tree, unreadable file, workspace package). Unknown is never drift.
+_Avoid_: Skipped, passed
