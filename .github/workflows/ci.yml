@@ -13,6 +13,10 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    container:
+      # Browsers and their system packages are preinstalled; keep in step with @playwright/test.
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --user 1001
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,12 +27,14 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run report:bundle
-      - run: npx playwright install --with-deps chromium firefox webkit
-        timeout-minutes: 10
       - run: npm run test:static
   browser:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    container:
+      # Browsers and their system packages are preinstalled; keep in step with @playwright/test.
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --user 1001
     strategy:
       fail-fast: false
       matrix:
@@ -47,9 +53,6 @@ jobs:
           cache: npm
       - run: npm ci
         if: matrix.engine == 'chromium' || env.ALL_ENGINES == 'true'
-      - run: npx playwright install --with-deps ${{ matrix.engine }}
-        if: matrix.engine == 'chromium' || env.ALL_ENGINES == 'true'
-        timeout-minutes: 10
       - name: Browser tests
         if: matrix.engine == 'chromium' || env.ALL_ENGINES == 'true'
         run: npx playwright test --project=${{ matrix.engine }} --shard=${{ matrix.shard }}/2
