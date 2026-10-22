@@ -262,9 +262,12 @@ export function createPublishingService({
       return {
         ...t,
         sha: file.sha,
-        content: new TextDecoder("utf-8", { fatal: true }).decode(
-          Buffer.from(file.content, "base64"),
-        ),
+        // Keep a leading BOM: the reviewed content must be exactly the bytes
+        // the Base SHA names, or a no-op publish would silently drop it.
+        content: new TextDecoder("utf-8", {
+          fatal: true,
+          ignoreBOM: true,
+        }).decode(Buffer.from(file.content, "base64")),
         commitSha: branch.commit.sha,
       };
     } catch (e) {

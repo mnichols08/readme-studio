@@ -43,6 +43,13 @@ const ENTRY_ACTION = {
   update: "update",
   unchanged: "unchanged: no write",
 };
+// A BOM is invisible in the diff panes, so the row names the change.
+const BOM_CHANGE = {
+  removed:
+    "Removed: the remote file starts with a UTF-8 byte order mark (BOM) and the prepared content does not. Publishing removes it.",
+  added:
+    "Added: the prepared content starts with a UTF-8 byte order mark (BOM) that the remote file does not have.",
+};
 const CHECK_STATUS = {
   pass: "Pass",
   warn: "Warning",
@@ -475,7 +482,7 @@ export class PublishDialog extends HTMLElement {
       if (!f) continue;
       item.dataset.action = e?.action || "pending";
       item.querySelector("[data-entry-facts]").innerHTML =
-        `<dt>Path</dt><dd><strong>${html(f.path)}</strong></dd><dt>Kind</dt><dd>${ENTRY_KIND[f.kind]}</dd><dt>Action</dt><dd data-entry-action>${html(ENTRY_ACTION[e?.action] || pending)}</dd><dt>Base SHA</dt><dd><code data-base-sha>${html(f.baseSha || "none: new file")}</code></dd><dt>Result SHA</dt><dd><code data-result-sha>${html(e?.resultSha || pending)}</code></dd><dt>Size</dt><dd>${new TextEncoder().encode(f.content).length} bytes</dd><dt>Lines</dt><dd>${e && e.added !== null ? `+${e.added} / −${e.removed}` : "not counted"}</dd>`;
+        `<dt>Path</dt><dd><strong>${html(f.path)}</strong></dd><dt>Kind</dt><dd>${ENTRY_KIND[f.kind]}</dd><dt>Action</dt><dd data-entry-action>${html(ENTRY_ACTION[e?.action] || pending)}</dd><dt>Base SHA</dt><dd><code data-base-sha>${html(f.baseSha || "none: new file")}</code></dd><dt>Result SHA</dt><dd><code data-result-sha>${html(e?.resultSha || pending)}</code></dd><dt>Size</dt><dd>${new TextEncoder().encode(f.content).length} bytes</dd><dt>Lines</dt><dd>${e && e.added !== null ? `+${e.added} / −${e.removed}` : "not counted"}</dd>${e?.bom ? `<dt>Byte order mark</dt><dd data-entry-bom>${BOM_CHANGE[e.bom]}</dd>` : ""}`;
     }
     const writes = cs ? fileWrites(cs).length : 0,
       where = cs ? `${cs.target.repository} on ${cs.target.branch}` : "";
@@ -489,21 +496,31 @@ export class PublishDialog extends HTMLElement {
     const confirm = this.querySelector("[data-confirm]");
     if (!confirm) return;
     // A Stale change set cannot be approved until a merge or reload builds a
-    // new one from the latest remote file.
-    const approvable = !!cs && writes > 0 && !this.staleRemote,
+    // new one from the latest remote file. Neither can one built on a
+    // baseline a Publish attempt already used: Studio's own writes would read
+    // back as remote changes.
+    const spent = this.spentBaseline(),
+      approvable = !!cs && writes > 0 && !this.staleRemote && !spent,
       approved = approvable && this.approvedChangeSetId === cs.id;
     confirm.checked = approved;
     confirm.disabled = !approvable;
     this.querySelector("[data-approval-label]").textContent = this.staleRemote
       ? "Stale change set: GitHub has a newer version. Merge, reload or cancel below before approving."
-      : !cs
-        ? this.changeSetError
-          ? "Nothing to approve: fix the problem shown under the change set first."
-          : "Building the change set…"
-        : writes
-          ? `I reviewed ${writes} file ${writes === 1 ? "write" : "writes"} to ${where} (change set ${shortChangeSetId(cs.id)}).`
-          : `Nothing to approve: every file already matches ${where} (change set ${shortChangeSetId(cs.id)}).`;
+      : spent
+        ? `A publish attempt already ran on this remote baseline. Load the remote ${this.kind === "workflow" ? "workflow" : "README"} again to review a new change set.`
+        : !cs
+          ? this.changeSetError
+            ? "Nothing to approve: fix the problem shown under the change set first."
+            : "Building the change set…"
+          : writes
+            ? `I reviewed ${writes} file ${writes === 1 ? "write" : "writes"} to ${where} (change set ${shortChangeSetId(cs.id)}).`
+            : `Nothing to approve: every file already matches ${where} (change set ${shortChangeSetId(cs.id)}).`;
     this.querySelector("[data-commit]").disabled = !approved;
+  }
+  // True once a Publish attempt ran on the loaded baseline. Only loading,
+  // reloading or merging a remote file (a new baseline) allows another one.
+  spentBaseline() {
+    return !!this.baseline && this.baseline === this.executedBaseline;
   }
   // The commit message is part of the Change set: editing it builds a new
   // one and withdraws approval.
@@ -525,6 +542,10 @@ export class PublishDialog extends HTMLElement {
         "Read-only mode. Re-check access for this exact target before publishing.",
       );
     const cs = this.changeSet;
+    if (this.spentBaseline())
+      throw new Error(
+        "A publish attempt already ran on this remote baseline. Load the remote file again before publishing. Nothing was written.",
+      );
     if (
       !cs ||
       this.approvedChangeSetId !== cs.id ||
@@ -555,7 +576,8 @@ export class PublishDialog extends HTMLElement {
       changeSetContents(this.changeFiles),
       (op, data) => this.client.request(op, data),
     );
-    // Approval covers one attempt; a retry needs a fresh review.
+    // Approval covers one attempt; a retry needs a fresh baseline and review.
+    this.executedBaseline = this.baseline;
     this.approvedChangeSetId = null;
     this.changeSetView();
     this.querySelector("[data-commit]").disabled = true;

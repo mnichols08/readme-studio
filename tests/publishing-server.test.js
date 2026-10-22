@@ -2,7 +2,7 @@ import { generateWorkflow } from "../src/workflows/model.js";
 // @vitest-environment node
 import { it, expect, vi } from "vitest";
 import { createPublishingService } from "../server/publishing.js";
-import { gitBlobSha } from "../src/publishing/change-set.js";
+import { buildChangeSet, gitBlobSha } from "../src/publishing/change-set.js";
 const origin = "https://studio.example",
   sha = "a".repeat(40),
   newSha = "b".repeat(40),
@@ -26,6 +26,7 @@ function harness({
   protectedBranch = false,
   rules = [],
   rulesStatus = 200,
+  remoteContent = "# Old",
 } = {}) {
   let clock = 1000,
     cookie,
@@ -99,7 +100,7 @@ function harness({
               encoding: "base64",
               size: 6,
               sha,
-              content: Buffer.from("# Old").toString("base64"),
+              content: Buffer.from(remoteContent).toString("base64"),
             }
           : {},
         { status: exists ? 200 : 404 },
@@ -181,6 +182,39 @@ it("rejects cross-origin, CSRF, arbitrary proxy and unconfirmed writes", async (
     ).response.status,
   ).toBe(400);
   expect(h.upstream.mock.calls.some(([, o]) => o.method === "PUT")).toBe(false);
+});
+it("reads a BOM-prefixed README as the exact bytes its Base SHA names", async () => {
+  const raw = "\uFEFF# Hi\n",
+    h = harness({ remoteContent: raw });
+  await h.connect();
+  const t = {
+      repository: "octocat/octocat",
+      branch: "main",
+      path: "README.md",
+    },
+    baseline = (await h.request("read", t)).value,
+    baseSha = await gitBlobSha(raw);
+  // A dropped BOM would make an identical draft look like an update.
+  expect(baseline.content).toBe(raw);
+  const build = (content) =>
+    buildChangeSet({
+      target: t,
+      message: "Update",
+      files: [
+        {
+          path: "README.md",
+          kind: "readme",
+          baseSha,
+          baseContent: baseline.content,
+          content,
+        },
+      ],
+    });
+  expect((await build(baseline.content)).entries[0].action).toBe("unchanged");
+  expect((await build("# Hi\n")).entries[0]).toMatchObject({
+    action: "update",
+    bom: "removed",
+  });
 });
 it.each([true, false])(
   "loads and commits an existing=%s README without changing UTF-8 source",

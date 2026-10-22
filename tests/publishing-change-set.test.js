@@ -112,6 +112,38 @@ describe("buildChangeSet", () => {
       "README.md",
     ]);
   });
+  it("keeps a remote BOM in the Base SHA and names an update that drops or adds it", async () => {
+    const remote = "\uFEFF# Hi\n",
+      baseSha = await gitBlobSha(remote);
+    // git hash-object of EF BB BF "# Hi\n".
+    expect(baseSha).toBe("4489fbf4ced9bc5f0603376c08477311abd8ed43");
+    const entry = async (content, base = remote) =>
+      (
+        await build({
+          files: [
+            readme(content, {
+              baseSha: await gitBlobSha(base),
+              baseContent: base,
+            }),
+          ],
+        })
+      ).entries[0];
+    // Identical bytes, BOM included: nothing to write.
+    expect(await entry(remote)).toMatchObject({
+      action: "unchanged",
+      bom: null,
+    });
+    // Same text without the BOM: a real write the review must name.
+    expect(await entry("# Hi\n")).toMatchObject({
+      action: "update",
+      bom: "removed",
+    });
+    expect(await entry(remote, "# Hi\n")).toMatchObject({
+      action: "update",
+      bom: "added",
+    });
+    expect((await build()).entries.at(-1).bom).toBeNull();
+  });
   it("is a frozen, versioned manifest without content", async () => {
     const cs = await build();
     expect(cs).toMatchObject({

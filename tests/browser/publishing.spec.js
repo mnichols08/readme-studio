@@ -19,6 +19,9 @@ async function setup(
     access = {},
     preflightOffline = false,
     load = true,
+    // When set, the README read returns remote.content with its real Git
+    // blob SHA; tests may change remote.content between loads.
+    remote = null,
   } = {},
 ) {
   const writes = [],
@@ -101,6 +104,11 @@ async function setup(
         sha: stale && reads > 1 ? next : exists ? sha : null,
         commitSha: sha,
       };
+      if (remote)
+        Object.assign(data, {
+          content: remote.content,
+          sha: await gitBlobSha(remote.content),
+        });
     }
     if (op === "read" && route.request().postDataJSON().kind === "asset") {
       // With staleAsset, the dark banner appears on GitHub after the review.
@@ -203,6 +211,15 @@ for (const exists of [true, false])
     expect(writes[0].sha).toBe(exists ? sha : null);
     expect(writes[0].message).toBe("Personal update");
     expect(writes[0].resultSha).toBe(await gitBlobSha(writes[0].content));
+    // The change set ran: it cannot be approved again on this baseline.
+    const box = d.locator("[data-confirm]");
+    await expect(box).toBeDisabled();
+    await expect(box).toHaveAccessibleName(
+      /A publish attempt already ran on this remote baseline/,
+    );
+    await expect(
+      d.getByRole("button", { name: "Confirm and publish README" }),
+    ).toBeDisabled();
     await expect(
       page.getByRole("textbox", { name: "Markdown editor", exact: true }),
     ).toHaveValue("# New 🦀");
@@ -521,12 +538,80 @@ for (const failAsset of [false, true])
       ).toHaveText(write.resultSha);
     }
     expect(writes[0].sha).toBeNull();
-    // Approval covers one attempt only.
-    await expect(d.getByLabel(approval)).not.toBeChecked();
+    // Approval covers one attempt only, even after a partial failure.
+    await expect(d.locator("[data-confirm]")).not.toBeChecked();
+    await expect(d.locator("[data-confirm]")).toBeDisabled();
     await expect(
       page.getByRole("textbox", { name: "Markdown editor", exact: true }),
     ).not.toHaveValue(/assets\/readme/);
   });
+test("a README that already matches needs no write; only assets publish", async ({
+  page,
+}) => {
+  const remote = { content: "# Old" },
+    { d, writes } = await setup(page, { assets: true, load: false, remote });
+  await loadWithAssets(d);
+  // GitHub now holds exactly the prepared README; load it again.
+  remote.content = await d.getByLabel("Prepared Markdown").inputValue();
+  await d.getByRole("button", { name: "Load remote README" }).click();
+  const readme = entry(d, "README.md");
+  await expect(readme.locator("[data-entry-action]")).toHaveText(
+    "unchanged: no write",
+  );
+  await expect(readme.locator("[data-base-sha]")).toHaveText(
+    await gitBlobSha(remote.content),
+  );
+  await expect(readme.locator("[data-result-sha]")).toHaveText(
+    await gitBlobSha(remote.content),
+  );
+  await expect(d.locator("[data-change-set-id]")).toContainText(
+    "2 file writes, 1 unchanged",
+  );
+  await d.getByLabel(approval).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await expect(d.locator("[data-status]")).toContainText(
+    "README needed no write",
+  );
+  expect(writes.map((w) => w.path)).toEqual([
+    "assets/readme/banner-light.svg",
+    "assets/readme/banner-dark.svg",
+  ]);
+  await expect(d.locator("[data-change-set-results]")).toContainText(
+    "README.md: no write",
+  );
+  await expect(d.locator("[data-confirm]")).toBeDisabled();
+});
+test("an unchanged README has nothing to approve; a dropped remote BOM is named", async ({
+  page,
+}) => {
+  const remote = { content: "# Old" },
+    { d, writes } = await setup(page, { remote });
+  remote.content = await d.getByLabel("Prepared Markdown").inputValue();
+  await d.getByRole("button", { name: "Load remote README" }).click();
+  const readme = entry(d, "README.md"),
+    box = d.locator("[data-confirm]");
+  await expect(readme.locator("[data-entry-action]")).toHaveText(
+    "unchanged: no write",
+  );
+  await expect(box).toBeDisabled();
+  await expect(box).toHaveAccessibleName(
+    /Nothing to approve: every file already matches octocat\/octocat on main/,
+  );
+  await expect(
+    d.getByRole("button", { name: "Confirm and publish README" }),
+  ).toBeDisabled();
+  await expect(readme.locator("[data-entry-bom]")).toHaveCount(0);
+  // Same text behind a UTF-8 BOM on GitHub: publishing would drop the BOM,
+  // so the entry is a write and says so.
+  remote.content = `\uFEFF${remote.content}`;
+  await d.getByRole("button", { name: "Load remote README" }).click();
+  await expect(readme.locator("[data-entry-action]")).toHaveText("update");
+  await expect(readme.locator("[data-entry-bom]")).toContainText(
+    "Removed: the remote file starts with a UTF-8 byte order mark",
+  );
+  await expect(box).toBeEnabled();
+  expect(writes).toHaveLength(0);
+});
 test("editing the commit message withdraws approval of the change set", async ({
   page,
 }) => {
@@ -564,7 +649,9 @@ test("editing the commit message withdraws approval of the change set", async ({
   await expect(d.locator("[data-status]")).toContainText("published");
   expect(writes).toHaveLength(1);
   expect(writes[0].message).toBe("Final message");
-  expect(await label()).toContain(writes[0].changeSetId.slice(0, 8));
+  await expect(d.locator("[data-change-set-id]")).toContainText(
+    writes[0].changeSetId.slice(0, 8),
+  );
 });
 test("a stale asset blocks every write and needs a new approval", async ({
   page,

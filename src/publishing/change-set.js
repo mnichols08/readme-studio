@@ -44,6 +44,15 @@ function lineCounts(action, before, content) {
   const { added, removed } = publishDiff(before, content);
   return { added, removed };
 }
+// A UTF-8 byte order mark is invisible in a diff, so an update that adds or
+// removes one says so. Null when unchanged, unknown or not an update.
+const BOM = "\uFEFF";
+export function byteOrderMarkChange(action, before, content) {
+  if (action !== "update" || typeof before !== "string") return null;
+  const had = before.startsWith(BOM),
+    has = content.startsWith(BOM);
+  return had === has ? null : had ? "removed" : "added";
+}
 // Entries that make a Contents write (everything except `unchanged`).
 export const fileWrites = (changeSet) =>
   changeSet.entries.filter((entry) => entry.action !== "unchanged");
@@ -57,9 +66,10 @@ export function entryTarget(changeSet, entry) {
   };
 }
 // files: [{path, kind: "readme"|"asset"|"workflow", baseSha|null, content,
-// baseContent?, fields?}]. `baseContent` only feeds the line counts; `fields`
-// are extra request fields (banner settings, workflow config) the server
-// needs to validate a write. Neither is part of the manifest or its id.
+// baseContent?, fields?}]. `baseContent` (the remote text, BOM included) only
+// feeds the review-only line counts and BOM note; `fields` are extra request
+// fields (banner settings, workflow config) the server needs to validate a
+// write. Neither is stored in the manifest, and neither changes its id.
 export async function buildChangeSet({
   target: value,
   baseCommitSha = null,
@@ -111,6 +121,7 @@ export async function buildChangeSet({
         resultSha,
         bytes: encoder.encode(content).length,
         ...lineCounts(action, file.baseContent, content),
+        bom: byteOrderMarkChange(action, file.baseContent, content),
       }),
     );
   }
