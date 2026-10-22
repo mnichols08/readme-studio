@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.6.2.** Turn drift check findings into reviewed fixes: each line's proposed edit shows its evidence and exact diff, applies only after you approve it and only to the Markdown that was checked, and can be undone. Nothing is published automatically. [Reviewed drift fixes](docs/drift-remediation.md) · [Drift checks](docs/drift-checks.md) · [Evidence snapshots](docs/evidence-snapshots.md)
+**Version 1.7.0.** Start from a goal: the first screen asks whether you want to write a profile README, write a repository README or audit your repository READMEs, keeps every earlier way to start and says where your work is kept. Your goal is saved in this browser and never changes a document. [Guided start](docs/guided-start.md) · [Reviewed drift fixes](docs/drift-remediation.md) · [Drift checks](docs/drift-checks.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -15,7 +15,7 @@ npm ci
 npm run dev
 ```
 
-Choose a template, import Markdown, open a Studio project, or start blank. Use the Create, Design, Review, GitHub and Save groups; `Ctrl/Cmd+K` searches tools and content. [Getting started](docs/getting-started.md) · [Task tutorials](docs/tutorials.md) · [All documentation](docs/index.md)
+Guided start asks whether you want to write a profile README, write a repository README or audit your repository READMEs, and says where your work is kept; templates, Markdown import, Studio projects and blank drafts remain one click away. Use the Create, Design, Review, GitHub and Save groups; `Ctrl/Cmd+K` searches tools and content. [Getting started](docs/getting-started.md) · [Task tutorials](docs/tutorials.md) · [All documentation](docs/index.md)
 
 ## What you can do
 

@@ -1,5 +1,6 @@
 export const commandGroups = {
   Create: [
+    ["guided-start", "Guided start"],
     ["templates", "Templates"],
     ["repository-readme", "Repository README"],
     ["import", "Import"],

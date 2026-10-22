@@ -1,0 +1,49 @@
+# Guided start
+
+Guided start is the first screen of a new workspace. It asks what you want to do first, keeps every earlier way to begin and says plainly where your work is kept. It opens by itself only when this browser has no saved workspace. Reopen it at any time from **Create → Guided start** or by searching for "Guided start" with `Ctrl/Cmd+K`.
+
+## Choose a goal
+
+Step 1 offers three goals:
+
+| Goal                            | What happens next                                                                                                            |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Write my profile README**     | Start from a profile template, Autofill from GitHub, or Start a blank profile README.                                        |
+| **Write a repository README**   | Build a repository README, Import existing README (a GitHub repository or a local file), or Start a blank repository README. |
+| **Audit my repository READMEs** | Open README audit. It reads your public repositories from GitHub, so it needs a connection.                                  |
+
+Choosing a goal shows step 2 in the same dialog and moves keyboard focus to its heading. **Back** returns to step 1 with focus on the goal you chose. Every option in step 2 opens that tool's normal flow, with its usual review and Undo; the blank options create an empty document in the Profile or Repositories group without a GitHub target. Escape or an outside click closes Guided start at either step and returns focus as other dialogs do.
+
+Your goal is saved in this browser's workspace when you choose it. It never changes a document. When you reopen Guided start, your current goal is marked ("Your current goal") and focused. A saved goal never opens a dialog by itself; later releases use it to suggest next steps.
+
+### Offline
+
+When the browser reports that it is offline, **Open README audit** stays visible and focusable but is marked unavailable (`aria-disabled`), with the reason read as its description. Activating it does nothing. Step 2 then offers **Import existing README** (local files work offline) and **Start a blank repository README** instead. Reopen Guided start once you are back online to open the audit. The profile and repository goals work offline, apart from options that read GitHub (Autofill and GitHub import), which report their own network errors.
+
+## Other ways to start
+
+The Start paths from earlier versions stay in step 1 under their existing names: **Start from a template**, **Autofill from GitHub**, **Import existing README** (named "Import GitHub README" before 1.7.0; the import dialog also accepts files), **Open Studio project**, **Start blank** and **Explore the sample profile**. On first run the sample profile is already open, so Explore closes the dialog; when Guided start is reopened later it adds a fresh copy of the sample.
+
+## Where your work is kept
+
+Guided start always shows the Locality statement:
+
+- Drafts are saved only in this browser. They are not encrypted and clearing site data removes them, so download a backup (**Manage drafts → Download all drafts backup**) to keep a copy.
+- GitHub is contacted only when you choose import, autofill or audit. Your Markdown is not uploaded for analysis.
+- Nothing is published without its own review.
+
+When browser storage is blocked, the first line instead says this is a temporary workspace that lasts only until the tab closes. The goal you choose then stays in memory only. The statement links to the [privacy notes](privacy.md).
+
+## What is saved, and where
+
+The goal is stored in an optional `guide` field of the version-1 workspace (ADR 0004): `{ "version": 1, "goal": null | "profile" | "repository" | "audit", "nextSteps": true }`. It is not a workspace setting, so it is not copied into Studio projects.
+
+| Where                                     | Contains the goal?                                                  |
+| ----------------------------------------- | ------------------------------------------------------------------- |
+| Browser storage and storage recovery      | Yes                                                                 |
+| Download all drafts backup                | Yes. A replace restore uses the backup's goal; a merge keeps yours. |
+| Studio project (`.readme-studio.json`)    | No, including embedded libraries and saved preferences              |
+| Download draft backup (single-draft JSON) | No                                                                  |
+| Export README / Copy Markdown             | No                                                                  |
+
+A workspace from an earlier version gets the default (no goal). An unknown goal reads as no goal. A `guide` written by a newer version (another `version`) is kept unchanged if it is at most 1 KB of JSON and is treated as no goal until you choose again; a larger one is replaced by the default. Guided start adds no network request, telemetry or storage key of its own.

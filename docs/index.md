@@ -3,6 +3,7 @@
 README Studio exports ordinary Markdown/HTML. Its preview is an approximation of GitHub, and optional remote images/widgets depend on their providers.
 
 - [Getting started](getting-started.md)
+- [Guided start](guided-start.md) — choose a profile README, repository README or audit goal, keep every earlier Start path, and see where your work is kept
 - [Editing and recovery](editing.md)
 - [Importing source](imports.md)
 - [Task tutorials](tutorials.md)

@@ -1,6 +1,6 @@
 # Getting started
 
-Run `npm ci` and `npm run dev` with Node 22.12+. First launch offers templates, Markdown import, a portable Studio project, or a blank draft. No account is needed for authoring.
+Run `npm ci` and `npm run dev` with Node 22.12+. First launch opens [Guided start](guided-start.md): choose to write a profile README, write a repository README or audit your repository READMEs, or use another way to start (templates, GitHub autofill, README import, a portable Studio project, a blank draft or the sample profile). It also says where your work is kept. No account is needed for authoring. Reopen it from **Create → Guided start**.
 
 1. Choose **Templates** for a guided starting point, or **Import** for existing source. Import is reviewed before application.
 2. Use **Build** to select and reorder sections. Open the relevant studio to configure badges, projects, themes or components.
