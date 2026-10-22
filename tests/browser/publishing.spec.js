@@ -1,7 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { evaluatePreflight } from "../../src/publishing/preflight.js";
+import { gitBlobSha } from "../../src/publishing/change-set.js";
 const sha = "a".repeat(40),
-  next = "b".repeat(40);
+  next = "b".repeat(40),
+  // The Publish approval names the file count, target and change set.
+  approval = /I reviewed \d+ file writes? to/;
 async function setup(
   page,
   {
@@ -11,6 +14,8 @@ async function setup(
     writable = true,
     assets = false,
     failAsset = false,
+    staleAsset = false,
+    noCrypto = false,
     access = {},
     preflightOffline = false,
     load = true,
@@ -19,7 +24,14 @@ async function setup(
   const writes = [],
     ops = [];
   let connected = false,
-    reads = 0;
+    reads = 0,
+    darkReads = 0;
+  if (noCrypto)
+    await page.addInitScript(() =>
+      Object.defineProperty(Crypto.prototype, "subtle", {
+        get: () => undefined,
+      }),
+    );
   await page.route("**/api/publishing/*", async (route) => {
     const op = route.request().url().split("/").at(-1);
     ops.push(op);
@@ -90,13 +102,19 @@ async function setup(
         commitSha: sha,
       };
     }
-    if (op === "read" && route.request().postDataJSON().kind === "asset")
+    if (op === "read" && route.request().postDataJSON().kind === "asset") {
+      // With staleAsset, the dark banner appears on GitHub after the review.
+      const changed =
+        staleAsset &&
+        route.request().postDataJSON().path.endsWith("-dark.svg") &&
+        ++darkReads > 1;
       data = {
         ...route.request().postDataJSON(),
-        content: "",
-        sha: null,
+        content: changed ? "<svg>remote</svg>" : "",
+        sha: changed ? next : null,
         commitSha: sha,
       };
+    }
     if (op === "commit") {
       writes.push(route.request().postDataJSON());
       if (
@@ -169,15 +187,22 @@ for (const exists of [true, false])
     const { d, writes } = await setup(page, { exists });
     expect(writes).toHaveLength(0);
     await expect(d.getByLabel("Prepared Markdown")).toHaveValue("# New 🦀");
-    await d.getByRole("button", { name: "Confirm and publish README" }).click();
-    expect(writes).toHaveLength(0);
-    await expect(d.locator("[data-status]")).toContainText("confirm");
-    await d.getByLabel(/I reviewed this diff/).check();
+    // Publish stays disabled until this exact change set is approved.
+    await expect(
+      d.getByRole("button", { name: "Confirm and publish README" }),
+    ).toBeDisabled();
+    await expect(d.locator('[data-entry="README.md"]')).toContainText(
+      exists ? "update" : "create (new file)",
+    );
     await d.getByLabel("Commit message").fill("Personal update");
+    await expect(d.getByLabel(approval)).toBeEnabled();
+    await d.getByLabel(approval).check();
     await d.getByRole("button", { name: "Confirm and publish README" }).click();
     await expect(d.locator("[data-status]")).toContainText("published");
+    expect(writes).toHaveLength(1);
     expect(writes[0].sha).toBe(exists ? sha : null);
     expect(writes[0].message).toBe("Personal update");
+    expect(writes[0].resultSha).toBe(await gitBlobSha(writes[0].content));
     await expect(
       page.getByRole("textbox", { name: "Markdown editor", exact: true }),
     ).toHaveValue("# New 🦀");
@@ -191,7 +216,7 @@ test("failed publish preserves review and download at mobile width", async ({
 }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   const { d } = await setup(page, { fail: true });
-  await d.getByLabel(/I reviewed this diff/).check();
+  await d.getByLabel(approval).check();
   await d.getByRole("button", { name: "Confirm and publish README" }).click();
   await expect(d.locator("[data-status]")).toContainText("branch protection");
   // GitHub's refusal routes the author to the new-branch review.
@@ -212,12 +237,17 @@ test("stale README requires explicit conflict resolution and fresh confirmation"
   page,
 }) => {
   const { d, writes } = await setup(page, { stale: true });
-  await d.getByLabel(/I reviewed this diff/).check();
+  await d.getByLabel(approval).check();
   await d.getByRole("button", { name: "Confirm and publish README" }).click();
   await expect(d.locator("[data-status]")).toContainText(
     "Remote README changed",
   );
   expect(writes).toHaveLength(0);
+  // A Stale change set cannot be approved, even after a message edit.
+  await expect(d.locator("[data-confirm]")).toBeDisabled();
+  await d.getByLabel("Commit message").fill("Edited while stale");
+  await expect(d.locator("[data-change-set-id]")).toContainText("Change set");
+  await expect(d.locator("[data-confirm]")).toBeDisabled();
   await d.getByRole("button", { name: "Merge local and remote" }).click();
   await d.getByRole("button", { name: "Review merged README" }).click();
   await expect(d.locator("[data-status]")).toContainText("every conflict");
@@ -225,8 +255,8 @@ test("stale README requires explicit conflict resolution and fresh confirmation"
   await d.locator("[data-manual]").fill("# Resolved");
   await d.getByRole("button", { name: "Review merged README" }).click();
   await expect(d.getByLabel("Prepared Markdown")).toHaveValue("# Resolved");
-  await expect(d.getByLabel(/I reviewed this diff/)).not.toBeChecked();
-  await d.getByLabel(/I reviewed this diff/).check();
+  await expect(d.getByLabel(approval)).not.toBeChecked();
+  await d.getByLabel(approval).check();
   await d.getByRole("button", { name: "Confirm and publish README" }).click();
   await expect(d.locator("[data-status]")).toContainText("published");
   expect(writes[0].sha).toBe(next);
@@ -250,7 +280,7 @@ test("dialog starts in Read-only mode with no publish control", async ({
   await expect(d.locator("[data-preflight] [role=status]")).toContainText(
     "Read-only mode",
   );
-  await expect(d.getByLabel(/I reviewed this diff/)).toHaveCount(0);
+  await expect(d.getByLabel(approval)).toHaveCount(0);
   await expect(
     d.getByRole("button", { name: /Confirm and publish/ }),
   ).toHaveCount(0);
@@ -284,7 +314,7 @@ test("read-only repository shows the failing check and no confirm control", asyn
   );
   // Remote content is still reviewable; write controls are not rendered.
   await expect(d.getByLabel("Prepared Markdown")).toHaveValue("# New 🦀");
-  await expect(d.getByLabel(/I reviewed this diff/)).toHaveCount(0);
+  await expect(d.getByLabel(approval)).toHaveCount(0);
   await expect(
     d.getByRole("button", { name: "Confirm and publish README" }),
   ).toHaveCount(0);
@@ -299,7 +329,7 @@ test("read-only repository shows the failing check and no confirm control", asyn
   access.installation = { permissions: { contents: "write" } };
   await d.getByRole("button", { name: "Re-check access" }).click();
   await expect(check).toContainText("Pass");
-  await expect(d.getByLabel(/I reviewed this diff/)).not.toBeChecked();
+  await expect(d.getByLabel(approval)).not.toBeChecked();
   await expect(
     d.getByRole("button", { name: "Confirm and publish README" }),
   ).toBeVisible();
@@ -309,7 +339,7 @@ test("the server's own Preflight refusal does not suggest the new-branch route",
   page,
 }) => {
   const { d } = await setup(page, { fail: "preflight" });
-  await d.getByLabel(/I reviewed this diff/).check();
+  await d.getByLabel(approval).check();
   await d.getByRole("button", { name: "Confirm and publish README" }).click();
   await expect(d.locator("[data-status]")).toContainText("cannot push");
   await expect(d.locator("[data-status]")).not.toContainText(
@@ -329,7 +359,7 @@ test("archived repository and missing branch keep the review read-only", async (
     },
   });
   await expect(d.locator('[data-check="not-archived"]')).toContainText("Fail");
-  await expect(d.getByLabel(/I reviewed this diff/)).toHaveCount(0);
+  await expect(d.getByLabel(approval)).toHaveCount(0);
   // The server refuses branch creation in an archived repository too.
   await expect(d.locator("[data-new-branch-route]")).toHaveCount(0);
   access.repository = { push: true, archived: false, defaultBranch: "main" };
@@ -394,28 +424,69 @@ test("branch creation is explicit and does not commit a README", async ({
   await expect(d.getByLabel("Prepared Markdown")).not.toBeVisible();
 });
 
+// Opens the review with the generated banner assets in the change set.
+async function loadWithAssets(d) {
+  await d
+    .getByLabel("Include generated banner SVG files in this publishing plan")
+    .check();
+  await d
+    .getByLabel(
+      "Update only Studio-owned banner references in the prepared README",
+    )
+    .check();
+  await d.getByRole("button", { name: "Load remote README" }).click();
+  await expect(d.getByRole("heading", { name: "Change set" })).toBeVisible();
+}
+const entry = (d, path) => d.locator(`[data-entry="${path}"]`);
 for (const failAsset of [false, true])
-  test(`asset plan is reviewed and partial=${failAsset} reports exact file outcomes`, async ({
+  test(`change set lists every file and partial=${failAsset} reports exact file outcomes`, async ({
     page,
   }) => {
     const { d, writes } = await setup(page, { assets: true, failAsset });
-    await d
-      .getByLabel("Include generated banner SVG files in this publishing plan")
-      .check();
-    await d
-      .getByLabel(
-        "Update only Studio-owned banner references in the prepared README",
-      )
-      .check();
-    await d.getByRole("button", { name: "Load remote README" }).click();
-    await expect(
-      d.getByRole("heading", { name: "Asset publish plan" }),
-    ).toBeVisible();
+    await loadWithAssets(d);
     await expect(d.getByLabel("Prepared Markdown")).toHaveValue(
       /assets\/readme\/banner-light.svg/,
     );
+    // Target, branch and base commit head the change set.
+    await expect(d.locator("[data-change-set-target]")).toContainText(
+      `octocat/octocat · branch main · base commit ${sha}`,
+    );
+    await expect(d.locator("[data-change-set]")).toContainText("Not atomic");
+    // One row per File change, in execution order: assets first, README last.
+    await expect(d.locator("[data-entry]")).toHaveCount(3);
+    expect(
+      await d
+        .locator("[data-entry]")
+        .evaluateAll((rows) => rows.map((r) => r.dataset.entry)),
+    ).toEqual([
+      "assets/readme/banner-light.svg",
+      "assets/readme/banner-dark.svg",
+      "README.md",
+    ]);
+    const light = entry(d, "assets/readme/banner-light.svg");
+    await expect(light.locator("[data-entry-action]")).toHaveText(
+      "create (new file)",
+    );
+    await expect(light.locator("[data-base-sha]")).toHaveText("none: new file");
+    await expect(light.locator("[data-result-sha]")).toHaveText(
+      /^[a-f0-9]{40}$/,
+    );
+    const readme = entry(d, "README.md");
+    await expect(readme.locator("[data-entry-action]")).toHaveText("update");
+    await expect(readme.locator("[data-base-sha]")).toHaveText(sha);
+    // Asset diffs are expandable with the shared source-diff panes.
+    await light.getByText("Diff for assets/readme/banner-light.svg").click();
+    await expect(
+      light.getByLabel("Generated assets/readme/banner-light.svg"),
+    ).toHaveValue(/<svg/);
+    await expect(d.getByLabel(approval)).toHaveAccessibleName(
+      /I reviewed 3 file writes to octocat\/octocat on main \(change set [a-f0-9]{8}\)/,
+    );
     expect(writes).toHaveLength(0);
-    await d.getByLabel(/I reviewed this diff/).check();
+    await d.getByLabel(approval).check();
+    const id = (
+      await d.locator("[data-change-set-id] code").last().textContent()
+    ).trim();
     await d.getByRole("button", { name: "Confirm and publish README" }).click();
     if (failAsset) {
       await expect(d.locator("[data-status]")).toContainText(
@@ -425,7 +496,12 @@ for (const failAsset of [false, true])
         "assets/readme/banner-light.svg",
         "assets/readme/banner-dark.svg",
       ]);
-      await expect(d.locator("[data-asset-results]")).toContainText("failed");
+      await expect(d.locator("[data-change-set-results]")).toContainText(
+        "banner-dark.svg: failed",
+      );
+      await expect(d.locator("[data-change-set-results]")).toContainText(
+        "README.md: not attempted",
+      );
     } else {
       await expect(d.locator("[data-status]")).toContainText(
         "README published",
@@ -436,7 +512,110 @@ for (const failAsset of [false, true])
         "README.md",
       ]);
     }
+    // Every write carries the reviewed SHAs and the approved change set id.
+    for (const write of writes) {
+      expect(write.changeSetId).toBe(id);
+      expect(write.resultSha).toBe(await gitBlobSha(write.content));
+      await expect(
+        entry(d, write.path).locator("[data-result-sha]"),
+      ).toHaveText(write.resultSha);
+    }
+    expect(writes[0].sha).toBeNull();
+    // Approval covers one attempt only.
+    await expect(d.getByLabel(approval)).not.toBeChecked();
     await expect(
       page.getByRole("textbox", { name: "Markdown editor", exact: true }),
     ).not.toHaveValue(/assets\/readme/);
   });
+test("editing the commit message withdraws approval of the change set", async ({
+  page,
+}) => {
+  const { d, writes } = await setup(page);
+  const publish = d.getByRole("button", { name: "Confirm and publish README" }),
+    // Its label changes with the change set, so locate it structurally.
+    box = d.locator("[data-confirm]"),
+    label = () => box.evaluate((el) => el.labels[0].textContent);
+  await expect(box).toHaveAccessibleName(approval);
+  await expect(publish).toBeDisabled();
+  // Approval works from the keyboard.
+  await box.focus();
+  await page.keyboard.press("Space");
+  await expect(box).toBeChecked();
+  await expect(publish).toBeEnabled();
+  const before = await label();
+  await d.getByLabel("Commit message").fill("Reworded message");
+  await expect(box).not.toBeChecked();
+  await expect(publish).toBeDisabled();
+  await expect(d.locator("[data-status]")).toContainText(
+    "Approve the new change set",
+  );
+  // The message is part of the change set, so its id changes.
+  await expect.poll(label).not.toBe(before);
+  // An empty message cannot form a change set at all.
+  await d.getByLabel("Commit message").fill("");
+  await expect(box).toBeDisabled();
+  await expect(d.locator("[data-change-set-id]")).toContainText(
+    "commit message",
+  );
+  expect(writes).toHaveLength(0);
+  await d.getByLabel("Commit message").fill("Final message");
+  await box.check();
+  await publish.click();
+  await expect(d.locator("[data-status]")).toContainText("published");
+  expect(writes).toHaveLength(1);
+  expect(writes[0].message).toBe("Final message");
+  expect(await label()).toContain(writes[0].changeSetId.slice(0, 8));
+});
+test("a stale asset blocks every write and needs a new approval", async ({
+  page,
+}) => {
+  const { d, writes } = await setup(page, { assets: true, staleAsset: true });
+  await loadWithAssets(d);
+  const dark = entry(d, "assets/readme/banner-dark.svg"),
+    id = d.locator("[data-change-set-id] code").last();
+  await expect(dark.locator("[data-base-sha]")).toHaveText("none: new file");
+  const before = await id.textContent();
+  await d.getByLabel(approval).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await expect(d.locator("[data-status]")).toContainText("Stale change set");
+  await expect(
+    d.getByRole("heading", { name: "Stale change set" }),
+  ).toBeFocused();
+  expect(writes).toHaveLength(0);
+  // The new change set updates from the latest remote SHA and is unapproved.
+  await expect(dark.locator("[data-base-sha]")).toHaveText(next);
+  await expect(dark.locator("[data-entry-action]")).toHaveText("update");
+  await expect(d.getByLabel(approval)).not.toBeChecked();
+  await expect(
+    d.getByRole("button", { name: "Confirm and publish README" }),
+  ).toBeDisabled();
+  await expect(id).not.toHaveText(before);
+  await d.getByLabel(approval).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await expect(d.locator("[data-status]")).toContainText("README published");
+  expect(writes.map((w) => [w.path, w.sha])).toEqual([
+    ["assets/readme/banner-light.svg", null],
+    ["assets/readme/banner-dark.svg", next],
+    ["README.md", sha],
+  ]);
+});
+test("without Web Crypto the review stays read-only with download", async ({
+  page,
+}) => {
+  const { d, writes } = await setup(page, { noCrypto: true });
+  await expect(d.getByLabel("Prepared Markdown")).toHaveValue("# New 🦀");
+  await expect(d.locator("[data-read-only]")).toContainText(
+    "cannot compute Git blob SHAs",
+  );
+  await expect(d.getByLabel(approval)).toHaveCount(0);
+  await expect(
+    d.getByRole("button", { name: /Confirm and publish/ }),
+  ).toHaveCount(0);
+  await expect(entry(d, "README.md").locator("[data-result-sha]")).toHaveText(
+    "not computed",
+  );
+  await expect(
+    d.getByRole("button", { name: "Download README fallback" }),
+  ).toBeVisible();
+  expect(writes).toHaveLength(0);
+});

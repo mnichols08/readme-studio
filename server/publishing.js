@@ -1,6 +1,7 @@
 import { generateWorkflow } from "../src/workflows/model.js";
 import { randomBytes } from "node:crypto";
 import { validateGeneratedAsset } from "../src/publishing/assets.js";
+import { gitBlobSha } from "../src/publishing/change-set.js";
 import {
   evaluatePreflight,
   blockingFailure,
@@ -476,13 +477,29 @@ export function createPublishingService({
           } catch (e) {
             throw fail(400, e.message);
           }
+          // The write must be exactly the reviewed content (ADR epic69-02).
+          let resultSha;
+          try {
+            resultSha = await gitBlobSha(input.content);
+          } catch (e) {
+            throw fail(503, e.message);
+          }
+          if (resultSha !== input.resultSha)
+            throw fail(
+              400,
+              "Content does not match the reviewed Result SHA. Nothing was written; review the change set again.",
+            );
           const t = await authorizeTarget(s, input, "write");
           const current = await read(s, t);
+          // A create requires the file to be absent; an update requires the
+          // Base SHA. There is no force, delete or ref-rewrite path.
           if (current.sha !== input.sha)
             throw Object.assign(
               fail(
                 409,
-                "Remote README changed since you loaded it. Review the latest version.",
+                input.sha === null
+                  ? `${t.path} now exists on GitHub. Nothing was written; review the remote file and build a new change set.`
+                  : "Remote README changed since you loaded it. Review the latest version.",
               ),
               { remote: current },
             );

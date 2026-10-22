@@ -154,8 +154,6 @@ _Avoid_: Dry run, preview mode, locked
 
 ### Change sets
 
-_Planned for later Epic #69 stories (#98, #99); not implemented yet._
-
 **Change set**:
 The complete, reviewed list of file writes one publish will make to one Publish target and branch: each file's action, Base SHA and Result SHA, plus the commit message. Any change to any of these makes a different Change set.
 _Avoid_: Patch, batch, plan, commit

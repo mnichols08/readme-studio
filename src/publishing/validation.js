@@ -47,31 +47,52 @@ export function target(value) {
     ...(["asset", "workflow"].includes(value.kind) ? { kind: value.kind } : {}),
   };
 }
-export function writeInput(value) {
-  const result = target(value);
+// Shared by writeInput and the Change set builder, so reviewed content and
+// messages are judged exactly as the server judges them.
+export function publishableContent(content) {
   if (
-    typeof value.content !== "string" ||
-    new TextEncoder().encode(value.content).length > MAX_SOURCE_BYTES
+    typeof content !== "string" ||
+    new TextEncoder().encode(content).length > MAX_SOURCE_BYTES
   )
     throw new Error(
       "README exceeds the 750 KB publishing limit. Download it instead.",
     );
+  return content;
+}
+export function commitMessage(message) {
   if (
-    typeof value.message !== "string" ||
-    !value.message.trim() ||
-    value.message.length > 500 ||
-    /[\x00-\x1f\x7f]/.test(value.message)
+    typeof message !== "string" ||
+    !message.trim() ||
+    message.length > 500 ||
+    /[\x00-\x1f\x7f]/.test(message)
   )
     throw new Error("Enter a commit message of 1–500 characters.");
+  return message.trim();
+}
+// One File change of an approved Change set (ADR epic69-02): `sha` is the
+// Base SHA (null only for a create) and `resultSha` the Git blob SHA of
+// `content`, which the server recomputes before writing.
+export function writeInput(value) {
+  const result = target(value),
+    content = publishableContent(value.content),
+    message = commitMessage(value.message);
   if (value.sha !== null && !/^[a-f0-9]{40,64}$/.test(value.sha || ""))
     throw new Error("Reload the remote SHA before publishing.");
+  if (!/^[a-f0-9]{40}$/.test(value.resultSha || ""))
+    throw new Error(
+      "Review the change set again: this write has no Result SHA.",
+    );
+  if (!/^[a-f0-9]{64}$/.test(value.changeSetId || ""))
+    throw new Error("Review the change set again: this write has no id.");
   if (value.confirmed !== true)
     throw new Error("Review and confirm this write first.");
   return {
     ...result,
-    content: value.content,
-    message: value.message.trim(),
+    content,
+    message,
     sha: value.sha,
+    resultSha: value.resultSha,
+    changeSetId: value.changeSetId,
     confirmed: true,
   };
 }
