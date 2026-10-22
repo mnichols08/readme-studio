@@ -146,6 +146,10 @@ export class BuilderForm extends HTMLElement {
   isDirty() {
     return !!this.value && unsavedSection(this.opened, this.value);
   }
+  // Whether the fields can produce Markdown, so Save section can succeed.
+  canSave() {
+    return !!this.value && sectionMarkdown(this.value) !== null;
+  }
   // Saves the section as the submit button does; false when its fields are
   // invalid, so nothing was saved.
   save() {

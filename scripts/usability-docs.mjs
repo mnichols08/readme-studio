@@ -106,6 +106,8 @@ export function scenarioBudget(scenarios, id) {
 }
 
 // The Friction tracker rows, each with the tracker section it was found in.
+// Every table with a "Found by" column counts, wherever it sits, so a row
+// under any other heading is reported by validateFindings instead of skipped.
 export function parseFindings(markdown) {
   const text = String(markdown);
   const sections = [...text.matchAll(/^##\s+(.+?)\s*$/gm)].map((m) => m[1]);
@@ -113,7 +115,7 @@ export function parseFindings(markdown) {
   if (missing.length)
     throw new Error(`Missing tracker sections: ${missing.join(", ")}.`);
   const findings = markdownTables(text)
-    .filter((t) => t.section in SECTIONS && t.header.includes("found by"))
+    .filter((t) => t.header.includes("found by"))
     .flatMap((t) =>
       t.rows.map((row) => ({
         id: row.id,
@@ -163,7 +165,9 @@ export function validateFindings(
     if (!FOUND_BY.includes(f.foundBy))
       problems.push(`${name} has unknown "found by" "${f.foundBy}".`);
     else if (SECTIONS[f.section] !== f.foundBy)
-      problems.push(`${name} (${f.foundBy}) is filed under "${f.section}".`);
+      problems.push(
+        `${name} (${f.foundBy}) is filed under "${f.section || "no section"}".`,
+      );
     if (!(f.severity in SEVERITIES))
       problems.push(`${name} needs a severity from 1 to 4.`);
     if (!STATUSES.includes(f.status))

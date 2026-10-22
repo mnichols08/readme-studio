@@ -13,10 +13,12 @@ import {
   sectionMarkdown,
   unsavedSection,
   unsavedSectionPrompt,
+  UNSAVED_SECTION_ACTIONS,
 } from "../src/workspace/unsaved-section.js";
 import { createBlock } from "../src/markdown/serialize.js";
 import {
   restoreWorkspace,
+  restoreNotice,
   validateWorkspace,
 } from "../src/state/workspace-backup.js";
 
@@ -182,6 +184,39 @@ describe("Friction tracker", () => {
     ).toEqual(['F4 (Scripted run) is filed under "Participant sessions".']);
   });
 
+  it("reports findings tables under any other heading instead of skipping them", () => {
+    const extra = [
+      "## Session notes",
+      header,
+      "| F9 | N1 | 1 · Start | Novice | Participant session | 1 | Open | |",
+      "| F10 | N1 | 2 · Template | Novice | Scripted run | 1 | Open | |",
+      "",
+    ].join("\n");
+    const text = tracker({ scripted: [fixed] }).replace(
+      "## Participant sessions",
+      `${extra}\n## Participant sessions`,
+    );
+    const parsed = parseFindings(text);
+    expect(parsed.findings.map((f) => [f.id, f.section])).toEqual([
+      ["F1", "Scripted run baseline (automated)"],
+      ["F9", "Session notes"],
+      ["F10", "Session notes"],
+    ]);
+    expect(validateFindings(parsed, scenarios)).toEqual([
+      'F9 (Participant session) is filed under "Session notes".',
+      'F10 (Scripted run) is filed under "Session notes".',
+      "F10 is severity 1 and still open.",
+      'Participant sessions say "None recorded" but list findings.',
+    ]);
+    // A table before the first section heading is reported too.
+    const top = parseFindings(
+      `${header}\n| F11 | N1 | 1 · Start | Novice | Scripted run | 3 | Open | |\n\n${tracker({})}`,
+    );
+    expect(validateFindings(top, scenarios)).toEqual([
+      'F11 (Scripted run) is filed under "no section".',
+    ]);
+  });
+
   it("accepts real participant rows once sessions are recorded, open at any severity", () => {
     const participant =
       "| F5 | E1 | 4 · Palette | Experienced | Participant session | 1 | Open | |";
@@ -286,6 +321,8 @@ describe("unsaved section edits (F1)", () => {
       save: "Save section and export",
       skip: "Export without these edits",
       keep: "Keep editing",
+      closed:
+        "The section form closed before its edits were saved, so nothing was saved and Export README did not run. Open the section again to redo the edits.",
     });
     expect(
       unsavedSectionPrompt("copy", { title: "Badge", added: false }),
@@ -297,6 +334,48 @@ describe("unsaved section edits (F1)", () => {
     expect(unsavedSectionPrompt("unknown").body).toMatch(
       /^This section has edits.*Export README/,
     );
+  });
+
+  it("asks before every download of the saved Source, not only Export README", () => {
+    expect(UNSAVED_SECTION_ACTIONS).toEqual([
+      "download",
+      "copy",
+      "save-project",
+      "backup-all",
+      "backup",
+    ]);
+    expect(
+      unsavedSectionPrompt("save-project", { title: "Hero" }),
+    ).toMatchObject({
+      body: "The Hero section has edits that are not in your README yet. Save Studio project uses only saved sections.",
+      save: "Save section and continue",
+      skip: "Continue without these edits",
+    });
+    expect(unsavedSectionPrompt("backup-all", { title: "Hero" })).toMatchObject(
+      {
+        body: "The Hero section has edits that are not in your README yet. Download all drafts backup uses only saved sections.",
+        save: "Save section and download",
+        skip: "Download without these edits",
+      },
+    );
+    expect(unsavedSectionPrompt("backup").body).toContain(
+      "Download draft backup uses only saved sections.",
+    );
+  });
+
+  it("offers no save choice when the fields cannot be saved", () => {
+    expect(
+      unsavedSectionPrompt("download", {
+        title: "Badge",
+        added: false,
+        valid: false,
+      }),
+    ).toMatchObject({
+      body: "The Badge section has edits that are not in your README yet. Export README uses only saved sections. Some of its fields need fixing before it can be saved.",
+      save: null,
+      skip: "Export without these edits",
+      keep: "Keep editing",
+    });
   });
 });
 
@@ -313,6 +392,20 @@ describe("merge restore (F2)", () => {
     ],
     active: "b",
   };
+
+  it("names the opened draft in the notice, also when evidence snapshots overflow", () => {
+    expect(restoreNotice({ mode: "merge", opened: "Kept safe" })).toBe(
+      "Workspace backup restored. Opened Kept safe; your other drafts are still under Current draft.",
+    );
+    expect(
+      restoreNotice({ mode: "merge", opened: "Kept safe", notRestored: 3 }),
+    ).toBe(
+      "Workspace backup restored. Opened Kept safe; your other drafts are still under Current draft. Local evidence snapshots were kept; 3 incoming evidence snapshot(s) did not fit the 100-snapshot workspace limit and remain only in the backup file.",
+    );
+    expect(restoreNotice({ mode: "replace", opened: "Kept safe" })).toBe(
+      "Workspace backup restored.",
+    );
+  });
 
   it("opens the backup's active draft and keeps every local draft", () => {
     const merged = restoreWorkspace(current, backup, "merge");

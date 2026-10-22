@@ -27,7 +27,6 @@ import {
   compareEvidence,
   documentSnapshots,
   differentTarget,
-  WORKSPACE_RETENTION,
 } from "../workspace/evidence-snapshots.js";
 import { portableData } from "../state/portable-data.js";
 import {
@@ -107,6 +106,7 @@ import { version } from "../../package.json";
 import {
   createBackup,
   restoreWorkspace,
+  restoreNotice,
   validateWorkspace,
   uniqueName,
   BACKUP_LIMIT,
@@ -115,6 +115,8 @@ import { safeFilename } from "../state/download.js";
 import { unsavedSectionPrompt } from "../workspace/unsaved-section.js";
 import { contextForBlock } from "../markdown/source-context.js";
 export class AppShell extends HTMLElement {
+  // Section form saves that reached the README (see unsavedSectionGuard).
+  sectionCommits = 0;
   connectedCallback() {
     let saved;
     try {
@@ -561,6 +563,8 @@ export class AppShell extends HTMLElement {
         blocks[i] = b;
       } else blocks.push(createBlock(b.type, b.settings));
       this.store.blocks(blocks);
+      // unsavedSectionGuard runs its tool only after a confirmed save.
+      this.sectionCommits++;
       this.showTab("sections");
       this.content.querySelector(`[data-id="${b.id}"]`)?.focus();
       this.notify("Section saved to README");
@@ -2274,34 +2278,52 @@ export class AppShell extends HTMLElement {
       }
     }
   }
-  // Export README and Copy Markdown use the saved Source. While the open
-  // section form has edits that are not saved yet, ask instead of leaving them
-  // out silently; saving them stays the author's explicit choice.
-  unsavedSectionGuard(action) {
+  // Export README, Copy Markdown, Save Studio project and the draft backups
+  // use the saved Source. While the open section form has edits that are not
+  // saved yet, ask instead of leaving them out silently; saving them stays the
+  // author's explicit choice. Returns true when it asked; `run` then runs only
+  // on the author's choice, and never after a save that did not happen.
+  unsavedSectionGuard(action, run) {
     const form = this.content?.querySelector("builder-form");
     if (!form?.isDirty()) return false;
     const prompt = unsavedSectionPrompt(action, {
       title: blockTypes[form.value.type],
       added: !!form.value.id,
+      valid: form.canSave(),
     });
+    // Save Studio project opens its own dialog in place of this one.
+    const opensDialog = action === "save-project";
     this.modal(
-      `<h1>${html(prompt.heading)}</h1><p>${html(prompt.body)}</p><div class="row-actions"><button class="primary" data-unsaved="save">${html(prompt.save)}</button><button data-unsaved="skip">${html(prompt.skip)}</button><button data-unsaved="keep">${html(prompt.keep)}</button></div>`,
+      `<h1>${html(prompt.heading)}</h1><p>${html(prompt.body)}</p><div class="row-actions">${prompt.save ? `<button class="primary" data-unsaved="save">${html(prompt.save)}</button>` : ""}<button${prompt.save ? "" : ' class="primary"'} data-unsaved="skip">${html(prompt.skip)}</button><button data-unsaved="keep">${html(prompt.keep)}</button></div>`,
     );
-    const run = () =>
-      action === "copy"
-        ? this.copy(this.store.draft.markdown)
-        : this.download(this.store.draft.markdown, "README.md");
+    // The form can be replaced while the question is open (a pane shortcut
+    // or a re-render); its edits are then gone and cannot be saved.
+    const current = () => this.content?.querySelector("builder-form") === form;
     this.querySelectorAll("[data-unsaved]").forEach(
       (button) =>
         (button.onclick = () => {
           const choice = button.dataset.unsaved;
           if (choice === "keep") {
-            this.closeDialog(form.querySelector("[type=submit]"));
+            const submit = form.querySelector("[type=submit]");
+            this.closeDialog(
+              !current()
+                ? undefined
+                : submit && !submit.disabled
+                  ? submit
+                  : form.querySelector("input,textarea,select"),
+            );
             return;
           }
-          this.closeDialog();
           if (choice === "save") {
+            if (!current()) {
+              this.closeDialog();
+              this.notify(prompt.closed, "warning");
+              return;
+            }
+            if (!opensDialog) this.closeDialog();
+            const commits = this.sectionCommits;
             if (!form.save()) {
+              if (opensDialog) this.closeDialog();
               this.notify(
                 "The section could not be saved. Check its fields, then save it.",
               );
@@ -2311,12 +2333,15 @@ export class AppShell extends HTMLElement {
               return;
             }
             // The commit handler explained why the section was not saved.
-            if (form.isConnected) return;
-            if (!this.dialogTrigger?.isConnected)
+            if (this.sectionCommits === commits) {
+              if (opensDialog) this.closeDialog();
+              return;
+            }
+            if (!opensDialog && !this.dialogTrigger?.isConnected)
               this.afterDialogFocus = this.content.querySelector(
                 `[data-id="${form.value.id}"]`,
               );
-          }
+          } else if (!opensDialog) this.closeDialog();
           run();
         }),
     );
@@ -2538,11 +2563,13 @@ export class AppShell extends HTMLElement {
               structuredClone(this.store.draft.metadata),
             );
           if (action === "backup") {
-            this.download(
-              JSON.stringify(portableData(this.store.draft), null, 2),
-              "readme-studio-draft.json",
-              "application/json",
-            );
+            const run = () =>
+              this.download(
+                JSON.stringify(portableData(this.store.draft), null, 2),
+                "readme-studio-draft.json",
+                "application/json",
+              );
+            if (!this.unsavedSectionGuard(action, run)) run();
             return;
           }
           if (action === "delete") {
@@ -2635,11 +2662,11 @@ export class AppShell extends HTMLElement {
             this.applySettings();
             this.closeDialog(this.querySelector("#draft-select"));
             this.notify(
-              notRestored
-                ? `Workspace backup restored. Local evidence snapshots were kept; ${notRestored} incoming evidence snapshot(s) did not fit the ${WORKSPACE_RETENTION}-snapshot workspace limit and remain only in the backup file.`
-                : mode === "merge"
-                  ? `Workspace backup restored. Opened ${this.store.draft.name}; your other drafts are still under Current draft.`
-                  : "Workspace backup restored.",
+              restoreNotice({
+                mode,
+                opened: this.store.draft.name,
+                notRestored,
+              }),
             );
           } catch (e) {
             this.querySelector("#restore-status").textContent =
@@ -2656,7 +2683,11 @@ export class AppShell extends HTMLElement {
   }
   action(action) {
     if (this.workspaceAction?.(action)) return;
-    if (action === "save-project") return saveProjectDialog(this);
+    if (action === "save-project") {
+      if (!this.unsavedSectionGuard(action, () => saveProjectDialog(this)))
+        saveProjectDialog(this);
+      return;
+    }
     if (action === "open-project") return openProjectDialog(this);
     if (action === "workflows")
       this.modal("<workflow-builder></workflow-builder>");
@@ -2761,13 +2792,18 @@ export class AppShell extends HTMLElement {
       case "drift-check":
         this.evidenceSnapshots("[data-drift-run],[data-set-target]");
         break;
-      case "backup-all":
-        this.download(
-          JSON.stringify(createBackup(this.data), null, 2),
-          "readme-studio-workspace.json",
-          "application/json",
-        );
+      case "backup-all": {
+        // createBackup reads this.data when run, so a section saved from the
+        // unsaved-section question is in the file.
+        const run = () =>
+          this.download(
+            JSON.stringify(createBackup(this.data), null, 2),
+            "readme-studio-workspace.json",
+            "application/json",
+          );
+        if (!this.unsavedSectionGuard(action, run)) run();
         break;
+      }
       case "restore":
         this.restoreDialog();
         break;
@@ -2787,14 +2823,16 @@ export class AppShell extends HTMLElement {
       case "import":
         this.importDialog();
         break;
-      case "copy":
-        if (!this.unsavedSectionGuard("copy"))
-          this.copy(this.store.draft.markdown);
+      case "copy": {
+        const run = () => this.copy(this.store.draft.markdown);
+        if (!this.unsavedSectionGuard(action, run)) run();
         break;
-      case "download":
-        if (!this.unsavedSectionGuard("download"))
-          this.download(this.store.draft.markdown, "README.md");
+      }
+      case "download": {
+        const run = () => this.download(this.store.draft.markdown, "README.md");
+        if (!this.unsavedSectionGuard(action, run)) run();
         break;
+      }
       case "theme":
         this.data.settings.theme =
           this.effectiveTheme() === "dark" ? "light" : "dark";

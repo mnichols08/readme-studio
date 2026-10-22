@@ -441,6 +441,16 @@ scenario(
     await page.reload();
     await expect(editor(page)).toHaveValue(driftReadme);
     await mockRepository(page);
+    // "Nothing was written to GitHub" is checked on the wire, not only in
+    // the status text: any write request to a GitHub host fails the run.
+    const writes = [];
+    page.on("request", (request) => {
+      if (
+        ["POST", "PUT", "PATCH", "DELETE"].includes(request.method()) &&
+        /^https:\/\/([\w-]+\.)*github(usercontent)?\.com\//.test(request.url())
+      )
+        writes.push(`${request.method()} ${request.url()}`);
+    });
     await act.search("drift check");
     await act.click(
       dialog(page).getByRole("button", { name: "Set document target" }),
@@ -468,6 +478,7 @@ scenario(
     expect(await markdown(page)).toBe(
       driftReadme.replace("test-unit", "test:unit"),
     );
+    expect(writes).toEqual([]);
   },
 );
 

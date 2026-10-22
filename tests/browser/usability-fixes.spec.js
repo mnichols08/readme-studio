@@ -132,7 +132,7 @@ test.describe("F1: unsaved section edits are never left out of an export silentl
     expect(await markdown(page)).toContain("# Grace Example");
   });
 
-  test("a new section with invalid fields is not saved or exported", async ({
+  test("a section with invalid fields offers no save, and Keep editing returns to its fields", async ({
     page,
   }) => {
     await start(page);
@@ -146,16 +146,113 @@ test.describe("F1: unsaved section edits are never left out of an export silentl
     let downloads = 0;
     page.on("download", () => downloads++);
     await tools(page).getByRole("button", { name: "Export README" }).click();
+    await expect(dialog(page)).toContainText(
+      "Some of its fields need fixing before it can be saved.",
+    );
+    await expect(
+      dialog(page).getByRole("button", { name: /and export$/ }),
+    ).toHaveCount(0);
+    await expect(
+      dialog(page).getByRole("button", { name: "Export without these edits" }),
+    ).toBeFocused();
+    await dialog(page).getByRole("button", { name: "Keep editing" }).click();
+    await expect(dialog(page)).toBeHidden();
+    await expect(page.locator("builder-form input").first()).toBeFocused();
+    await expect(page.getByLabel("Link URL", { exact: true })).toHaveValue(
+      "javascript:x",
+    );
+    expect(downloads).toBe(0);
+    expect(await markdown(page)).toBe(saved);
+  });
+
+  test("a form replaced behind the question is never reported as saved and exported", async ({
+    page,
+  }) => {
+    await start(page);
+    const saved = await markdown(page);
+    await editHero(page);
+    let downloads = 0;
+    page.on("download", () => downloads++);
+    await tools(page).getByRole("button", { name: "Export README" }).click();
+    // The pane shortcut runs while the question is open and replaces the
+    // builder content, and with it the form and its edits.
+    await page.keyboard.press("Alt+4");
+    await expect(page.locator("builder-form")).toHaveCount(0);
     await dialog(page)
-      .getByRole("button", { name: "Add section and export" })
+      .getByRole("button", { name: "Save section and export" })
       .click();
     await expect(dialog(page)).toBeHidden();
     await expect(toast(page)).toHaveText(
-      "The section could not be saved. Check its fields, then save it.",
+      "The section form closed before its edits were saved, so nothing was saved and Export README did not run. Open the section again to redo the edits.",
     );
-    await expect(page.locator("builder-form input").first()).toBeFocused();
     expect(downloads).toBe(0);
     expect(await markdown(page)).toBe(saved);
+  });
+
+  test("Save Studio project and the draft backups ask too, and include the section once saved", async ({
+    page,
+  }) => {
+    await start(page);
+    const saved = await markdown(page);
+    await editHero(page);
+    // Save Studio project: save the section, then the project dialog opens.
+    await page
+      .getByRole("button", { name: "Save Studio project", exact: true })
+      .click();
+    await expect(dialog(page)).toContainText(
+      "Save Studio project uses only saved sections.",
+    );
+    await dialog(page)
+      .getByRole("button", { name: "Save section and continue" })
+      .click();
+    await expect(dialog(page)).toHaveAccessibleName("Save Studio project");
+    const project = JSON.parse(
+      await download(page, () =>
+        dialog(page)
+          .getByRole("button", { name: "Download Studio project" })
+          .click(),
+      ),
+    );
+    expect(project.document.markdown).toContain("# Ada Example");
+    expect(await markdown(page)).toBe(project.document.markdown);
+    await page.locator(".close-dialog").click();
+    await expect(dialog(page)).toBeHidden();
+    // Download all drafts backup without the new edits leaves them in the form.
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    expect(await markdown(page)).toBe(saved);
+    await editHero(page, "Grace Example");
+    await page.getByRole("button", { name: "Manage drafts" }).click();
+    await dialog(page)
+      .getByRole("button", { name: "Download all drafts backup" })
+      .click();
+    await expect(dialog(page)).toContainText(
+      "Download all drafts backup uses only saved sections.",
+    );
+    const backupFile = JSON.parse(
+      await download(page, () =>
+        dialog(page)
+          .getByRole("button", { name: "Download without these edits" })
+          .click(),
+      ),
+    );
+    expect(JSON.stringify(backupFile)).not.toContain("Grace Example");
+    await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+      "Grace Example",
+    );
+    // Download draft backup: save the section, then download it.
+    await page.getByRole("button", { name: "Manage drafts" }).click();
+    await dialog(page)
+      .getByRole("button", { name: "Download draft backup" })
+      .click();
+    await expect(dialog(page)).toContainText(
+      "Download draft backup uses only saved sections.",
+    );
+    const draftFile = await download(page, () =>
+      dialog(page)
+        .getByRole("button", { name: "Save section and download" })
+        .click(),
+    );
+    expect(draftFile).toContain("# Grace Example");
   });
 });
 

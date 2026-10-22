@@ -3,6 +3,7 @@ import {
   validateSnapshots,
   recoverSnapshots,
   mergeSnapshots,
+  WORKSPACE_RETENTION,
 } from "../workspace/evidence-snapshots.js";
 import {
   validateShared,
@@ -117,6 +118,20 @@ export function createBackup(data) {
     version: 1,
     createdAt: new Date().toISOString(),
   };
+}
+// The notification after a restore. A merge always names the draft it opened
+// (the backup's own active draft), also when some incoming evidence snapshots
+// did not fit the workspace limit and stay only in the backup file.
+export function restoreNotice({ mode, opened, notRestored = 0 }) {
+  return [
+    "Workspace backup restored.",
+    mode === "merge" &&
+      `Opened ${opened}; your other drafts are still under Current draft.`,
+    notRestored > 0 &&
+      `Local evidence snapshots were kept; ${notRestored} incoming evidence snapshot(s) did not fit the ${WORKSPACE_RETENTION}-snapshot workspace limit and remain only in the backup file.`,
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 export function restoreWorkspace(current, backup, mode) {
   const incoming = validateWorkspace(backup);
