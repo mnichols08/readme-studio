@@ -265,10 +265,18 @@ test("checks in-document anchors offline without GitHub and explains ineligible 
   ).toBeFocused();
 });
 
-test("discards a drift check when the Markdown changes while GitHub is read", async ({
+test("discards a drift check when the Markdown changes while GitHub is read, hiding the earlier result", async ({
   page,
 }) => {
   await start(page);
+  // A first, successful check shows a result for the current Markdown.
+  await openDrift(page);
+  const panel = page.locator("evidence-snapshots");
+  await panel.getByRole("button", { name: "Run drift check" }).click();
+  await expect(panel.locator("[data-drift-counts]")).toHaveText(
+    "3 observed mismatches · 1 uncertain · 0 unknown · 4 matches",
+    firstRead,
+  );
   let release;
   const held = new Promise((resolve) => (release = resolve));
   let reading;
@@ -291,8 +299,6 @@ test("discards a drift check when the Markdown changes while GitHub is read", as
       return route.fulfill({ json: blob("# Usage\n\n## Install\n") });
     return route.fulfill({ status: 404, json: {} });
   });
-  await openDrift(page);
-  const panel = page.locator("evidence-snapshots");
   await panel.getByRole("button", { name: "Run drift check" }).click();
   await started;
   const edited = source + "\nEdited during the check.\n";
@@ -308,11 +314,49 @@ test("discards a drift check when the Markdown changes while GitHub is read", as
   await expect(panel.locator("[data-status]")).toContainText(
     "Nothing was saved",
   );
-  // No result for the old Markdown is shown.
+  // No result for the old Markdown is shown, including the first run's.
+  await expect(panel.locator("[data-drift]")).toBeHidden();
   await expect(panel.locator("[data-drift-counts]")).toHaveCount(0);
+  await expect(panel).not.toContainText("npm run lint");
   await expect(
     panel.getByRole("button", { name: "Run drift check" }),
   ).toBeFocused();
   // The edit made during the check is kept.
   expect(await markdown(page)).toBe(edited);
+});
+
+test("a failed second drift check hides the first check's result", async ({
+  page,
+}) => {
+  await start(page);
+  await openDrift(page);
+  const panel = page.locator("evidence-snapshots");
+  const run = () =>
+    panel.getByRole("button", { name: "Run drift check" }).click();
+  await run();
+  const drift = panel.locator("[data-drift]");
+  await expect(drift.locator("[data-drift-counts]")).toHaveText(
+    "3 observed mismatches · 1 uncertain · 0 unknown · 4 matches",
+    firstRead,
+  );
+  await page.unroute("https://api.github.com/**");
+  await page.route("https://api.github.com/**", (route) =>
+    route.fulfill({ status: 503, json: {} }),
+  );
+  await run();
+  await expect(panel.locator("[data-status]")).toContainText(
+    "Drift check failed:",
+  );
+  await expect(drift).toBeHidden();
+  await expect(drift.locator("[data-drift-counts]")).toHaveCount(0);
+  await expect(panel).not.toContainText("Compared your Markdown with GitHub");
+  await expect(
+    panel.getByRole("button", { name: "Run drift check" }),
+  ).toBeFocused();
+  // A later successful check shows a fresh result.
+  await mockGitHub(page);
+  await run();
+  await expect(drift.locator("[data-drift-counts]")).toHaveText(
+    "3 observed mismatches · 1 uncertain · 0 unknown · 4 matches",
+  );
 });

@@ -190,6 +190,15 @@ export class EvidenceSnapshots extends HTMLElement {
       }`;
     section.querySelector("h2").focus();
   }
+  // Hides the last Drift check result. A new run starts from nothing, so a
+  // run that fails, is cancelled or is discarded leaves no earlier result
+  // (possibly for Markdown that has since changed) on screen.
+  clearDrift() {
+    const section = this.querySelector("[data-drift]");
+    if (!section) return;
+    section.hidden = true;
+    section.innerHTML = "";
+  }
   send(action, id) {
     this.dispatchEvent(
       new CustomEvent("evidence-action", {

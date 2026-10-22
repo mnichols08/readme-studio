@@ -69,6 +69,12 @@ const PROMPTED = new Set([
 const POWERSHELL = new Set(["powershell", "pwsh", "ps", "ps1"]),
   CMD = new Set(["cmd", "bat", "batch"]);
 const ENV_LANGS = new Set(["env", "dotenv", ".env"]);
+// Shell and toolchain setup, not application configuration.
+const SYSTEM_ENV = new Set(
+  "PATH HOME USER SHELL LANG LANGUAGE LC_ALL TERM EDITOR VISUAL TMPDIR PWD MANPATH LD_LIBRARY_PATH DYLD_LIBRARY_PATH LIBRARY_PATH CPATH PKG_CONFIG_PATH CC CXX CFLAGS CXXFLAGS CPPFLAGS LDFLAGS JAVA_HOME GOPATH GOROOT GOBIN CARGO_HOME RUSTUP_HOME NVM_DIR PNPM_HOME VOLTA_HOME NODE_OPTIONS PYTHONPATH PYENV_ROOT VIRTUAL_ENV ANDROID_HOME ANDROID_SDK_ROOT".split(
+    " ",
+  ),
+);
 // These folders (and paths under them) are usually created by a build or
 // install, and files like `.env` are usually ignored by Git, so their absence
 // is uncertain. Committed templates such as `.env.example` are not ignored.
@@ -77,6 +83,9 @@ const GENERATED =
 const IGNORED =
   /(?:^|\/)\.env(?!\.(?:example|sample|template|dist|defaults?)$)(?:\.[\w-]+)?$/;
 const MARKDOWN = /\.(?:md|markdown|mdx)$/i;
+// GitHub's line anchors (#L10, #L10-L20, #L3C2-L4C1), not heading slugs such
+// as #l10n-setup.
+const LINE_ANCHOR = /^l\d+(?:c\d+)?(?:-l\d+(?:c\d+)?)?$/i;
 
 const yarnBuiltins = new Set(
   "add audit autoclean bin cache check config create dedupe dlx exec explain generate-lock-entry global help import info init install licenses link list login logout node npm outdated owner pack patch patch-commit plugin policies publish rebuild remove search set tag team unlink unplug up upgrade upgrade-interactive version versions why workspace workspaces constraints".split(
@@ -147,7 +156,18 @@ const runners = {
 // may have consumed the word.
 const runnerFlags = {
   node: {
-    none: ["-e", "--eval", "-p", "--print", "-c", "--check", "-h", "--help"],
+    // `node --run <script>` runs a package.json script (read separately).
+    none: [
+      "-e",
+      "--eval",
+      "-p",
+      "--print",
+      "-c",
+      "--check",
+      "-h",
+      "--help",
+      "--run",
+    ],
     valued: [
       "-r",
       "--require",
@@ -362,6 +382,9 @@ function commandLines(text, lang) {
       else if (hereString) body = hereString[1] + "@";
     }
     if (pending) {
+      // A prompted command's continued lines carry the continuation prompt
+      // (`> `, or `>> ` in PowerShell); without a prompt, `>` is a redirect.
+      if (pending.prompted) line = line.replace(/^>>?(?:\s+|$)/, "");
       pending.text += " " + line.replace(continued, "");
       if (!continued.test(line)) {
         lines.push(pending);
@@ -374,11 +397,15 @@ function commandLines(text, lang) {
     if (prompt) line = line.slice(prompt[0].length);
     if (!line || line.startsWith("#") || line.startsWith("//")) return;
     if (continued.test(line))
-      pending = { text: line.replace(continued, ""), index };
+      pending = {
+        text: line.replace(continued, ""),
+        index,
+        prompted: !!prompt,
+      };
     else lines.push({ text: line, index });
   });
   if (pending) lines.push(pending);
-  return lines;
+  return lines.map(({ text, index }) => ({ text, index }));
 }
 
 // Interprets one command segment. `context` carries what earlier commands in
@@ -476,9 +503,15 @@ function commandClaims(words, context, claim) {
       const file = flagValue(plain, ["-f", "--file", "--makefile"]);
       if (flagValue(plain, ["-C", "--directory"]) !== undefined) return;
       if (plain.some((word) => [...help, "-v"].includes(word))) return;
+      // `./configure` or `cmake .` earlier generates the Makefile.
       return file
         ? path(file, { tool: "make" })
-        : claim({ kind: "path", anyOf: makefiles, tool: "make" });
+        : claim({
+            kind: "path",
+            anyOf: makefiles,
+            tool: "make",
+            ...(context.makefile ? { built: context.makefile } : {}),
+          });
     }
     case "cargo": {
       const manifest = flagValue(plain, ["--manifest-path"]);
@@ -534,6 +567,22 @@ function commandClaims(words, context, claim) {
         path(positional[1]);
       return;
   }
+  // `node --run dev` runs the package.json script, and fails without it.
+  if (tool === "node" || tool === "nodejs") {
+    const script = flagValue(plain, ["--run"]);
+    if (script !== undefined) {
+      if (/^[\w:.@/+-]{1,100}$/.test(script))
+        claim({
+          kind: "script",
+          manager: "node",
+          script,
+          strict: true,
+          ifPresent: false,
+          scope: "root",
+        });
+      return;
+    }
+  }
   if (runners[tool])
     return runnerFile(runners[tool], plain, path, tool, context.untagged);
   // An earlier build, unpack or setup step may have produced the program.
@@ -551,6 +600,15 @@ const BUILDERS = new Set(
 const builds = (words) => {
   const tool = commandWords(words)[0] || "";
   return BUILDERS.has(tool) || /^\.\.?\//.test(tool) ? tool : "";
+};
+// Commands that may generate a Makefile: a configure-style `./script`,
+// CMake, qmake and the autotools.
+const MAKEFILE_GENERATORS = new Set(
+  "cmake qmake qmake6 autoreconf automake".split(" "),
+);
+const generatesMakefile = (words) => {
+  const tool = commandWords(words)[0] || "";
+  return MAKEFILE_GENERATORS.has(tool) || /^\.\.?\//.test(tool) ? tool : "";
 };
 // The script an interpreter runs: the first word that is not an option or
 // an option's value. `python -m module` and `node -e code` name no file.
@@ -572,8 +630,13 @@ function runnerFile(family, words, path, tool = "", untagged = false) {
       continue;
     }
     if (!word) return;
-    // `tsx watch src/index.ts`
-    if (tool === "tsx" && word === "watch" && i + 1 < words.length) continue;
+    // `tsx watch src/index.ts` and `node inspect app.js` (the debugger).
+    if (
+      ((tool === "tsx" && word === "watch") ||
+        (family === "node" && tool !== "tsx" && word === "inspect")) &&
+      i + 1 < words.length
+    )
+      continue;
     if ((untagged || family === "source") && !/[./]/.test(word)) return;
     const extra = loose ? { loose: true } : {};
     // `node server` runs server.js, server/index.js and so on.
@@ -808,7 +871,8 @@ export function minimumMajor(range) {
   let min = null;
   for (const part of String(range).split("||")) {
     const trimmed = part.trim();
-    if (!trimmed || trimmed === "*" || /^<(?!=)/.test(trimmed)) return null;
+    // An upper bound alone (`<20`, `<=20`) has no minimum.
+    if (!trimmed || trimmed === "*" || /^</.test(trimmed)) return null;
     const match = trimmed.match(/(\d+)/);
     if (!match) return null;
     let major = Number(match[1]);
@@ -823,10 +887,19 @@ const NODE_CLAIMS = [
   /\b(?:requires?|required|minimum|at least)\s+node(?:\.?js)?\s*(?:version\s*)?(?:v|>=\s*)?(\d{1,2})\b/gi,
 ];
 
+// GitHub footnote definitions (`[^1]: Benchmarks.`). Marked has no footnote
+// extension, so a one-word definition would lex as a link reference and turn
+// `[^1]` into a link. Renaming the definition's label (`^` to an invisible
+// separator, one character for another, so every offset and line is kept)
+// leaves `[^1]` as plain text, while the definition still ends where it did.
+const FOOTNOTE = /^([ \t]{0,3}(?:>[ \t]?)*[ \t]{0,3}\[)\^(?=[^\]\n]+\]:)/gm;
+
 // Extracts the document's Claims. Bounded to CLAIM_LIMIT; extra claims and
 // links that cannot be resolved are counted in notes, never guessed.
 export function driftClaims(markdown, destination) {
-  const source = String(markdown ?? "").replace(/\r\n?/g, "\n");
+  const source = String(markdown ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(FOOTNOTE, "$1\u2063");
   const readmeDir = destination.path.split("/").slice(0, -1);
   const repository = destination.repository.split("/")[1] || "";
   const newlines = [];
@@ -897,6 +970,7 @@ export function driftClaims(markdown, destination) {
         if (value && !claimed.has(value)) context.mentioned.add(value);
       }
       context.built = builds(words) || context.built;
+      context.makefile = generatesMakefile(words) || context.makefile;
     }
   };
   // Files that earlier blocks created, mentioned or built stay possible in
@@ -905,6 +979,7 @@ export function driftClaims(markdown, destination) {
     created: new Set(),
     mentioned: new Set(),
     built: "",
+    makefile: "",
   };
   const freshContext = (bases, untagged = false, shared = null) => ({
     cd: [],
@@ -913,6 +988,7 @@ export function driftClaims(markdown, destination) {
     created: shared ? shared.created : new Set(),
     mentioned: shared ? shared.mentioned : new Set(),
     built: shared ? shared.built : "",
+    makefile: shared ? shared.makefile : "",
     // Explicit clones of this repository; `cd <name>` without one may be the
     // clone or a folder of that name.
     clones: new Set(),
@@ -921,6 +997,13 @@ export function driftClaims(markdown, destination) {
     untagged,
     bases,
   });
+  const atRoot = (raw) => {
+    try {
+      return resolveRelativePath(`${raw}/_`, readmeDir) === "_";
+    } catch {
+      return false;
+    }
+  };
   const link = (value, image, line) => {
     const text = value.trim();
     if (!text || /[\x00-\x1f\x7f\\]/.test(text) || /^mailto:/i.test(text))
@@ -939,7 +1022,11 @@ export function driftClaims(markdown, destination) {
         path = resolveRelativePath(raw, readmeDir);
       } catch (error) {
         if (error === OUTSIDE_ROOT) outside++;
-        else undecodable++;
+        else if (error instanceof URIError) undecodable++;
+        // `./`, `.` or `../` up to the root: the repository page, which
+        // always exists and shows the root README.
+        else if (anchor && atRoot(raw) && !destination.path.includes("/"))
+          add({ category: "link", kind: "anchor", anchor, text, line });
         return;
       }
       if (path === destination.path) {
@@ -997,7 +1084,8 @@ export function driftClaims(markdown, destination) {
       cursors[cursor] = index + 1;
       return lineAt(offset + index);
     };
-    const prose = new Set();
+    const prose = new Set(),
+      covered = new Set();
     visitTokens([block], (token) => {
       if (token.type === "code" && token.codeBlockStyle !== "indented") {
         const lang = (token.lang || "").trim().split(/\s+/)[0].toLowerCase();
@@ -1023,7 +1111,7 @@ export function driftClaims(markdown, destination) {
         if (ENV_LANGS.has(lang)) {
           token.text.split("\n").forEach((line, index) => {
             const key = line.match(/^\s*(?:export\s+)?([A-Za-z_]\w*)\s*=/)?.[1];
-            if (key)
+            if (key && !SYSTEM_ENV.has(key))
               add({
                 category: "config",
                 kind: "env",
@@ -1045,18 +1133,20 @@ export function driftClaims(markdown, destination) {
         const context = freshContext(bases, lang === "", produced);
         for (const { text, index } of commandLines(token.text, lang)) {
           const exported = text.match(/^export\s+([A-Za-z_]\w*)=/);
-          if (exported)
-            add({
-              category: "config",
-              kind: "env",
-              key: exported[1],
-              text: text.slice(0, 300),
-              line: start + index,
-            });
-          else command(text, start + index, "block", context);
+          if (exported) {
+            if (!SYSTEM_ENV.has(exported[1]))
+              add({
+                category: "config",
+                kind: "env",
+                key: exported[1],
+                text: text.slice(0, 300),
+                line: start + index,
+              });
+          } else command(text, start + index, "block", context);
         }
         carried = context.cd.length ? context.cd : carried;
         produced.built = context.built;
+        produced.makefile = context.makefile;
         return;
       }
       if (token.type === "codespan") {
@@ -1094,7 +1184,14 @@ export function driftClaims(markdown, destination) {
             });
         }
       }
-      if (["paragraph", "heading", "text"].includes(token.type) && token.text) {
+      if (
+        ["paragraph", "heading", "text"].includes(token.type) &&
+        token.text &&
+        !covered.has(token)
+      ) {
+        // A paragraph's (or list item's) own text tokens repeat its text;
+        // their statements are read once, from the outermost token.
+        visitTokens(token.tokens || [], (child) => covered.add(child));
         const text = token.text.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1");
         for (const pattern of NODE_CLAIMS)
           for (const match of text.matchAll(pattern)) {
@@ -1374,7 +1471,8 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
   for (const claim of plan.claims) {
     if (claim.kind === "anchor") {
       const anchor = claim.anchor.toLowerCase().replace(/^user-content-/, "");
-      if (["top", "readme"].includes(anchor) || /^l\d+/.test(anchor)) continue;
+      if (["top", "readme"].includes(anchor) || LINE_ANCHOR.test(anchor))
+        continue;
       if (plan.anchors.includes(anchor))
         result(claim, "matches", "A heading in this Markdown has this anchor.");
       else {
@@ -1424,7 +1522,7 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
       if (
         !claim.anchor ||
         !MARKDOWN.test(claim.path) ||
-        /^L\d+/.test(claim.anchor)
+        LINE_ANCHOR.test(claim.anchor)
       ) {
         result(claim, "matches", `${claim.path} exists.`, claim.path);
         continue;

@@ -1568,3 +1568,243 @@ describe("drift false positives, round 2", () => {
     ).toBe("uncertain");
   });
 });
+
+describe("drift false positives, round 3", () => {
+  const statuses = (result) =>
+    result.results.map((item) => [item.text, item.status]);
+  const tree = (...entries) =>
+    evidence({
+      listing: listingOf(
+        entries.map((path) =>
+          path.endsWith("/") ? [path.slice(0, -1), "tree"] : [path],
+        ),
+      ),
+    });
+  const withScripts = (scripts, ...entries) => ({
+    ...tree("package.json", ...entries),
+    files: new Map([
+      ["package.json", { status: "read", text: JSON.stringify({ scripts }) }],
+    ]),
+  });
+
+  it("treats GitHub footnotes as footnotes, not link references", () => {
+    for (const definition of [
+      "[^1]: Benchmarks.",
+      "[^node]: Tested",
+      "[^2]: Deprecated",
+      '[^1]: "quoted"',
+      "  [^1]: Benchmarks.",
+    ]) {
+      const label = definition.match(/\[(\^[^\]]+)\]/)[1];
+      const markdown = `Fast[${label}].\n\n${definition}\n`;
+      expect(plan(markdown).claims, definition).toEqual([]);
+      expect(plan(markdown).notes, definition).toEqual([]);
+    }
+    // Ordinary reference links are still checked, on the reference's line.
+    const markdown =
+      "Fast[^1]. See [the guide][g].\n\n[^1]: Benchmarks.\n[g]: docs/gone.md\n";
+    expect(kinds(markdown)).toEqual(["link:docs/gone.md"]);
+    expect(plan(markdown).claims[0].line).toBe(1);
+    // Later claims keep their lines and text.
+    const after = plan(
+      "[^1]: Benchmarks.\n\n```bash\nnpm run lint\n```\n\n[g](docs/gone.md)\n",
+    ).claims.map((claim) => [claim.text, claim.line]);
+    expect(after).toEqual([
+      ["npm run lint", 4],
+      ["docs/gone.md", 7],
+    ]);
+  });
+
+  it("knows that configure and CMake generate the Makefile that make reads", () => {
+    const listing = tree(
+      "README.md",
+      "configure",
+      "Makefile.in",
+      "Makefile.am",
+      "CMakeLists.txt",
+      "autogen.sh",
+    );
+    for (const markdown of [
+      fence("bash", "./configure", "make", "sudo make install"),
+      fence("bash", "./autogen.sh && ./configure && make"),
+      fence("sh", "cmake .", "make"),
+      [fence("sh", "./configure --prefix=/usr"), fence("sh", "make")].join(
+        "\n\n",
+      ),
+    ]) {
+      const result = check(markdown, listing);
+      expect(result.counts.mismatch, markdown).toBe(0);
+      const make = result.results.filter((r) => /^make needs/.test(r.message));
+      expect(make.length, markdown).toBeGreaterThan(0);
+      for (const item of make)
+        expect(item.message, markdown).toMatch(
+          /earlier command \((?:\.\/configure|cmake)\)/,
+        );
+    }
+    // Without a generator, a missing Makefile is still observed.
+    for (const markdown of [
+      fence("sh", "make"),
+      fence("sh", "npm install", "make"),
+    ])
+      expect(status(check(markdown, listing), "make"), markdown).toEqual([
+        "mismatch",
+      ]);
+  });
+
+  it("reads node --run as a package.json script and skips node inspect", () => {
+    expect(kinds(fence("bash", "node --run dev", "node --run=build"))).toEqual([
+      "node:dev",
+      "node:build",
+    ]);
+    const read = withScripts({ dev: "vite" }, "server.js");
+    expect(
+      statuses(
+        check(
+          fence(
+            "bash",
+            "node --run dev",
+            "node --run lint",
+            "node inspect server.js",
+          ),
+          read,
+        ),
+      ),
+    ).toEqual([
+      ["node --run lint", "mismatch"],
+      ["node --run dev", "matches"],
+      ["node inspect server.js", "matches"],
+    ]);
+  });
+
+  it("strips continuation prompts from continued lines of prompted commands", () => {
+    const listing = tree(
+      "package.json",
+      "package-lock.json",
+      "deploy/",
+      "deploy/compose.yml",
+    );
+    expect(
+      statuses(
+        check(
+          fence(
+            "console",
+            "$ docker compose \\",
+            ">   -f deploy/compose.yml up",
+          ),
+          listing,
+        ),
+      ),
+    ).toEqual([["docker compose  -f deploy/compose.yml up", "matches"]]);
+    expect(
+      kinds(fence("console", "$ python \\", ">   -m http.server")),
+    ).toEqual([]);
+    expect(kinds(fence("console", "$ npm run \\", "> build"))).toEqual([
+      "npm:build",
+    ]);
+    expect(kinds(fence("bash", "$ npm run \\", "> build"))).toEqual([
+      "npm:build",
+    ]);
+    expect(kinds(fence("powershell", "PS> npm run `", ">> build"))).toEqual([
+      "npm:build",
+    ]);
+    // Without a prompt, a continued line's `>` is a real redirect.
+    expect(
+      kinds(fence("bash", "node scripts/report.js \\", "> report.txt")),
+    ).toEqual(["path:scripts/report.js"]);
+  });
+
+  it("reports a Node version statement once, on its own line", () => {
+    const lines = (markdown) =>
+      plan(markdown).claims.map((claim) => [
+        claim.kind,
+        claim.line,
+        claim.major,
+      ]);
+    expect(
+      lines("## Requirements\n\nThis project needs\nNode 18 or later.\n"),
+    ).toEqual([["node", 4, 18]]);
+    expect(lines("- item\n- requires Node 16 at least\n")).toEqual([
+      ["node", 2, 16],
+    ]);
+    expect(lines("Needs\nmore\nNode 18+ and later Node 18+ again\n")).toEqual([
+      ["node", 3, 18],
+    ]);
+  });
+
+  it("treats links to the repository root as the repository page", () => {
+    for (const markdown of ["[home](./)", "[x](.)", "[y](/)"]) {
+      expect(plan(markdown).claims, markdown).toEqual([]);
+      expect(plan(markdown).notes, markdown).toEqual([]);
+    }
+    const markdown = "[top](./#install) [gone](./#missing)\n\n## Install\n";
+    expect(plan(markdown).notes).toEqual([]);
+    expect(statuses(evaluateDrift(plan(markdown), null))).toEqual([
+      ["./#missing", "mismatch"],
+      ["./#install", "matches"],
+    ]);
+    // From a README in a folder, the root page shows another README.
+    const nested = { ...target, path: "docs/README.md" };
+    expect(plan("[top](../#install)", nested).claims).toEqual([]);
+    expect(plan("[top](../#install)", nested).notes).toEqual([]);
+    expect(kinds("[here](./)", nested)).toEqual(["link:docs"]);
+    // Undecodable links are still counted.
+    expect(plan("[bad](%E0%A4%A.md)").notes).toEqual([
+      "1 relative link(s) could not be decoded.",
+    ]);
+  });
+
+  it("checks heading anchors that only look like line anchors", () => {
+    const markdown =
+      "## L10n setup\n\n[x](#l10n-setup) [y](#l10n-missing) [z](#L10) [w](#L10-L20) [v](#L3C2-L4C1)\n";
+    expect(statuses(evaluateDrift(plan(markdown), null))).toEqual([
+      ["#l10n-missing", "mismatch"],
+      ["#l10n-setup", "matches"],
+    ]);
+    const result = check(
+      "[a](docs/usage.md#l10n-missing) [b](docs/usage.md#L12) [c](docs/usage.md#l12)",
+    );
+    expect(statuses(result)).toEqual([
+      ["docs/usage.md#l10n-missing", "mismatch"],
+      ["docs/usage.md#L12", "matches"],
+      ["docs/usage.md#l12", "matches"],
+    ]);
+  });
+
+  it("does not read an upper bound as a minimum Node version", () => {
+    expect(minimumMajor("<=20")).toBe(null);
+    expect(minimumMajor("<20")).toBe(null);
+    expect(minimumMajor(">=18 <=22")).toBe(18);
+    const read = {
+      ...tree("package.json"),
+      files: new Map([
+        [
+          "package.json",
+          {
+            status: "read",
+            text: JSON.stringify({ engines: { node: "<=20" } }),
+          },
+        ],
+      ]),
+    };
+    const result = check("Requires Node 18 or later.", read);
+    expect(result.counts.uncertain).toBe(0);
+    expect(result.results[0].status).toBe("unknown");
+  });
+
+  it("does not compare shell setup variables with the .env example", () => {
+    expect(
+      kinds(
+        [
+          fence(
+            "bash",
+            'export PATH="$HOME/bin:$PATH"',
+            "export JAVA_HOME=/opt/java",
+            "export NODE_OPTIONS=--max-old-space-size=4096",
+            "export API_URL=https://example.com",
+          ),
+          fence("env", "PATH=/usr/bin", "TOKEN=x"),
+        ].join("\n\n"),
+      ),
+    ).toEqual(["env:API_URL", "env:TOKEN"]);
+  });
+});

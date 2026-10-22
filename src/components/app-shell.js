@@ -1481,6 +1481,7 @@ export class AppShell extends HTMLElement {
   // need no GitHub request, so a document with only those works offline.
   // Called from evidenceAction, whose catch/finally report and settle.
   async driftCheck(panel, draft, destination) {
+    panel.clearDrift();
     if (!destination)
       throw Error("Set a repository, branch and README path first.");
     const source = draft.markdown,
