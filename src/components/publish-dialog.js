@@ -16,10 +16,24 @@ import { PublishingClient } from "../github/publishing-client.js";
 import { html } from "../markdown/serialize.js";
 import { target, writeInput } from "../publishing/validation.js";
 import { publishDiff } from "../publishing/diff.js";
+import {
+  evaluatePreflight,
+  blockingFailure,
+  passes,
+  branchChecks,
+  CHECK_LABELS,
+  READ_CHECKS,
+} from "../publishing/preflight.js";
+const CHECK_STATUS = {
+  pass: "Pass",
+  warn: "Warning",
+  fail: "Fail",
+  unknown: "Unknown",
+};
 export class PublishDialog extends HTMLElement {
   connectedCallback() {
     this.client = new PublishingClient();
-    this.innerHTML = `<h1>Publish to GitHub</h1><p>Optional publishing. Your README source stays unchanged. Every write requires a source review and confirmation.</p><p role="status" data-status>Checking connection…</p><section data-auth></section><section data-target></section><section data-review></section><section data-history></section><button data-download>Download README fallback</button>`;
+    this.innerHTML = `<h1>Publish to GitHub</h1><p>Optional publishing. Your README source stays unchanged. Every write requires a source review and confirmation.</p><p role="status" data-status>Checking connection…</p><section data-auth></section><section data-target></section><section data-preflight aria-labelledby="publish-preflight-heading"></section><section data-review></section><section data-history></section><button data-download>Download README fallback</button>`;
     this.querySelector("[data-download]").onclick = () =>
       this.emit("publish-download", {
         content: this.source,
@@ -75,6 +89,17 @@ export class PublishDialog extends HTMLElement {
   async session() {
     this.auth = await this.client.request("session");
     this.authView();
+    // Read-only mode is the default; a local report explains why until a
+    // Preflight for a chosen target runs on the server.
+    this.preflight = this.auth.connected
+      ? null
+      : evaluatePreflight(
+          this.auth.configured
+            ? { configured: true, connected: false }
+            : { configured: false },
+          { kind: this.kind },
+        );
+    this.preflightView();
     if (this.auth.connected) await this.loadRepositories();
     else
       this.status(
@@ -113,6 +138,7 @@ export class PublishDialog extends HTMLElement {
         await this.client.request("disconnect", {});
         this.baseline = null;
         this.plan = null;
+        this.preflight = null;
         this.querySelector("[data-target]").replaceChildren();
         this.querySelector("[data-review]").replaceChildren();
         await this.session();
@@ -147,8 +173,16 @@ export class PublishDialog extends HTMLElement {
     area
       .querySelectorAll("input")
       .forEach((el) => (el.oninput = () => this.invalidate()));
+    // One explicit action: Preflight first, then the read-only load.
     area.querySelector("[data-load]").onclick = () =>
       this.run(async () => {
+        const report = await this.checkAccess();
+        if (!passes(report, READ_CHECKS)) {
+          this.status(
+            `Remote file not loaded. ${blockingFailure(report, READ_CHECKS).message} Your local draft is safe and download remains available.`,
+          );
+          return;
+        }
         this.baseline = await this.client.request("read", this.target());
         this.source = this.initialSource || this.originalSource;
         this.assetRows = [];
@@ -174,7 +208,9 @@ export class PublishDialog extends HTMLElement {
         this.plan = null;
         this.review();
         this.status(
-          "Remote baseline loaded separately from your local draft. Review all source changes.",
+          report.verdict === "writable"
+            ? "Remote baseline loaded separately from your local draft. Review all source changes."
+            : `Remote baseline loaded in Read-only mode. ${blockingFailure(report).message} Download remains available.`,
         );
         this.querySelector("[data-message]").focus();
       });
@@ -192,21 +228,104 @@ export class PublishDialog extends HTMLElement {
       ...(this.kind ? { kind: this.kind } : {}),
     });
   }
+  rawTarget() {
+    return {
+      repository: this.querySelector("[data-repo]").value,
+      branch: this.querySelector("[data-branch]").value,
+      path: this.querySelector("[data-path]").value,
+      ...(this.kind ? { kind: this.kind } : {}),
+    };
+  }
+  // Runs a Preflight for the current target. Never retries; a failure leaves
+  // every check unknown, which keeps the review in Read-only mode.
+  async checkAccess() {
+    const raw = this.rawTarget();
+    target({
+      repository: raw.repository,
+      branch: raw.branch,
+      path: "README.md",
+    });
+    this.preflight = null;
+    this.preflightView("Checking access…");
+    let report;
+    try {
+      report = await this.client.request("preflight", raw);
+    } catch (e) {
+      report = evaluatePreflight(
+        {
+          target: raw,
+          unavailable: `Access could not be checked: ${e.message} Your local draft is safe. No automatic retry was made.`,
+        },
+        { kind: this.kind },
+      );
+    }
+    if (JSON.stringify(raw) !== JSON.stringify(this.rawTarget())) {
+      this.preflightView();
+      throw new Error("Target changed while checking access. Re-check access.");
+    }
+    this.preflight = report;
+    this.preflightView();
+    return report;
+  }
+  // Write controls exist only for a writable Preflight of this exact target.
+  writableTarget() {
+    try {
+      return (
+        this.preflight?.verdict === "writable" &&
+        JSON.stringify(this.preflight.target) === JSON.stringify(this.target())
+      );
+    } catch {
+      return false;
+    }
+  }
+  preflightView(pending) {
+    const area = this.querySelector("[data-preflight]"),
+      p = this.preflight;
+    if (!area) return;
+    const heading = `<h2 id="publish-preflight-heading">Preflight</h2>`;
+    if (!p) {
+      area.innerHTML = `${heading}<p role="status" data-verdict>${pending || "Read-only mode. Load the remote file to run a Preflight for that exact target. No write can be approved until every blocking check passes."}</p>`;
+      return;
+    }
+    const failure = blockingFailure(p),
+      where = p.target.repository
+        ? `${p.target.repository} · branch ${p.target.branch} · ${p.target.path}`
+        : "";
+    area.innerHTML = `${heading}<p role="status" data-verdict>${p.verdict === "writable" ? `Writable: every blocking check passed for ${html(where)}.` : `Read-only mode${where ? ` for ${html(where)}` : ""}. ${html(failure.message)}`}</p><ul class="preflight-checks">${p.checks.map((c) => `<li data-check="${html(c.id)}" data-check-status="${html(c.status)}"><strong>${CHECK_STATUS[c.status]}</strong> · ${html(CHECK_LABELS[c.id] || c.id)}${c.blocking ? "" : " (advisory)"}: ${html(c.message)}</li>`).join("")}</ul><p class="preflight-time">Checked ${html(new Date(p.checkedAt).toLocaleString())}. Permissions can change on GitHub at any time, and GitHub still decides at write time.</p>${this.auth?.connected && where ? "<button data-recheck>Re-check access</button>" : ""}`;
+    area.querySelector("[data-recheck]")?.addEventListener("click", () =>
+      this.run(async () => {
+        const report = await this.checkAccess();
+        if (this.baseline) this.review({ keepMessage: true });
+        this.status(
+          report.verdict === "writable"
+            ? "Access re-checked: every blocking check passed. Confirm the review again."
+            : `Access re-checked: Read-only mode. ${blockingFailure(report).message}`,
+        );
+        this.querySelector("[data-recheck]")?.focus();
+      }),
+    );
+  }
   invalidate() {
     this.baseline = null;
     this.assetRows = [];
     this.plan = null;
+    this.preflight = null;
+    this.preflightView();
     this.querySelector("[data-review]").replaceChildren();
     this.status("Target changed. Load the remote README again.");
   }
-  review() {
+  review({ keepMessage = false } = {}) {
     const b = this.baseline,
       diff = publishDiff(b.content, this.source),
-      writable = this.repositories.find((r) => r.repository === b.repository)?.[
-        this.kind === "workflow" ? "workflowsWritable" : "writable"
-      ];
+      message = keepMessage
+        ? this.querySelector("[data-message]")?.value
+        : undefined,
+      writable = this.writableTarget(),
+      // Enforcement equals display: offer the route only when the server's
+      // branch operation would accept it.
+      branchable = passes(this.preflight, branchChecks(this.kind));
     this.querySelector("[data-review]").innerHTML =
-      `<h2>Review ${b.sha ? "updated file" : "New file"}</h2><p>${html(b.repository)} · branch ${html(b.branch)} · ${html(b.path)}</p><p>SHA baseline: <code>${html(b.sha || "New file (does not exist)")}</code></p><p>${diff.added} added / ${diff.removed} removed lines in changed region. Sections: ${html(diff.sections.join(", ") || "body content")}.</p>${sourceDiffMarkup({ beforeLabel: `Remote ${this.kind === "workflow" ? "YAML" : "Markdown"}`, afterLabel: `Prepared ${this.kind === "workflow" ? "YAML" : "Markdown"}`, label: "Publishing diff" })}<label>Commit message<input data-message value="Update README with README Studio" maxlength="500"></label><label class="check"><input type="checkbox" data-confirm> I reviewed this diff and confirm ${b.sha ? "updating" : "creating"} this exact repository, branch, path and every listed asset write.</label><button data-commit ${!writable || (b.content === this.source && !this.assetRows?.some((r) => r.status !== "unchanged")) ? "disabled" : ""}>Confirm and publish README</button><div data-result></div><section data-stale></section><details><summary>Publish on a new branch instead</summary><p>Create a branch from ${html(b.branch)} at commit ${html(b.commitSha || "unknown")}. This creates only a branch; committing still needs a fresh review.</p><label>New branch name<input data-new-branch value="readme-studio/update-${new Date().toISOString().slice(0, 10)}"></label><label class="check"><input type="checkbox" data-confirm-branch> I confirm creating this branch in ${html(b.repository)}.</label><button data-create-branch ${!writable ? "disabled" : ""}>Create branch for review</button></details>`;
+      `<h2>Review ${b.sha ? "updated file" : "New file"}</h2><p>${html(b.repository)} · branch ${html(b.branch)} · ${html(b.path)}</p><p>SHA baseline: <code>${html(b.sha || "New file (does not exist)")}</code></p><p>${diff.added} added / ${diff.removed} removed lines in changed region. Sections: ${html(diff.sections.join(", ") || "body content")}.</p>${sourceDiffMarkup({ beforeLabel: `Remote ${this.kind === "workflow" ? "YAML" : "Markdown"}`, afterLabel: `Prepared ${this.kind === "workflow" ? "YAML" : "Markdown"}`, label: "Publishing diff" })}<label>Commit message<input data-message value="Update README with README Studio" maxlength="500"></label>${writable ? `<label class="check"><input type="checkbox" data-confirm> I reviewed this diff and confirm ${b.sha ? "updating" : "creating"} this exact repository, branch, path and every listed asset write.</label><button data-commit ${b.content === this.source && !this.assetRows?.some((r) => r.status !== "unchanged") ? "disabled" : ""}>Confirm and publish README</button>` : `<p data-read-only>Read-only mode: no publish control is available until a Preflight for this exact target passes. Re-check access after fixing the failing check. Download remains available.</p>`}<div data-result></div><section data-stale></section>${branchable ? `<details data-new-branch-route><summary>Publish on a new branch instead</summary><p>Create a branch from ${html(b.branch)} at commit ${html(b.commitSha || "unknown")}. This creates only a branch; committing still needs a fresh review.</p><label>New branch name<input data-new-branch value="readme-studio/update-${new Date().toISOString().slice(0, 10)}"></label><label class="check"><input type="checkbox" data-confirm-branch> I confirm creating this branch in ${html(b.repository)}.</label><button data-create-branch>Create branch for review</button></details>` : ""}`;
     if (this.assetRows?.length) {
       const area = document.createElement("section");
       area.innerHTML = `<h2>Asset publish plan</h2><p>Separate commits, not an atomic transaction. README is written last. ${this.rewriteApplied ? "Owned banner paths updated in prepared source." : "No banner source rewrite applied."}</p>${this.assetRows.map((r, i) => `<details><summary>${html(r.path)} — ${r.status} — ${r.bytes} bytes</summary><p>Baseline SHA: ${html(r.baseline.sha || "New file")}. ${html(r.warning)} ${this.source.includes(r.path.split("/").at(-1)) ? "" : "Warning: asset appears unreferenced by this README."}</p><div data-asset-diff="${i}"></div></details>`).join("")}<div data-asset-results role="status"></div>`;
@@ -228,20 +347,24 @@ export class PublishDialog extends HTMLElement {
       diff.text,
     );
     if (this.kind === "workflow") {
-      this.querySelector("[data-commit]").textContent =
-        "Confirm and publish workflow";
+      const button = this.querySelector("[data-commit]");
+      if (button) button.textContent = "Confirm and publish workflow";
       this.querySelector("[data-message]").value = "Update README workflow";
     }
-    this.querySelector("[data-commit]").onclick = () =>
-      this.run(() => this.commit());
-    this.querySelector("[data-create-branch]").onclick = () =>
-      this.run(() => this.createBranch());
-    if (!writable)
-      this.status(
-        "Read-only repository. Publishing is disabled; download remains available.",
-      );
+    if (message !== undefined)
+      this.querySelector("[data-message]").value = message;
+    this.querySelector("[data-commit]")?.addEventListener("click", () =>
+      this.run(() => this.commit()),
+    );
+    this.querySelector("[data-create-branch]")?.addEventListener("click", () =>
+      this.run(() => this.createBranch()),
+    );
   }
   async commit() {
+    if (!this.writableTarget())
+      throw new Error(
+        "Read-only mode. Re-check access for this exact target before publishing.",
+      );
     const input = writeInput({
       ...this.baseline,
       content: this.source,
@@ -291,6 +414,16 @@ export class PublishDialog extends HTMLElement {
     try {
       result = await this.client.request("commit", input);
     } catch (e) {
+      // GitHub's own refusal is definitive; route to the new-branch review.
+      // A refusal by the server's own Preflight would refuse the branch too.
+      const route =
+        [403, 422].includes(e.status) && !e.preflight
+          ? this.querySelector("[data-new-branch-route]")
+          : null;
+      if (route) {
+        route.open = true;
+        e.message += " You can use “Publish on a new branch instead” below.";
+      }
       if (this.assetRows?.length)
         throw new Error(
           `Assets completed, but README failed: ${e.message} Reload and review before retrying.`,
@@ -360,8 +493,10 @@ export class PublishDialog extends HTMLElement {
   }
   stale(remote) {
     this.latest = remote;
-    this.querySelector("[data-commit]").disabled = true;
-    this.querySelector("[data-confirm]").checked = false;
+    const commit = this.querySelector("[data-commit]"),
+      confirm = this.querySelector("[data-confirm]");
+    if (commit) commit.disabled = true;
+    if (confirm) confirm.checked = false;
     const area = this.querySelector("[data-stale]");
     area.innerHTML = `<h2 tabindex="-1">Remote README changed since you loaded it</h2><details open><summary>View remote changes</summary><pre data-remote-diff></pre><label>Latest remote Markdown<textarea data-latest readonly rows="6"></textarea></label></details><button data-merge>Merge local and remote</button><button data-reload>Reload remote baseline and review local replacement</button><button data-cancel>Cancel publishing review</button><section data-conflicts></section>`;
     area.querySelector("[data-latest]").value = remote.content;
