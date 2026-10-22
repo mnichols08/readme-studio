@@ -188,7 +188,25 @@ export function analyzeManifest(path, source) {
       "Optional and target-specific declarations do not prove a dependency is active in a build. Unused workspace declarations are excluded.",
     );
   } else if (path === "pyproject.toml") {
-    for (const record of tomlRecords(source)) {
+    const records = tomlRecords(source);
+    // Poetry runtime dependencies declared `optional = true`, inline or as a
+    // [tool.poetry.dependencies.<name>] table. They are extras, so they are
+    // optional like Cargo optional dependencies, never runtime.
+    const poetryOptional = new Set();
+    for (const { path: p, raw } of records)
+      if (p[0] === "tool" && p[1] === "poetry" && p[2] === "dependencies") {
+        if (p.length === 4) {
+          const value = tomlValue(raw);
+          if (object(value) && value.optional === true)
+            poetryOptional.add(p[3]);
+        } else if (
+          p.length === 5 &&
+          p[4] === "optional" &&
+          tomlValue(raw) === true
+        )
+          poetryOptional.add(p[3]);
+      }
+    for (const record of records) {
       const p = record.path,
         joined = p.join(".");
       let role = "";
@@ -219,7 +237,11 @@ export function analyzeManifest(path, source) {
         if (name && name !== "python")
           add(
             name.toLowerCase().replace(/[-_.]+/g, "-"),
-            p[2] === "dependencies" ? "runtime" : "development",
+            p[2] !== "dependencies"
+              ? "development"
+              : poetryOptional.has(name)
+                ? "optional"
+                : "runtime",
             p.slice(0, -1).join("."),
             record.line,
           );

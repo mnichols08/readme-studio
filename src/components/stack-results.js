@@ -2,6 +2,7 @@ import { provenanceHTML } from "./stack-dna.js";
 import { html as h } from "../markdown/serialize.js";
 import {
   CONFIDENCE_BASES,
+  basisExplanation,
   staleness,
   uncertainResults,
 } from "../stack-intelligence/dependencies.js";
@@ -101,21 +102,23 @@ const basisLegend = () =>
 // explanation, and manifests found but not read. They also stay in place in
 // the dependency list; this list never hides or promotes anything.
 function uncertainList(record) {
-  const { declarations, unread } = uncertainResults(record);
-  const count = declarations.length + unread.length;
+  const { declarations, unread, unlisted } = uncertainResults(record);
+  const count = declarations.length + unread.length + unlisted;
   return `<section data-uncertain aria-label="Uncertain stack results"><h3>Uncertain stack results (${count})</h3>${
     count
       ? `<ul data-uncertain-list>${declarations
           .map(
             (item) =>
-              `<li><strong>${h(item.name)}</strong> — ${h(item.ecosystem)} · ${h(item.kind)}${item.project ? ` · ${h(item.project)}` : ""} — ${provenanceHTML(item.evidence)}<br><span class="hint">${h(item.evidence.explanation)}</span></li>`,
+              `<li><strong>${h(item.name)}</strong> — ${h(item.ecosystem)} · ${h(item.kind)}${item.project ? ` · ${h(item.project)}` : ""} — ${provenanceHTML(item.evidence)}<br><span class="hint">${h(basisExplanation(item.evidence.basis))}</span></li>`,
           )
           .join("")}${unread
           .map(
             (entry) =>
               `<li><strong>${h(entry.path)}</strong> — Not read — unknown: ${h(entry.reason)}</li>`,
           )
-          .join("")}</ul>`
+          .join(
+            "",
+          )}</ul>${unlisted ? `<p data-uncertain-unlisted>${plural(unlisted, "more manifest")} not read and not listed — unknown.</p>` : ""}`
       : "<p>None: every declaration read is explicit or inherited, and every manifest found was read.</p>"
   }</section>`;
 }

@@ -49,8 +49,13 @@ export function confidenceBasis(entry, manifestFile) {
   }
   return "explicit";
 }
+// The one fixed explanation of a basis, looked up when it is shown so cached
+// records do not repeat it on every evidence item.
+export const basisExplanation = (basis) =>
+  Object.hasOwn(CONFIDENCE_BASES, basis) ? CONFIDENCE_BASES[basis] : "";
 // Provenance of one Declaration: where and when it was observed. `context`
-// carries the record's repository association, branch and Observed at.
+// carries the record's repository association, branch and Observed at. The
+// basis is stored by name only; see basisExplanation().
 export function provenance(context, manifest, { section, line, basis }) {
   return {
     repository: context.repository,
@@ -62,7 +67,6 @@ export function provenance(context, manifest, { section, line, basis }) {
     line: Number.isSafeInteger(line) && line > 0 ? line : null,
     observedAt: context.observedAt,
     basis,
-    explanation: CONFIDENCE_BASES[basis],
   };
 }
 // A dependency is direct because it is explicitly declared, not because we
@@ -133,23 +137,32 @@ const DAY = 24 * 60 * 60 * 1000;
 // Why a stack result may no longer match its repository, computed when it is
 // shown from data Studio already holds: never a timer, refetch or extra
 // request. "pushed-since": the currently loaded repository list reports a
-// push after Observed at. "age": observed more than 24 hours before `now`.
+// newer push than the pushed_at the scan started from (`record.pushedAt`).
+// Both times come from GitHub, so a wrong local clock cannot fake or hide a
+// push; only a record without a scan-time pushed_at falls back to comparing
+// with Observed at. "age": observed more than 24 hours before `now`.
 export function staleness(record, currentRepo, now = Date.now()) {
   const observed = record?.observedAt ?? record?.checkedAt;
   if (!Number.isFinite(observed)) return [];
   const reasons = [];
   const pushed = Date.parse(currentRepo?.pushed_at ?? "");
-  if (Number.isFinite(pushed) && pushed > observed)
+  const scanned = Date.parse(record?.pushedAt ?? "");
+  if (
+    Number.isFinite(pushed) &&
+    pushed > (Number.isFinite(scanned) ? scanned : observed)
+  )
     reasons.push("pushed-since");
   if (Number.isFinite(now) && now - observed > DAY) reasons.push("age");
   return reasons;
 }
 // Uncertain stack results of one record: conditional or ambiguous
 // Declarations, and Manifests that were found but not read (their contents
-// are unknown, never absent). Failed records contribute nothing.
+// are unknown, never absent). `unlisted` counts unread Manifests beyond the
+// bounded skipped list, so the total matches the discovery summary. Failed
+// records contribute nothing.
 export function uncertainResults(record) {
   if (!record || record.status === "failed")
-    return { declarations: [], unread: [] };
+    return { declarations: [], unread: [], unlisted: 0 };
   const declarations = [];
   for (const dependency of record.dependencies || [])
     for (const evidence of dependency.evidence || [])
@@ -165,5 +178,15 @@ export function uncertainResults(record) {
     path: String(entry.path),
     reason: String(entry.reason),
   }));
-  return { declarations, unread };
+  const discovery = record.discovery;
+  const notRead =
+    Number.isSafeInteger(discovery?.found) &&
+    Number.isSafeInteger(discovery?.read)
+      ? discovery.found - discovery.read
+      : 0;
+  return {
+    declarations,
+    unread,
+    unlisted: Math.max(0, notRead - unread.length),
+  };
 }

@@ -6,7 +6,7 @@ import {
   technologyById,
   technologyForDependency,
 } from "./catalog.js";
-import { CONFIDENCE_BASES, UNCERTAIN_BASES } from "./dependencies.js";
+import { UNCERTAIN_BASES, basisExplanation } from "./dependencies.js";
 // Provenance fields copied onto Stack DNA evidence. Metadata evidence is not
 // a Declaration, so it has no Manifest and an empty basis.
 const provenanceOf = (item = {}) => ({
@@ -18,7 +18,7 @@ const provenanceOf = (item = {}) => ({
   blobSha: item.blobSha || "",
   observedAt: item.observedAt ?? null,
   basis: item.basis || "",
-  explanation: item.explanation || CONFIDENCE_BASES[item.basis] || "",
+  explanation: basisExplanation(item.basis),
 });
 const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 export function stackDNA(records) {

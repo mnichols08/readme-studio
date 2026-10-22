@@ -179,7 +179,7 @@ The time Studio read the Manifest from GitHub. Not the time the Manifest was las
 _Avoid_: Updated at, last modified, timestamp
 
 **Stale** (stack result):
-A stack result that may no longer match the repository: the loaded repository list reports a push after it was Observed at, or it was Observed at more than 24 hours ago. Stale is a reason to refresh, never a claim that anything changed. Not the same as a Different target or an Observed mismatch.
+A stack result that may no longer match the repository: the loaded repository list reports a newer push than the one the scan started from, or it was Observed at more than 24 hours ago. Stale is a reason to refresh, never a claim that anything changed. Not the same as a Different target or an Observed mismatch.
 _Avoid_: Outdated, expired, invalid
 
 **Confidence basis**:

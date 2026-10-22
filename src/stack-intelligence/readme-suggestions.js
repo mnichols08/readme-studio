@@ -9,30 +9,43 @@ export function readmeSuggestions(record) {
     suggestions.push({ id, title, markdown, evidence, caveat });
   const dna = stackDNA([record]);
   const known = dna.technologies.filter((t) => t.category !== "Unknown");
-  if (known.length) {
+  // A technology whose every declaration is conditional or ambiguous is shown,
+  // never promoted: it is left out of the Detected stack section and gets no
+  // badge, and is offered as its own labelled suggestion instead.
+  const certain = known.filter((t) => !t.uncertainOnly);
+  const uncertain = known.filter((t) => t.uncertainOnly);
+  // Evidence names its Confidence basis; metadata has none.
+  const basis = (e) => (e.basis ? ` · basis: ${e.basis}` : " · metadata");
+  const section = (heading, technologies) =>
+    `## ${heading}\n\n` +
+    dna.groups
+      .map((g) => ({
+        ...g,
+        technologies: g.technologies.filter((t) => technologies.includes(t)),
+      }))
+      .filter((g) => g.technologies.length)
+      .map(
+        (g) => `- ${g.name}: ${g.technologies.map((t) => t.name).join(" · ")}`,
+      )
+      .join("\n");
+  const evidence = (technologies) =>
+    technologies
+      .flatMap((t) =>
+        t.evidence.map((e) => `${t.name}: ${e.source}${basis(e)}`),
+      )
+      .slice(0, 100);
+  if (certain.length) {
     add(
       "stack",
       "Detected stack section",
-      "## Detected stack\n\n" +
-        dna.groups
-          .map((g) => ({
-            ...g,
-            technologies: g.technologies.filter(
-              (t) => t.category !== "Unknown",
-            ),
-          }))
-          .filter((g) => g.technologies.length)
-          .map(
-            (g) =>
-              `- ${g.name}: ${g.technologies.map((t) => t.name).join(" · ")}`,
-          )
-          .join("\n"),
-      known
-        .flatMap((t) => t.evidence.map((e) => `${t.name}: ${e.source}`))
-        .slice(0, 100),
-      "Declarations and primary-language metadata, not proficiency or verified production use. Unknown dependencies are omitted.",
+      section("Detected stack", certain),
+      evidence(certain),
+      "Declarations and primary-language metadata, not proficiency or verified production use. Unknown dependencies are omitted." +
+        (uncertain.length
+          ? " Technologies with only uncertain evidence are left out and offered separately."
+          : ""),
     );
-    for (const t of known)
+    for (const t of certain)
       add(
         `badge:${t.id}`,
         `${t.name} badge`,
@@ -41,10 +54,18 @@ export function readmeSuggestions(record) {
           color: "555555",
           alt: `${t.name} — repository evidence`,
         }),
-        t.evidence.map((e) => e.source),
+        t.evidence.map((e) => e.source + basis(e)),
         "Optional presentation. Rendering this badge contacts Shields.io; it does not certify skill.",
       );
   }
+  if (uncertain.length)
+    add(
+      "stack:uncertain",
+      "Technologies with only uncertain evidence",
+      section("Possibly in the stack", uncertain),
+      evidence(uncertain),
+      `Only uncertain evidence: every declaration of ${uncertain.map((t) => t.name).join(", ")} is conditional or ambiguous, so it may not be active in every build or install. It is not part of the Detected stack section and no badge is suggested. Select it only after confirming it applies.`,
+    );
   // Commands, managers and package links come from root Manifests only: a
   // command for a Workspace member or Nested project would need its own
   // working directory, which is not offered yet.

@@ -19,8 +19,9 @@ function content(path, source) {
   };
 }
 // Routes api.github.com: one repository with the given root files. A file
-// mapped to a number answers with that HTTP status instead.
-async function routeGitHub(page, files, { pushedAt = "" } = {}) {
+// mapped to a number answers with that HTTP status instead. `list.pushedAt`
+// is read on every repository list request, so a test can report a later push.
+async function routeGitHub(page, files, list = {}) {
   const calls = [];
   await page.route("https://api.github.com/**", async (route) => {
     const url = new URL(route.request().url());
@@ -33,7 +34,7 @@ async function routeGitHub(page, files, { pushedAt = "" } = {}) {
             full_name: "example/app",
             default_branch: "main",
             language: "",
-            pushed_at: pushedAt,
+            pushed_at: list.pushedAt ?? "",
           },
         ],
       });
@@ -123,9 +124,10 @@ test("a partial record lists unread manifests as unknown beside provenance at 32
     "package.json · dependencies · basis: explicit · observed",
   );
   await expect(react).toContainText("on main · blob fffffff");
-  await expect(react.locator(`[title="Blob SHA ${SHA}"]`)).toHaveText(
-    "blob fffffff",
-  );
+  // The full SHA is screen-reader text, not only a title.
+  const blob = react.locator(`[title="Blob SHA ${SHA}"]`);
+  await expect(blob.locator(".sr-only")).toHaveText(`SHA ${SHA}`);
+  await expect(blob.locator('[aria-hidden="true"]')).toHaveText("fffffff");
   await expect(
     results.locator("[data-dependencies] > li").filter({ hasText: "vue" }),
   ).toHaveCount(1);
@@ -147,6 +149,11 @@ test("a newer push in the repository list marks the result Stale without request
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 700 });
+  // The local clock runs behind GitHub: the list already reports a push five
+  // minutes "later" than local time when the scan starts.
+  const start = new Date("2026-03-01T12:00:00Z");
+  await page.clock.setFixedTime(start);
+  const list = { pushedAt: "2026-03-01T12:05:00Z" };
   const calls = await routeGitHub(
     page,
     {
@@ -156,14 +163,25 @@ test("a newer push in the repository list marks the result Stale without request
       }),
       "requirements.txt": "flask\n",
     },
-    { pushedAt: "2099-01-01T00:00:00Z" },
+    list,
   );
   await open(page);
   await analyze(page);
-  const count = calls.length;
+  // Same pushed_at as when the scan started: fresh, whatever the clock says.
+  await expect(page.locator("stack-results summary").first()).toHaveText(
+    "example/app — Manifests read",
+  );
+  // A real push after the scan, seen when the list is loaded again after
+  // its five-minute cache.
+  list.pushedAt = "2026-03-01T12:20:00Z";
+  await page.clock.setFixedTime(new Date(start.getTime() + 6 * 60 * 1000));
+  await page
+    .getByRole("button", { name: "Load repositories", exact: true })
+    .click();
   await expect(page.locator("stack-results summary").first()).toHaveText(
     "example/app — Manifests read — Stale",
   );
+  const count = calls.length;
   await expand(page);
   const stale = page.locator("stack-results [data-stale]");
   await expect(stale).toContainText("Stale: repository pushed after this scan");

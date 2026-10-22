@@ -3,6 +3,7 @@ import { analyzeManifest } from "../src/stack-intelligence/manifests.js";
 import {
   CONFIDENCE_BASES,
   UNCERTAIN_BASES,
+  basisExplanation,
   confidenceBasis,
   normalizeDependencies,
   staleness,
@@ -133,6 +134,10 @@ test = ["pytest"]
 [tool.poetry.dependencies]
 python = "^3.12"
 httpx = "*"
+psycopg2 = { version = "^2.9", optional = true }
+[tool.poetry.dependencies.uvicorn]
+version = "*"
+optional = true
 [tool.poetry.group.dev.dependencies]
 ruff = "*"
 `,
@@ -143,6 +148,9 @@ ruff = "*"
       ["setuptools", "build", "conditional"],
       ["pytest", "development", "explicit"],
       ["httpx", "runtime", "explicit"],
+      // Poetry extras (`optional = true`) are conditional like Cargo's.
+      ["psycopg2", "optional", "conditional"],
+      ["uvicorn", "optional", "conditional"],
       ["ruff", "development", "explicit"],
     ]);
   });
@@ -211,7 +219,6 @@ describe("Provenance (#132)", () => {
           "basis",
           "blobSha",
           "branch",
-          "explanation",
           "line",
           "manifest",
           "observedAt",
@@ -225,7 +232,8 @@ describe("Provenance (#132)", () => {
       expect(item.observedAt).toBe(T0);
       expect(item.branch).toBe("main");
       expect(item.blobSha).toBe("f".repeat(40));
-      expect(item.explanation).toBe(CONFIDENCE_BASES[item.basis]);
+      // The explanation is looked up when shown, not repeated in the cache.
+      expect(basisExplanation(item.basis)).toBe(CONFIDENCE_BASES[item.basis]);
     }
     expect(
       record.dependencies.map((d) => [d.name, d.evidence[0].basis]),
@@ -252,8 +260,8 @@ describe("Provenance (#132)", () => {
       line: null,
       observedAt: T0,
       basis: "explicit",
-      explanation: CONFIDENCE_BASES.explicit,
     });
+    expect(signal.explanation).toBeUndefined();
   });
   it("keeps the original Observed at on a cache hit and renews it on a fresh read", async () => {
     const { client, calls } = mockClient(files);
@@ -302,7 +310,6 @@ describe("Provenance (#132)", () => {
         line: 1,
         observedAt: null,
         basis: "explicit",
-        explanation: CONFIDENCE_BASES.explicit,
       },
     ]);
   });
@@ -328,6 +335,47 @@ describe("Stale stack results (#132)", () => {
         T0 + 25 * HOUR,
       ),
     ).toEqual(["pushed-since", "age"]);
+  });
+  it("compares pushes on GitHub's clock, not the local clock", () => {
+    // The scan started from pushed_at 12:00; the local clock ran 3 minutes
+    // slow, so Observed at is 11:57. An unchanged list is not a push.
+    const pushedAt = "2026-10-22T12:00:00Z";
+    const slow = {
+      observedAt: Date.parse("2026-10-22T11:57:00Z"),
+      pushedAt,
+    };
+    expect(staleness(slow, { pushed_at: pushedAt }, slow.observedAt)).toEqual(
+      [],
+    );
+    // The local clock ran 10 minutes fast; a real push at 12:05 is still
+    // after the scan-time pushed_at.
+    const fast = {
+      observedAt: Date.parse("2026-10-22T12:10:00Z"),
+      pushedAt,
+    };
+    expect(
+      staleness(fast, { pushed_at: "2026-10-22T12:05:00Z" }, fast.observedAt),
+    ).toEqual(["pushed-since"]);
+  });
+  it("scans with a skewed clock and stays fresh until the next push", async () => {
+    const serverNow = Date.parse("2026-10-22T12:00:00Z");
+    const pushed = { ...repo, pushed_at: "2026-10-22T12:00:00Z" };
+    const { client } = mockClient({
+      "package.json": JSON.stringify({ dependencies: { react: "19" } }),
+    });
+    const record = await new StackClient({
+      client,
+      now: () => serverNow - 5 * 60 * 1000,
+    }).repository(pushed);
+    expect(record.pushedAt).toBe(pushed.pushed_at);
+    expect(staleness(record, pushed, record.observedAt)).toEqual([]);
+    expect(
+      staleness(
+        record,
+        { ...pushed, pushed_at: "2026-10-22T12:01:00Z" },
+        record.observedAt,
+      ),
+    ).toEqual(["pushed-since"]);
   });
   it("uses the checkedAt alias and ignores missing or invalid times", () => {
     expect(staleness({ checkedAt: T0 }, null, T0 + 25 * HOUR)).toEqual(["age"]);
@@ -403,7 +451,51 @@ describe("Partial results list unread manifests as unknown (#132)", () => {
     expect(
       uncertainResults({ ...record, status: "failed" }).declarations,
     ).toEqual([]);
-    expect(uncertainResults(null)).toEqual({ declarations: [], unread: [] });
+    expect(uncertainResults(null)).toEqual({
+      declarations: [],
+      unread: [],
+      unlisted: 0,
+    });
+  });
+  it("counts unread manifests beyond the bounded skipped list", () => {
+    const skipped = Array.from({ length: 50 }, (_, i) => ({
+      path: `vendor/${i}/package.json`,
+      reason: "excluded directory",
+    }));
+    const record = {
+      status: "partial",
+      dependencies: [],
+      discovery: { found: 75, read: 5, skipped },
+    };
+    const { unread, unlisted } = uncertainResults(record);
+    expect(unread).toHaveLength(50);
+    expect(unlisted).toBe(20);
+    const element = document.createElement("stack-results");
+    document.body.append(element);
+    element.setData([
+      {
+        ...record,
+        repository: "Example/App",
+        ref: "main",
+        observedAt: T0,
+        manifests: [],
+        issues: [],
+      },
+    ]);
+    const details = element.querySelector("details");
+    details.open = true;
+    details.ontoggle();
+    // The heading matches the discovery summary: 70 not read.
+    expect(element.querySelector("[data-discovery-summary]").textContent).toBe(
+      "75 manifests found, 5 read, 70 not read. Root manifests only; nested manifests were not included.",
+    );
+    expect(element.querySelector("[data-uncertain] h3").textContent).toBe(
+      "Uncertain stack results (70)",
+    );
+    expect(element.querySelector("[data-uncertain-unlisted]").textContent).toBe(
+      "20 more manifests not read and not listed — unknown.",
+    );
+    element.remove();
   });
   it("gives failed records an Observed at and pushedAt but no evidence", async () => {
     const records = [];
@@ -546,8 +638,15 @@ describe("stack-results rendering (#133)", () => {
     expect(line).toContain("basis: conditional");
     expect(line).toContain("on main");
     expect(line).toContain("blob fffffff");
-    expect(element.querySelector("[title]").title).toBe(
-      "Blob SHA " + "f".repeat(40),
+    const blob = element.querySelector("[data-blob]");
+    expect(blob.title).toBe("Blob SHA " + "f".repeat(40));
+    // The full SHA is text for keyboard and screen-reader users, not only a
+    // title; the visible short form is hidden from assistive technology.
+    expect(blob.querySelector(".sr-only").textContent).toBe(
+      "SHA " + "f".repeat(40),
+    );
+    expect(blob.querySelector('[aria-hidden="true"]').textContent).toBe(
+      "fffffff",
     );
     // Uncertain declarations stay in place in the dependency list.
     expect(element.querySelector("[data-dependencies]").textContent).toContain(

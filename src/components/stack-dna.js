@@ -3,11 +3,15 @@ import { categories } from "../stack-intelligence/catalog.js";
 import { stackDNA } from "../stack-intelligence/dna.js";
 const observed = (time, branch) =>
   `observed ${Number.isFinite(time) ? new Date(time).toLocaleString() : "at an unknown time"} on ${branch || "an unknown branch"}`;
+// The blob SHA shown shortened to 7 characters. The full SHA is screen-reader
+// text (a title alone is not reachable by keyboard or reliably announced) and
+// also the title for pointer users.
+const blobHTML = (sha) =>
+  `<span data-blob title="Blob SHA ${h(sha)}">blob <span aria-hidden="true">${h(String(sha).slice(0, 7))}</span><span class="sr-only">SHA ${h(sha)}</span></span>`;
 // One Provenance as escaped text: Manifest path · section · line N · basis ·
-// observed <time> on <branch>, with the blob SHA shortened to 7 characters
-// (the full SHA is in its title). Shared with stack-results.js.
+// observed <time> on <branch> · blob SHA. Shared with stack-results.js.
 export function provenanceHTML(item) {
-  return `${h(item.manifest)} · ${h(item.section)}${item.line ? ` · line ${h(item.line)}` : ""} · <span data-basis="${h(item.basis)}">basis: ${h(item.basis || "unknown")}</span> · ${h(observed(item.observedAt, item.branch))}${item.blobSha ? ` · <span title="Blob SHA ${h(item.blobSha)}">blob ${h(String(item.blobSha).slice(0, 7))}</span>` : ""}`;
+  return `${h(item.manifest)} · ${h(item.section)}${item.line ? ` · line ${h(item.line)}` : ""} · <span data-basis="${h(item.basis)}">basis: ${h(item.basis || "unknown")}</span> · ${h(observed(item.observedAt, item.branch))}${item.blobSha ? ` · ${blobHTML(item.blobSha)}` : ""}`;
 }
 const evidenceHTML = (source) =>
   source.manifest
