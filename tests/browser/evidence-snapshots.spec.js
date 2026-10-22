@@ -282,6 +282,7 @@ test("ineligible documents explain the target and storage failures save nothing"
   await page.getByLabel("Current draft").selectOption(ids[0]);
   await page.evaluate(() => {
     const original = Storage.prototype.setItem;
+    window.restoreSetItem = () => (Storage.prototype.setItem = original);
     Storage.prototype.setItem = function (key, value) {
       if (key === "readme-studio:v1" && value.includes('"sourceHash"'))
         throw new DOMException("Quota", "QuotaExceededError");
@@ -304,4 +305,38 @@ test("ineligible documents explain the target and storage failures save nothing"
           .length ?? 0,
     ),
   ).toBe(0);
+  // A failure while saving must not leave the panel stuck busy.
+  const captureButton = panel.getByRole("button", {
+    name: "Capture evidence snapshot",
+  });
+  await expect(captureButton).toBeEnabled();
+  await expect(captureButton).toBeFocused();
+  await expect(panel.locator("[data-cancel]")).toBeHidden();
+  await page.evaluate(() => window.restoreSetItem());
+  await captureButton.click();
+  await expect(panel.locator("[data-status]")).toContainText(
+    "Snapshot captured.",
+  );
+  await expect(panel.locator("[data-snapshot]")).toHaveCount(1);
+});
+
+test("deleting a draft warns that its evidence snapshots and Baseline go too", async ({
+  page,
+}) => {
+  await start(page);
+  await open(page);
+  const panel = page.locator("evidence-snapshots");
+  await panel
+    .getByRole("button", { name: "Capture evidence snapshot" })
+    .click();
+  await expect(panel.locator("[data-snapshot]")).toHaveCount(1, firstRead);
+  await panel.getByRole("button", { name: "Pin as Baseline" }).click();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Manage drafts" }).click();
+  await page.getByRole("button", { name: "Delete this draft" }).click();
+  await expect(page.locator("[data-delete-evidence]")).toContainText(
+    "1 evidence snapshot(s), including its Baseline",
+  );
+  await page.getByRole("button", { name: "Delete draft" }).click();
+  await expect.poll(() => stored(page)).toHaveLength(0);
 });

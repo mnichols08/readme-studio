@@ -29,36 +29,59 @@ const types = { blob: "file", tree: "directory", commit: "submodule" };
 
 // Repository paths the document's own Source links to by relative URL,
 // resolved against its README path. Read-only; the Source is not changed.
+// Resolution is done segment by segment (not with URL against a synthetic
+// origin) so a link that climbs above the repository root is reported, never
+// clamped onto a root file. Links that cannot be decoded are reported too.
+const OUTSIDE = Symbol("outside");
+function resolveLink(raw, directory) {
+  const segments = raw.startsWith("/") ? [] : [...directory];
+  for (const encoded of raw.split("/")) {
+    const part = decodeURIComponent(encoded);
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      if (!segments.length) throw OUTSIDE;
+      segments.pop();
+    } else segments.push(part);
+  }
+  return evidencePath(segments.join("/"));
+}
 export function linkedPaths(markdown, readmePath) {
-  const base =
-    "https://readme.invalid/" +
-    readmePath.split("/").map(encodeURIComponent).join("/");
+  const directory = readmePath.split("/").slice(0, -1);
   const paths = [];
-  let skipped = 0;
+  let skipped = 0,
+    outside = 0,
+    undecodable = 0;
   for (const { value } of sourceUrls(markdown)) {
     if (!isRelativeUrl(value) || /[\x00-\x1f\x7f\\]/.test(value)) continue;
+    // Query- or fragment-only links point at the README itself.
+    const raw = value.trim().split(/[?#]/)[0];
+    if (!raw) continue;
     let path;
     try {
-      const url = new URL(value.trim(), base);
-      if (url.origin !== "https://readme.invalid") continue;
-      path = evidencePath(
-        decodeURIComponent(url.pathname).replace(/^\/+|\/+$/g, ""),
-      );
-    } catch {
+      path = resolveLink(raw, directory);
+    } catch (error) {
+      if (error === OUTSIDE) outside++;
+      else if (error instanceof URIError) undecodable++;
       continue;
     }
     if (path === readmePath || paths.includes(path)) continue;
     if (paths.length >= LINK_LIMIT) skipped++;
     else paths.push(path);
   }
-  return {
-    paths,
-    notes: skipped
-      ? [
-          `Only the first ${LINK_LIMIT} relative links were recorded; ${skipped} more were not.`,
-        ]
-      : [],
-  };
+  const notes = [];
+  if (skipped)
+    notes.push(
+      `Only the first ${LINK_LIMIT} relative links were recorded; ${skipped} more were not.`,
+    );
+  if (outside)
+    notes.push(
+      `${outside} relative link(s) point above the repository root and were not recorded.`,
+    );
+  if (undecodable)
+    notes.push(
+      `${undecodable} relative link(s) could not be decoded (for example a literal "%") and were not recorded.`,
+    );
+  return { paths, notes };
 }
 
 // Reads the branch head and one recursive tree listing. Failure to read the

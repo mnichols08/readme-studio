@@ -27,6 +27,7 @@ import {
   compareEvidence,
   documentSnapshots,
   differentTarget,
+  WORKSPACE_RETENTION,
 } from "../workspace/evidence-snapshots.js";
 import { portableData } from "../state/portable-data.js";
 import {
@@ -1321,6 +1322,11 @@ export class AppShell extends HTMLElement {
       this.data.evidenceSnapshots,
       draft.id,
     ).find((item) => item.id === id);
+    const settle = () => {
+      panel.working = false;
+      panel.controller = null;
+      if (panel.isConnected) panel.busy(false);
+    };
     const refresh = (message, focus) => {
       panel.configure(this.evidenceState());
       panel.status(message);
@@ -1408,10 +1414,10 @@ export class AppShell extends HTMLElement {
         throw Error(
           "The document or its target changed while GitHub was being read.",
         );
-      panel.working = false;
-      panel.controller = null;
+      // The panel stays busy until the outcome is saved: if saving throws
+      // (storage full, retention refused) `finally` restores the controls.
       if (action === "check") {
-        panel.busy(false);
+        settle();
         panel.status("Change check complete. Nothing was saved.");
         panel.showCheck(snapshot, compareEvidence(snapshot, evidence));
         return;
@@ -1426,6 +1432,7 @@ export class AppShell extends HTMLElement {
         }),
       );
       this.setSnapshots(snapshots);
+      settle();
       const unknown = evidence.entries.filter(
         (entry) => entry.status === "failed",
       ).length;
@@ -1445,12 +1452,8 @@ export class AppShell extends HTMLElement {
       );
     } finally {
       if (panel.working) {
-        panel.working = false;
-        panel.controller = null;
-        if (panel.isConnected) {
-          panel.busy(false);
-          panel.querySelector("[data-capture],[data-set-target]")?.focus();
-        }
+        settle();
+        panel.querySelector("[data-capture],[data-set-target]")?.focus();
       }
     }
   }
@@ -2333,8 +2336,17 @@ export class AppShell extends HTMLElement {
             return;
           }
           if (action === "delete") {
+            // Snapshots are machine-local and never in Studio projects, so
+            // say plainly that deleting the draft deletes them (Baseline too).
+            const evidence = documentSnapshots(
+              this.data.evidenceSnapshots,
+              this.data.active,
+            );
+            const evidenceWarning = evidence.length
+              ? `<p data-delete-evidence>It also deletes this document's ${evidence.length} evidence snapshot(s)${evidence.some((item) => item.baseline) ? ", including its Baseline" : ""}. Snapshots are not in Studio projects; download all drafts backup first to keep them.</p>`
+              : "";
             this.modal(
-              '<h1>Delete this local draft?</h1><p>This removes the saved draft from this browser.</p><button id="confirm-delete" class="danger">Delete draft</button><button id="keep-draft">Keep draft</button>',
+              `<h1>Delete this local draft?</h1><p>This removes the saved draft from this browser.</p>${evidenceWarning}<button id="confirm-delete" class="danger">Delete draft</button><button id="keep-draft">Keep draft</button>`,
             );
             this.querySelector("#keep-draft").onclick = () =>
               this.closeDialog();
@@ -2394,6 +2406,14 @@ export class AppShell extends HTMLElement {
                 "Confirm replacing drafts or recovery data before restoring.",
               );
             const plan = restoreWorkspace(this.data, backup, mode);
+            // Merge never evicts local snapshots; incoming ones that do not
+            // fit the workspace limit are left in the backup file.
+            const notRestored =
+              mode === "merge"
+                ? (this.data.evidenceSnapshots?.items?.length || 0) +
+                  backup.evidenceSnapshots.items.length -
+                  plan.evidenceSnapshots.items.length
+                : 0;
             saveDrafts(plan);
             this.data = plan;
             this.storageBlocked = false;
@@ -2403,7 +2423,11 @@ export class AppShell extends HTMLElement {
             this.load(plan.active);
             this.applySettings();
             this.closeDialog(this.querySelector("#draft-select"));
-            this.notify("Workspace backup restored.");
+            this.notify(
+              notRestored
+                ? `Workspace backup restored. Local evidence snapshots were kept; ${notRestored} incoming evidence snapshot(s) did not fit the ${WORKSPACE_RETENTION}-snapshot workspace limit and remain only in the backup file.`
+                : "Workspace backup restored.",
+            );
           } catch (e) {
             this.querySelector("#restore-status").textContent =
               e.name === "QuotaExceededError"

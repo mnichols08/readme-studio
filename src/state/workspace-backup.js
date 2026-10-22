@@ -141,7 +141,7 @@ export function restoreWorkspace(current, backup, mode) {
     evidenceSnapshots: mergeSnapshots(
       current.evidenceSnapshots,
       incoming.evidenceSnapshots,
-    ),
+    ).snapshots,
     componentLibrary: mergeComponents(
       current.componentLibrary,
       incoming.componentLibrary,

@@ -35,15 +35,21 @@ export class EvidenceSnapshots extends HTMLElement {
   configure({ draft, target, snapshots, storageBlocked = false }) {
     this.state = { draft, target, snapshots, storageBlocked };
     const items = documentSnapshots(snapshots, draft.id);
-    this.innerHTML = `<h1>Evidence snapshots</h1><p>An evidence snapshot records what GitHub reports for this document's repository at one moment: the branch head commit, the README revision, recognised manifests and lockfiles, and files your Markdown links to by relative path, plus a fingerprint of your local Markdown. Capture and change checks only read public GitHub data. They never change your Markdown or write to GitHub.</p>
+    // The status live region is created once and never re-rendered, so an
+    // outcome written right after a refresh is still announced.
+    if (!this.querySelector(":scope > [data-status]"))
+      this.innerHTML =
+        '<div data-head></div><p data-status role="status"></p><div data-body></div>';
+    this.querySelector("[data-head]").innerHTML =
+      `<h1>Evidence snapshots</h1><p>An evidence snapshot records what GitHub reports for this document's repository at one moment: the branch head commit, the README revision, recognised manifests and lockfiles, and files your Markdown links to by relative path, plus a fingerprint of your local Markdown. Capture and change checks only read public GitHub data. They never change your Markdown or write to GitHub.</p>
       ${
         target
           ? `<p data-target-line>Target: ${targetText(target)}</p><button class="primary" data-capture>Capture evidence snapshot</button>`
           : `<p data-target-line>This document has no repository, branch and README path target, so it cannot be captured. Saved snapshots remain readable.</p><button data-set-target>Set document target</button>`
       }<button data-cancel hidden>Cancel</button>
-      ${storageBlocked ? '<p role="alert">Storage recovery is active. Snapshots can be viewed and checked, but capture, Baseline and delete need restored workspace storage.</p>' : ""}
-      <p data-status role="status"></p>
-      <h2>Saved snapshots (${items.length})</h2>
+      ${storageBlocked ? '<p role="alert">Storage recovery is active. Snapshots can be viewed and checked, but capture, Baseline and delete need restored workspace storage.</p>' : ""}`;
+    this.querySelector("[data-body]").innerHTML =
+      `<h2>Saved snapshots (${items.length})</h2>
       <p class="hint">Kept in this browser and in all-drafts backups, not in Studio projects or README exports. Retention keeps each document's newest ${DOCUMENT_RETENTION} snapshots plus its Baseline, up to ${WORKSPACE_RETENTION} in this workspace; a Baseline is never removed automatically.</p>
       ${
         items.length

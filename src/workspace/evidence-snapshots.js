@@ -169,7 +169,18 @@ export function recoverSnapshots(value, ids = null) {
       /* The damaged original stays in the recovery download. */
     }
   }
-  return retainSnapshots(remap(items, ids)).snapshots;
+  // Retention throws when more Baselines remain than the workspace holds; a
+  // recovery must not fail on that, so the oldest excess Baselines are left
+  // in the recovery download instead.
+  let baselineCount = 0;
+  const bounded = remap(items, ids)
+    .sort(newest)
+    .filter((item) => !item.baseline || ++baselineCount <= WORKSPACE_RETENTION);
+  try {
+    return retainSnapshots(bounded).snapshots;
+  } catch {
+    return empty();
+  }
 }
 
 const newest = (a, b) =>
@@ -177,11 +188,15 @@ const newest = (a, b) =>
   b.id.localeCompare(a.id);
 // Retention keeps each document's Baseline plus its newest snapshots, then
 // enforces the workspace cap by evicting the oldest non-Baseline snapshots.
-export function retainSnapshots(items) {
+// `keep` names a snapshot that must survive (a fresh capture): it counts as
+// its document's newest even when other snapshots carry later timestamps,
+// and capture is refused rather than silently dropping it.
+export function retainSnapshots(items, keep = null) {
   const kept = [],
     evicted = [],
     counts = new Map();
-  for (const item of [...items].sort(newest)) {
+  const order = (a, b) => (b.id === keep) - (a.id === keep) || newest(a, b);
+  for (const item of [...items].sort(order)) {
     const count = counts.get(item.documentId) || 0;
     if (!item.baseline && count >= DOCUMENT_RETENTION) evicted.push(item);
     else {
@@ -190,7 +205,9 @@ export function retainSnapshots(items) {
     }
   }
   while (kept.length > WORKSPACE_RETENTION) {
-    const index = kept.findLastIndex((item) => !item.baseline);
+    const index = kept.findLastIndex(
+      (item) => !item.baseline && item.id !== keep,
+    );
     if (index === -1)
       throw Error(
         `Every one of the ${WORKSPACE_RETENTION} retained snapshots is a Baseline. Unpin or delete one first.`,
@@ -221,8 +238,9 @@ export function createSnapshot({
   });
 }
 export function addSnapshot(snapshots, snapshot) {
-  const current = validateSnapshots(snapshots);
-  return retainSnapshots([...current.items, validateSnapshot(snapshot)]);
+  const current = validateSnapshots(snapshots),
+    item = validateSnapshot(snapshot);
+  return retainSnapshots([...current.items, item], item.id);
 }
 export function documentSnapshots(snapshots, documentId) {
   return (snapshots?.items || [])
@@ -275,21 +293,43 @@ export function forgetDocument(snapshots, documentId) {
     ),
   );
 }
+// Local snapshots win: they are never evicted by a merge, incoming IDs are
+// renamed and a local Baseline stays. Incoming snapshots fill the remaining
+// workspace capacity (Baselines first, then newest); the rest are not
+// restored and stay in the backup file. `dropped` counts them.
 export function mergeSnapshots(current, incoming) {
   const items = validateSnapshots(current).items;
   const ids = new Set(items.map((item) => item.id)),
     baselines = new Set(
       items.filter((item) => item.baseline).map((item) => item.documentId),
     );
-  // Local snapshots win: incoming IDs are renamed and a local Baseline stays.
-  return retainSnapshots([
-    ...items,
-    ...validateSnapshots(incoming).items.map((item) => ({
+  const candidates = validateSnapshots(incoming)
+    .items.map((item) => ({
       ...item,
       id: ids.has(item.id) ? crypto.randomUUID() : item.id,
       baseline: item.baseline && !baselines.has(item.documentId),
-    })),
-  ]).snapshots;
+    }))
+    .sort((a, b) => b.baseline - a.baseline || newest(a, b));
+  const room = Math.max(0, WORKSPACE_RETENTION - items.length),
+    perDocument = new Map(),
+    added = [];
+  for (const item of items)
+    if (!item.baseline)
+      perDocument.set(
+        item.documentId,
+        (perDocument.get(item.documentId) || 0) + 1,
+      );
+  let dropped = 0;
+  for (const item of candidates) {
+    const count = perDocument.get(item.documentId) || 0;
+    if (added.length >= room || (!item.baseline && count >= DOCUMENT_RETENTION))
+      dropped++;
+    else {
+      added.push(item);
+      if (!item.baseline) perDocument.set(item.documentId, count + 1);
+    }
+  }
+  return { snapshots: checkItems([...items, ...added]), dropped };
 }
 export function snapshotSummary(snapshot, source) {
   const count = (status) =>

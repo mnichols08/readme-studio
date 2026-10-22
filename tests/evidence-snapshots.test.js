@@ -133,6 +133,29 @@ describe("linked evidence paths", () => {
     expect(paths).toHaveLength(LINK_LIMIT);
     expect(notes[0]).toContain("3 more were not");
   });
+  it("never maps links above the repository root onto root files", () => {
+    const { paths, notes } = linkedPaths(
+      "[a](../../outside.md) [b](docs/../../up.md) [r](root.md) ![i](./img.png) [n](docs/../ok.md)",
+      "README.md",
+    );
+    expect(paths).toEqual(["root.md", "img.png", "ok.md"]);
+    expect(notes).toEqual([
+      "2 relative link(s) point above the repository root and were not recorded.",
+    ]);
+    expect(linkedPaths("[l](../../LICENSE)", "docs/README.md").notes).toEqual([
+      "1 relative link(s) point above the repository root and were not recorded.",
+    ]);
+  });
+  it("notes links that cannot be decoded instead of dropping them silently", () => {
+    const { paths, notes } = linkedPaths(
+      "[b](docs/100%.md) [c](docs/a%20b.md) [q](?tab=1) [f](usage.md?x=1#top)",
+      "README.md",
+    );
+    expect(paths).toEqual(["docs/a b.md", "usage.md"]);
+    expect(notes).toEqual([
+      '1 relative link(s) could not be decoded (for example a literal "%") and were not recorded.',
+    ]);
+  });
 });
 
 describe("evidence capture", () => {
@@ -353,6 +376,31 @@ describe("retention and Baseline", () => {
       ),
     ).toThrow(/Baseline/);
   });
+  it("always keeps a fresh capture, even behind future-dated snapshots", () => {
+    const future = Array.from({ length: DOCUMENT_RETENTION }, (_, i) =>
+      item("doc", 0, {
+        id: `future-${i}`,
+        capturedAt: new Date(Date.UTC(2030, 0, 1, 0, i)).toISOString(),
+      }),
+    );
+    const { snapshots, evicted } = addSnapshot(
+      { version: 1, items: future },
+      item("doc", 1, { id: "new" }),
+    );
+    expect(snapshots.items.map((e) => e.id)).toContain("new");
+    expect(evicted.map((e) => e.id)).toEqual(["future-0"]);
+  });
+  it("refuses a capture rather than dropping it when every other snapshot is a Baseline", () => {
+    const baselines = {
+      version: 1,
+      items: Array.from({ length: WORKSPACE_RETENTION }, (_, i) =>
+        item(`doc-${i}`, i, { baseline: true }),
+      ),
+    };
+    expect(() => addSnapshot(baselines, item("doc-0", 59))).toThrow(
+      /Unpin or delete one first/,
+    );
+  });
   it("pins one Baseline per document, refuses a Different target and supports unpin/delete/forget", () => {
     let snapshots = {
       version: 1,
@@ -558,15 +606,99 @@ describe("storage, backup and recovery", () => {
     const self = mergeSnapshots(
       current.evidenceSnapshots,
       current.evidenceSnapshots,
-    ).items;
+    ).snapshots.items;
     expect(self).toHaveLength(2);
     expect(self.filter((s) => s.baseline).map((s) => s.id)).toEqual([
       current.evidenceSnapshots.items[0].id,
     ]);
   });
+  it("recovers drafts even when damaged storage holds more Baselines than the workspace limit", async () => {
+    const base = (await workspace()).evidenceSnapshots.items[0];
+    const drafts = Array.from({ length: WORKSPACE_RETENTION + 1 }, (_, i) => {
+      const draft = newDraft(`Doc ${i}`);
+      draft.id = `d${i}`;
+      return draft;
+    });
+    const evidenceSnapshots = {
+      version: 1,
+      items: drafts.map((draft, i) => ({
+        ...base,
+        id: `s${i}`,
+        documentId: draft.id,
+        capturedAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+        baseline: true,
+      })),
+    };
+    const salvaged = recoverSnapshots(evidenceSnapshots);
+    expect(salvaged.items).toHaveLength(WORKSPACE_RETENTION);
+    expect(salvaged.items.map((s) => s.id)).not.toContain("s0");
+    const recovered = recoverWorkspace(
+      JSON.stringify({
+        version: 1,
+        drafts,
+        active: "d0",
+        settings: {},
+        evidenceSnapshots,
+      }),
+    );
+    expect(recovered.drafts).toHaveLength(WORKSPACE_RETENTION + 1);
+    expect(recovered.evidenceSnapshots.items).toHaveLength(WORKSPACE_RETENTION);
+  });
+  it("never evicts local snapshots on merge and counts incoming ones that do not fit", async () => {
+    const base = (await workspace()).evidenceSnapshots.items[0];
+    const many = (prefix, documents, year) => ({
+      version: 1,
+      items: Array.from({ length: documents * DOCUMENT_RETENTION }, (_, i) => ({
+        ...base,
+        id: `${prefix}${i}`,
+        documentId: `${prefix}doc${Math.floor(i / DOCUMENT_RETENTION)}`,
+        capturedAt: new Date(Date.UTC(year, 0, 1, 0, i)).toISOString(),
+        baseline: false,
+      })),
+    });
+    const local = many("l", 16, 2025),
+      incoming = many("i", 10, 2026);
+    const { snapshots, dropped } = mergeSnapshots(local, incoming);
+    expect(snapshots.items).toHaveLength(WORKSPACE_RETENTION);
+    expect(snapshots.items.filter((s) => s.id.startsWith("l"))).toHaveLength(
+      80,
+    );
+    expect(dropped).toBe(30);
+
+    const current = await workspace();
+    current.drafts = Array.from({ length: 20 }, (_, i) => newDraft(`L${i}`));
+    current.active = current.drafts[0].id;
+    current.evidenceSnapshots = {
+      version: 1,
+      items: Array.from({ length: WORKSPACE_RETENTION }, (_, i) => ({
+        ...base,
+        id: `local-${i}`,
+        documentId: current.drafts[i % 20].id,
+        capturedAt: new Date(Date.UTC(2025, 0, 1, 0, i)).toISOString(),
+        baseline: false,
+      })),
+    };
+    const merged = restoreWorkspace(
+      current,
+      createBackup(await workspace()),
+      "merge",
+    );
+    expect(
+      merged.evidenceSnapshots.items.filter((s) => s.id.startsWith("local-")),
+    ).toHaveLength(WORKSPACE_RETENTION);
+  });
   it("never puts snapshots in portable Studio projects", async () => {
     const data = await workspace();
-    const project = JSON.stringify(createProject(data.drafts[0]));
+    // Pass everything the app could hand over: the workspace as embedded
+    // libraries and a draft carrying stray workspace fields.
+    const project = JSON.stringify(
+      createProject(
+        { ...data.drafts[0], evidenceSnapshots: data.evidenceSnapshots },
+        data.settings,
+        data,
+      ),
+    );
+    expect(project).toContain("libraries");
     expect(project).not.toContain("evidenceSnapshots");
     expect(project).not.toContain(sha("1"));
   });
@@ -607,8 +739,8 @@ describe("evidence snapshots dialog", () => {
     el.busy(true);
     el.busy(false);
     expect(
-      items[1].querySelector('[data-snapshot-action="check"]'),
-    ).not.toBeNull();
+      items[1].querySelector('[data-snapshot-action="check"]').disabled,
+    ).toBe(true);
     expect(
       el.querySelector('[data-id="older"][data-snapshot-action="pin"]')
         .disabled,
@@ -623,6 +755,17 @@ describe("evidence snapshots dialog", () => {
         /publish|commit|push/i.test(b.textContent),
       ),
     ).toBe(false);
+    // The live region survives re-rendering so outcomes are announced.
+    const live = el.querySelector("[data-status]");
+    el.status("Pinned as Baseline.");
+    el.configure({
+      draft,
+      target,
+      snapshots: { version: 1, items: [snapshot] },
+    });
+    expect(el.querySelector("[data-status]")).toBe(live);
+    expect(el.querySelectorAll("[data-status]")).toHaveLength(1);
+    expect(el.querySelectorAll("[data-snapshot]")).toHaveLength(1);
     el.showCheck(snapshot, compareEvidence(snapshot, snapshot));
     expect(el.querySelector("[data-counts]").textContent).toContain(
       "0 changed",
