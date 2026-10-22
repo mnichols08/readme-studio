@@ -902,6 +902,7 @@ export class AppShell extends HTMLElement {
       this.data.drafts[this.data.drafts.findIndex((d) => d.id === id)] =
         this.store.draft;
       this.editor.value = this.store.draft.markdown;
+      this.documentChanged?.(e.detail);
       if (e.detail !== "raw") this.draftOptions();
       this.querySelector(".save-status").textContent = "Saving…";
       clearTimeout(this.updateTimer);
@@ -953,6 +954,7 @@ export class AppShell extends HTMLElement {
     }
     try {
       saveDrafts(this.data);
+      this.saveFailedNow(false);
       this.querySelector(".save-status").textContent = "Saved locally";
       if (
         !this.lastSaveAnnouncement ||
@@ -965,6 +967,7 @@ export class AppShell extends HTMLElement {
       this.querySelector(".recovery-notice").hidden = true;
       return true;
     } catch {
+      this.saveFailedNow(true);
       this.querySelector(".save-status").textContent =
         "Save failed · export to keep work";
       this.storageNotice(
@@ -972,6 +975,13 @@ export class AppShell extends HTMLElement {
       );
       return false;
     }
+  }
+  // A save that fails after startup (quota full, storage revoked) leaves the
+  // work in memory only, like blocked storage; Next steps then offer Export.
+  saveFailedNow(failed) {
+    if (!!this.saveFailed === failed) return;
+    this.saveFailed = failed;
+    this.renderNextSteps?.();
   }
   storageNotice(message) {
     const el = this.querySelector(".recovery-notice");
@@ -2409,7 +2419,11 @@ export class AppShell extends HTMLElement {
             template(b.dataset.template),
           );
           this.closeDialog();
-          if (created) this.arrive("template", { template: "profile" });
+          if (!created) return;
+          this.arrive("template", { template: "profile" });
+          this.notify(
+            `${b.dataset.template} template opened as a new local draft.`,
+          );
         }),
     );
   }

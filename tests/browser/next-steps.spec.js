@@ -8,6 +8,7 @@ const dialog = (page) => page.getByRole("dialog");
 const editor = (page) =>
   page.getByRole("textbox", { name: "Markdown editor", exact: true });
 const blockRows = (page) => page.locator(".block-row");
+const toast = (page) => page.getByRole("status").and(page.locator(".toast"));
 const imported = "# Widget\n\nA small tool.\n\n## Install\n\nnpm i widget\n";
 // Next steps never contact GitHub by themselves; record anything that does.
 function watchGitHub(page) {
@@ -34,6 +35,10 @@ async function importLocal(page, markdown = imported, mode = "new") {
     mimeType: "text/markdown",
     buffer: Buffer.from(markdown),
   });
+  if (mode === "replace")
+    await dialog(page)
+      .getByLabel("I confirm replacing the current draft")
+      .check();
   await dialog(page).locator("#apply-import").click();
   await expect(dialog(page)).toBeHidden();
 }
@@ -69,6 +74,10 @@ test("no Next steps before an Arrival; a profile template shows them without mov
   await expect(trigger).toBeFocused();
   await expect(panel(page)).not.toHaveAttribute("aria-live");
   await expect(panel(page)).not.toHaveAttribute("role", "status");
+  // The usual notification announces the new draft instead.
+  await expect(toast(page)).toHaveText(
+    "Minimal template opened as a new local draft.",
+  );
   await expect(steps(page)).toHaveText([
     "Edit your sections",
     "Autofill from GitHub",
@@ -141,10 +150,64 @@ test("keyboard only: import, then Split into sections; Escape returns to the ste
     "README Health",
     "Compatibility Lab",
   ]);
-  // The tool's own Undo still restores the single imported block.
+  // The tool's own Undo still restores the single imported block, and the
+  // steps follow the document back without a dialog closing.
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(blockRows(page)).toHaveCount(1);
   await expect(editor(page)).toHaveValue(imported);
+  await expect(steps(page)).toHaveText([
+    "Split into sections",
+    "README Health",
+    "Preview README",
+  ]);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(blockRows(page)).toHaveCount(2);
+  await expect(steps(page)).toHaveText([
+    "Preview README",
+    "README Health",
+    "Compatibility Lab",
+  ]);
+});
+
+test("undoing a replacing import removes the panel that described it", async ({
+  page,
+}) => {
+  await start(page);
+  const before = await blockRows(page).count();
+  expect(before).toBeGreaterThan(1);
+  await importLocal(page, "Just one paragraph.\n", "replace");
+  await expect(blockRows(page)).toHaveCount(1);
+  await expect(steps(page)).toHaveText([
+    "Split into sections",
+    "README Health",
+    "Preview README",
+  ]);
+  await expect(panel(page)).toContainText(
+    "Replaced this draft with the import.",
+  );
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(blockRows(page)).toHaveCount(before);
+  await expect(panel(page)).toBeHidden();
+});
+
+test("a save that fails after startup makes the last step Export README", async ({
+  page,
+}) => {
+  await start(page);
+  await page.evaluate(() => {
+    Storage.prototype.setItem = () => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    };
+  });
+  await profileTemplate(page);
+  await expect(page.locator(".save-status")).toHaveText(
+    "Save failed · export to keep work",
+  );
+  await expect(steps(page)).toHaveText([
+    "Edit your sections",
+    "Autofill from GitHub",
+    "Export README",
+  ]);
 });
 
 test("a step's dialog returns focus to the step; Hide focuses the editor and a draft switch or reload clears the panel", async ({
@@ -293,17 +356,9 @@ test("an audit Arrival offers Health and the Attention Queue with GitHub mocked"
     .getByRole("button", { name: "Open existing README unchanged" })
     .click();
   await expect(dialog(page)).toBeHidden();
-  const hasTarget = await page.evaluate(() => {
-    const { metadata } = document.querySelector("app-shell").store.draft;
-    return Boolean(
-      metadata.workspaceDocument?.target ||
-      metadata.importSource ||
-      metadata.publishing?.readme,
-    );
-  });
   await expect(steps(page)).toHaveText([
     "README Health",
-    ...(hasTarget ? ["Drift check"] : []),
+    "Drift check",
     "README Attention Queue",
   ]);
   await expect(panel(page)).toContainText(
@@ -333,6 +388,7 @@ test("a blank start from Guided start offers ways to fill it", async ({
     "Import existing README",
   ]);
   await expect(panel(page)).toContainText("Started a blank local draft.");
+  await expect(toast(page)).toHaveText("Blank draft created.");
   await step(page, "Add a section").click();
   await expect(
     page.locator(".builder-content").getByRole("heading", {

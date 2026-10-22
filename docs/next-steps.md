@@ -23,15 +23,15 @@ The suggestions depend on how the document arrived and on a few cheap facts: how
 
 Opening the existing README unchanged from the repository README builder counts as a GitHub import; doing it from the README audit counts as an audit. A template with no clear kind follows the document's group, then your goal.
 
-The steps are worked out again when a tool's dialog closes, so after **Split into sections** or **Set repository target** the panel shows what fits the document now. A step that is still offered keeps its button, so focus stays on it; when a step is replaced (for example **Set repository target** by **Preview README** once a target is saved), focus moves to the step now in its place.
+The steps are worked out again when a tool's dialog closes and after **Undo** or **Redo**, so after **Split into sections** or **Set repository target** the panel shows what fits the document now. A step that is still offered keeps its button, so focus stays on it; when a step is replaced (for example **Set repository target** by **Preview README** once a target is saved), focus moves to the step now in its place.
 
 ### Offline and temporary workspaces
 
-While the browser reports it is offline, steps that read GitHub (Autofill from GitHub, Drift check, README audit and the Attention Queue) are left out and the panel says "GitHub steps are hidden while offline." They return when the connection does. When browser storage is unavailable, the last step becomes **Export README**, so work in a temporary workspace is not lost.
+While the browser reports it is offline, steps that read GitHub (Autofill from GitHub, Drift check, README audit and the Attention Queue) are left out and the panel says "GitHub steps are hidden while offline." They return when the connection does. When browser storage is unavailable, or saving fails later (for example because storage is full), the last step becomes **Export README**, so work in a temporary workspace is not lost.
 
 ## Keyboard and focus
 
-- The panel never takes focus when it appears, and it is not a live region; the usual notification announces what happened.
+- The panel never takes focus when it appears, and it is not a live region; the usual notification announces what happened, for example "Import complete.", "Minimal template opened as a new local draft." or "Blank draft created."
 - It sits after the draft controls and before the panes, so `Tab` from **Current draft** passes **Documents** and **Manage drafts**, then reaches the steps, **All tools** and **Hide**.
 - A step that opens a dialog returns focus to that step when the dialog closes without applying anything. A tool that applies a change moves focus as it always does (for example to the editor after a split).
 - While any dialog is open the panel cannot be reached, like the rest of the page.
@@ -39,7 +39,7 @@ While the browser reports it is offline, steps that read GitHub (Autofill from G
 
 ## How long it stays
 
-The panel belongs to the document that just arrived. It stays until you choose **Hide**, switch to another document, restore a workspace backup, start another Arrival or reload the page. Nothing about it is saved: there is no per-document guidance in storage, backups or Studio projects (ADR 0005).
+The panel belongs to the document that just arrived. It stays until you choose **Hide**, switch to another document, restore a workspace backup, start another Arrival or reload the page. Undoing an import that replaced, appended to or merged into the document also removes it, because it no longer describes the document. Nothing about it is saved: there is no per-document guidance in storage, backups or Studio projects (ADR 0005).
 
 ## Turning it off
 

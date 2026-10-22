@@ -92,8 +92,10 @@ function installGuidedStart(app) {
             else if (start === "import") app.importDialog();
             else {
               app.closeDialog();
-              if (start === "blank" && app.addDraft("Untitled", []))
+              if (start === "blank" && app.addDraft("Untitled", [])) {
                 app.arrive("blank");
+                app.notify("Blank draft created.");
+              }
               // On first run the sample is already open; later it is a copy.
               if (start === "sample" && !firstRun)
                 app.addDraft("My developer profile", template(), {
@@ -139,8 +141,10 @@ function installGuidedStart(app) {
                   [],
                   { workspaceDocument: blankDocument(kind) },
                 )
-              )
+              ) {
                 app.arrive("blank");
+                app.notify("Blank draft created.");
+              }
               return;
             }
             app.action(id);
@@ -193,7 +197,7 @@ function installNextSteps(app) {
     const facts = {
       goal: guideGoal(app.data.guide),
       online: navigator.onLine !== false,
-      storageBlocked: !!app.storageBlocked,
+      storageBlocked: !!(app.storageBlocked || app.saveFailed),
       ...documentFacts(app.store.draft),
     };
     panel.querySelector("[data-next-context]").textContent =
@@ -242,7 +246,25 @@ function installNextSteps(app) {
   // its Next steps. A new Arrival replaces the previous one.
   app.arrive = (kind, detail = {}, draftId = app.store?.draft.id) => {
     app.arrival = createArrival(draftId, kind, detail);
+    // Changes recorded in the active document's history since the Arrival.
+    app.arrivalChanges = 0;
     app.renderNextSteps();
+  };
+  // Undo and Redo are not dialogs, so they re-run the steps here. Undoing
+  // past the import that changed this document means the Arrival no longer
+  // describes it, so the panel goes away with the import.
+  app.documentChanged = (source) => {
+    const arrival = app.arrival;
+    if (!arrival || arrival.draftId !== app.store?.draft.id) return;
+    app.arrivalChanges += source === "undo" ? -1 : 1;
+    if (source !== "undo" && source !== "redo") return;
+    if (
+      app.arrivalChanges < 0 &&
+      arrival.kind === "import" &&
+      arrival.detail.mode !== "new"
+    )
+      app.clearArrival();
+    else app.renderNextSteps();
   };
   app.clearArrival = () => {
     app.arrival = null;
