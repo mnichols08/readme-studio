@@ -40,12 +40,15 @@ export function sourceUrls(source) {
   return tokenUrls(marked.lexer(source));
 }
 // The same walk over already-lexed tokens, so callers that track source
-// positions per block share one URL extraction.
+// positions per block share one URL extraction. Each URL keeps the token it
+// came from (a link, image or HTML token).
 export function tokenUrls(tokens) {
   const urls = [];
+  let token = null;
   const add = (value, image) =>
-    urls.push({ value: decode(value || ""), image });
+    urls.push({ value: decode(value || ""), image, token });
   visitTokens(tokens, (t) => {
+    token = t;
     if (t.type === "link") add(t.href, false);
     if (t.type === "image") add(t.href, true);
     if (t.type === "html") {

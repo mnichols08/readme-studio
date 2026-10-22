@@ -7,6 +7,12 @@ import {
   WORKSPACE_RETENTION,
 } from "../workspace/evidence-snapshots.js";
 import { driftStatuses, ANCHOR_FILE_LIMIT } from "../workspace/drift-check.js";
+import {
+  driftProposals,
+  previewDriftChanges,
+  convertsBuilder,
+} from "../workspace/drift-remediation.js";
+import { sourceDiffMarkup, fillSourceDiff } from "./source-diff.js";
 
 const short = (sha) => (sha ? sha.slice(0, 7) : "");
 const kinds = {
@@ -54,6 +60,9 @@ export class EvidenceSnapshots extends HTMLElement {
   }
   configure({ draft, target, snapshots, storageBlocked = false }) {
     this.state = { draft, target, snapshots, storageBlocked };
+    // Re-rendering drops any Drift check result, so its proposals go too.
+    this.drift = null;
+    this.changes = null;
     const items = documentSnapshots(snapshots, draft.id);
     // The status live region is created once and never re-rendered, so an
     // outcome written right after a refresh is still announced.
@@ -69,7 +78,7 @@ export class EvidenceSnapshots extends HTMLElement {
       }<button data-cancel hidden>Cancel</button>
       ${storageBlocked ? '<p role="alert">Storage recovery is active. Snapshots can be viewed and checked, but capture, Baseline and delete need restored workspace storage.</p>' : ""}`;
     this.querySelector("[data-body]").innerHTML =
-      `<section data-drift hidden aria-label="Drift check result"></section><h2>Saved snapshots (${items.length})</h2>
+      `<section data-drift hidden aria-label="Drift check result"></section><section data-fixes hidden aria-label="Review drift fixes"></section><h2>Saved snapshots (${items.length})</h2>
       <p class="hint">Kept in this browser and in all-drafts backups, not in Studio projects or README exports. Retention keeps each document's newest ${DOCUMENT_RETENTION} snapshots plus its Baseline, up to ${WORKSPACE_RETENTION} in this workspace; a Baseline is never removed automatically.</p>
       ${
         items.length
@@ -152,10 +161,18 @@ export class EvidenceSnapshots extends HTMLElement {
   }
   // Renders a Drift check result. Every value from the repository or the
   // Markdown is escaped; findings are grouped by status so observed
-  // mismatches are never mixed with heuristics or unknowns.
-  showDrift(result, baseline = null) {
+  // mismatches are never mixed with heuristics or unknowns. `source` is the
+  // exact Markdown that was checked; with it, findings can be turned into
+  // reviewed Fix proposals for that Markdown only.
+  showDrift(result, baseline = null, source = null) {
     const section = this.querySelector("[data-drift]");
     const { counts } = result;
+    this.hideFixes();
+    this.drift =
+      typeof source === "string"
+        ? { source, ...driftProposals(source, result) }
+        : null;
+    const fixable = this.drift?.proposals.length || 0;
     const table = (items) =>
       `<div class="evidence-table"><table><thead><tr><th scope="col">Claim</th><th scope="col">Line</th><th scope="col">Type</th><th scope="col">Evidence</th></tr></thead><tbody>${items
         .map(
@@ -183,27 +200,160 @@ export class EvidenceSnapshots extends HTMLElement {
       ${result.tree && result.tree !== "complete" ? `<p data-drift-partial>The repository tree was ${result.tree === "truncated" ? "truncated by GitHub" : "not read"}, so paths it does not list are unknown.</p>` : ""}
       ${baseline ? `<p>Evidence files are also compared with the Baseline captured ${html(when(baseline.capturedAt))}.</p>` : ""}
       ${result.notes.length ? `<ul data-drift-notes>${result.notes.map((note) => `<li>${html(note)}</li>`).join("")}</ul>` : ""}
+      ${fixable ? `<p>Fixing is opt-in: review a proposed edit for each line with an observed mismatch or uncertain finding, with its evidence and exact diff, and approve only the changes you want.</p><button data-fix-review>Review fixes (${fixable} line${fixable === 1 ? "" : "s"})</button>` : ""}
       ${
         result.results.length
           ? driftStatuses.map(group).join("")
           : "<p data-drift-empty>No checkable commands, paths, links or config keys were found in your Markdown.</p>"
       }`;
+    section
+      .querySelector("[data-fix-review]")
+      ?.addEventListener("click", () => this.reviewFixes());
     section.querySelector("h2").focus();
   }
-  // Hides the last Drift check result. A new run starts from nothing, so a
-  // run that fails, is cancelled or is discarded leaves no earlier result
-  // (possibly for Markdown that has since changed) on screen.
+  // Hides the last Drift check result and any Fix review. A new run starts
+  // from nothing, so a run that fails, is cancelled or is discarded leaves no
+  // earlier result (possibly for Markdown that has since changed) on screen.
   clearDrift() {
     const section = this.querySelector("[data-drift]");
+    this.drift = null;
+    this.hideFixes();
     if (!section) return;
     section.hidden = true;
     section.innerHTML = "";
   }
-  send(action, id) {
+  hideFixes() {
+    this.changes = null;
+    const fixes = this.querySelector("[data-fixes]");
+    if (!fixes) return;
+    fixes.hidden = true;
+    fixes.innerHTML = "";
+  }
+  // Reviewed drift remediation. Each proposal edits one line and starts
+  // unapproved, uncertain ones included; editing a proposed line withdraws
+  // its approval. Source panes and diffs are filled as text, never parsed.
+  // Applying only sends the approved changes; app-shell checks them against
+  // the checked Markdown before changing anything.
+  reviewFixes() {
+    const section = this.querySelector("[data-fixes]");
+    if (!section || !this.drift?.proposals.length) return;
+    const { proposals, notes, excluded } = this.drift;
+    const changes = proposals.map((proposal) => ({
+      line: proposal.line,
+      before: proposal.before,
+      after: proposal.suggested,
+      approved: false,
+    }));
+    const finding = (item) => {
+      const suggestion = item.suggestion
+        ? item.suggestion.placed
+          ? ` Suggested from the evidence: <code>${html(item.suggestion.find)}</code> → <code>${html(item.suggestion.replace)}</code>.`
+          : " A suggestion from the evidence could not be placed on this line unambiguously; edit the proposed line yourself."
+        : " No suggestion from the evidence; edit the proposed line yourself if it needs a change.";
+      return `<li data-finding="${item.status}"><span class="evidence-label">${item.status === "mismatch" ? "Observed mismatch" : "Uncertain — may be correct as written"}</span> <code>${html(item.text)}</code>: ${html(item.message)}${item.evidencePath ? ` Evidence file: ${html(item.evidencePath)}.` : ""}${item.baseline ? ` ${since[item.baseline]}` : ""}${suggestion}</li>`;
+    };
+    section.hidden = false;
+    section.innerHTML = `<h2 tabindex="-1">Review drift fixes</h2>
+      <p>Each proposal edits one line of the Markdown that was checked. Read the evidence, edit the proposed line if needed and approve each change you want. Unapproved lines stay exactly as they are. Nothing is applied until you choose Apply, and nothing is published: Publish to GitHub stays a separate step with its own review. Undo restores the previous Markdown.</p>
+      ${convertsBuilder(this.state?.draft) ? '<p class="issue" data-fix-builder>Applying converts this draft to one Custom Markdown block, so builder sections, components and generated content can no longer overwrite the fixes. Undo restores the previous Markdown and builder ownership.</p>' : ""}
+      <p class="hint">Uncertain findings may be correct as written. Unknown results and matches have no proposals${excluded ? ` (${excluded} not proposed)` : ""}. If your Markdown changes before you apply, nothing is applied.</p>
+      ${notes.length ? `<ul>${notes.map((note) => `<li>${html(note)}</li>`).join("")}</ul>` : ""}
+      <ol data-proposals>${proposals
+        .map(
+          (proposal, index) =>
+            `<li data-proposal="${proposal.line}"><fieldset><legend>Line ${proposal.line}${proposal.status === "uncertain" ? " · uncertain" : ""}</legend>
+            <ul>${proposal.findings.map(finding).join("")}</ul>
+            <label>Current line ${proposal.line}<textarea data-fix-before rows="2" readonly></textarea></label>
+            <label>Proposed line ${proposal.line}<textarea data-fix-after data-index="${index}" rows="2"></textarea></label>
+            <pre data-fix-diff tabindex="0" aria-label="Change to line ${proposal.line}"></pre>
+            <label class="check"><input type="checkbox" data-fix-approve data-index="${index}"> Approve this change to line ${proposal.line}</label></fieldset></li>`,
+        )
+        .join("")}</ol>
+      <h3>All approved changes</h3>
+      ${sourceDiffMarkup({ beforeLabel: "Markdown that was checked", afterLabel: "Markdown with approved changes", label: "Approved changes diff" })}
+      <p data-fix-summary></p>
+      <div class="evidence-actions"><button class="primary" data-fix-apply disabled>Apply approved changes</button><button data-fix-download>Download current Markdown</button><button data-fix-discard>Discard proposals</button></div>`;
+    this.changes = changes;
+    section.querySelectorAll("[data-proposal]").forEach((item, index) => {
+      item.querySelector("[data-fix-before]").value = changes[index].before;
+      item.querySelector("[data-fix-after]").value = changes[index].after;
+    });
+    section.querySelectorAll("[data-fix-after]").forEach(
+      (field) =>
+        (field.oninput = () => {
+          const change = changes[Number(field.dataset.index)];
+          change.after = field.value;
+          change.approved = false;
+          this.updateFixes();
+        }),
+    );
+    section.querySelectorAll("[data-fix-approve]").forEach(
+      (box) =>
+        (box.onchange = () => {
+          changes[Number(box.dataset.index)].approved = box.checked;
+          this.updateFixes();
+        }),
+    );
+    section.querySelector("[data-fix-apply]").onclick = () =>
+      this.send("remediate", null, { changes: this.approvedChanges() });
+    section.querySelector("[data-fix-download]").onclick = () =>
+      this.send("download-markdown");
+    section.querySelector("[data-fix-discard]").onclick = () => {
+      this.hideFixes();
+      this.status("Fix proposals discarded. Your Markdown is unchanged.");
+      this.querySelector("[data-fix-review]")?.focus();
+    };
+    this.updateFixes();
+    section.querySelector("h2").focus();
+  }
+  approvedChanges() {
+    return (this.changes || [])
+      .filter((change) => change.approved && change.after !== change.before)
+      .map(({ line, before, after }) => ({ line, before, after }));
+  }
+  // Refreshes per-line diffs, approval boxes, the combined diff and the
+  // Apply button from the current proposals.
+  updateFixes() {
+    const section = this.querySelector("[data-fixes]");
+    if (!section || !this.changes) return;
+    section.querySelectorAll("[data-proposal]").forEach((item, index) => {
+      const change = this.changes[index];
+      const same = change.after === change.before;
+      if (same) change.approved = false;
+      const box = item.querySelector("[data-fix-approve]");
+      box.checked = change.approved;
+      box.disabled = same;
+      const lines = (text, mark) =>
+        text
+          .split("\n")
+          .map((line) => mark + line)
+          .join("\n");
+      item.querySelector("[data-fix-diff]").textContent = same
+        ? "No change proposed. Edit the proposed line to make one."
+        : `@@ line ${change.line} @@\n${lines(change.before, "-")}\n${lines(change.after, "+")}`;
+    });
+    const approved = this.approvedChanges();
+    let preview = this.drift.source;
+    try {
+      preview = previewDriftChanges(this.drift.source, approved).markdown;
+    } catch {
+      /* A stale change is rejected again, with a message, when applying. */
+    }
+    fillSourceDiff(section, this.drift.source, preview);
+    const total = this.changes.length;
+    section.querySelector("[data-fix-summary]").textContent =
+      `${approved.length} of ${total} proposed change${total === 1 ? "" : "s"} approved.`;
+    const apply = section.querySelector("[data-fix-apply]");
+    apply.disabled = !approved.length || Boolean(this.working);
+    apply.textContent = approved.length
+      ? `Apply ${approved.length} approved change${approved.length === 1 ? "" : "s"}`
+      : "Apply approved changes";
+  }
+  send(action, id, extra = {}) {
     this.dispatchEvent(
       new CustomEvent("evidence-action", {
         bubbles: true,
-        detail: { action, id },
+        detail: { ...extra, action, id },
       }),
     );
   }
@@ -215,6 +365,8 @@ export class EvidenceSnapshots extends HTMLElement {
     this.querySelectorAll("button").forEach(
       (el) => (el.disabled = value || el.hasAttribute("data-blocked")),
     );
+    // Apply stays disabled until a change is approved.
+    if (!value) this.updateFixes();
     const cancel = this.querySelector("[data-cancel]");
     cancel.hidden = !value;
     cancel.disabled = false;

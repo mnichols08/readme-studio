@@ -1301,7 +1301,14 @@ export class AppShell extends HTMLElement {
     const panel = this.querySelector("evidence-snapshots");
     panel.configure(this.evidenceState());
     panel.addEventListener("evidence-action", ({ detail }) =>
-      this.evidenceAction(panel, detail.action, detail.id),
+      detail.action === "remediate"
+        ? this.remediateDrift(panel, detail.changes)
+        : detail.action === "download-markdown"
+          ? this.download(
+              this.store.draft.markdown,
+              `${this.store.draft.name || "README"}.md`,
+            )
+          : this.evidenceAction(panel, detail.action, detail.id),
     );
     // The Drift check command only moves focus; checking stays explicit.
     if (focus) panel.querySelector(focus)?.focus();
@@ -1482,6 +1489,7 @@ export class AppShell extends HTMLElement {
   // Called from evidenceAction, whose catch/finally report and settle.
   async driftCheck(panel, draft, destination) {
     panel.clearDrift();
+    panel.driftChecked = null;
     if (!destination)
       throw Error("Set a repository, branch and README path first.");
     const source = draft.markdown,
@@ -1526,12 +1534,61 @@ export class AppShell extends HTMLElement {
     const result = drift.evaluateDrift(plan, evidence, { baseline });
     panel.working = false;
     panel.controller = null;
+    // Fix proposals may only change the exact Markdown, document and target
+    // that were checked. Held by the dialog, never saved (ADR 0002).
+    panel.driftChecked = { draftId: draft.id, identity, source };
     panel.busy(false);
     const { counts } = result;
     panel.status(
       `Drift check complete: ${counts.mismatch} observed mismatch(es), ${counts.uncertain} uncertain, ${counts.unknown} unknown.${evidence ? "" : " Only anchors within your Markdown were checked; GitHub was not read."} Nothing was saved and your Markdown is unchanged.`,
     );
-    panel.showDrift(result, baseline && evidence ? baseline : null);
+    panel.showDrift(result, baseline && evidence ? baseline : null, source);
+  }
+  // Reviewed drift remediation: applies only the changes the author
+  // approved, line by line, and only to the exact Markdown that was checked.
+  // Any edit since the check, a different document or a changed target is a
+  // conflict and nothing is applied. One Store.raw call records one Undo
+  // checkpoint. Nothing is sent to GitHub: publishing stays its own reviewed
+  // action.
+  async remediateDrift(panel, changes) {
+    if (panel.working) return;
+    const checked = panel.driftChecked;
+    const run = () => panel.querySelector("[data-drift-run]")?.focus();
+    try {
+      const { applyDriftProposals, convertsBuilder, DriftConflict } =
+        await import("../workspace/drift-remediation.js");
+      const draft = this.store.draft;
+      if (
+        !checked ||
+        draft.id !== checked.draftId ||
+        targetIdentity(documentTarget(draft)) !== checked.identity
+      )
+        throw new DriftConflict(
+          "The document or its target changed since the drift check, so the reviewed changes were not applied. Run the drift check again.",
+        );
+      const { markdown, applied } = applyDriftProposals(
+        checked.source,
+        draft.markdown,
+        changes,
+      );
+      // Store.raw converts builder sections to one Custom Markdown block, as
+      // the review said before Apply; Undo restores them.
+      const converted = convertsBuilder(draft);
+      this.store.raw(markdown);
+      const saved = this.save();
+      panel.driftChecked = null;
+      panel.configure(this.evidenceState());
+      panel.status(
+        `Applied ${applied} reviewed change${applied === 1 ? "" : "s"} to your Markdown${saved ? " and saved it in this browser" : ""}.${converted ? " The draft is now one Custom Markdown block." : ""} Undo in the editor restores the previous Markdown${converted ? " and builder ownership" : ""}. Nothing was published or written to GitHub; use Publish to GitHub to review and publish separately. Run the drift check again to check the updated Markdown.`,
+      );
+      run();
+    } catch (error) {
+      if (!panel.isConnected) return;
+      panel.driftChecked = null;
+      panel.clearDrift();
+      panel.status(`${error.message} Your Markdown is unchanged.`);
+      run();
+    }
   }
   async documents() {
     await import("./workspace-documents.js");
