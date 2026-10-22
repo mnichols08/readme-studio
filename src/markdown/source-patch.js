@@ -347,12 +347,45 @@ function splitPatch(draft, markdown, now) {
       markdown: target,
     };
   }
+  const moved = movedDetachments(draft, current, detachments, now);
+  detachments.push(...moved);
   return {
     blocks: current.blocks,
-    metadata: current.metadata,
+    metadata: appendDetachments(current.metadata, moved),
     detachments,
     fallback: false,
   };
+}
+// One step's deletion plus another step's insertion can move an Owned Block's
+// text (reordering sections in one edit). The deletion step drops that Block
+// without a record, so record it here, on the Custom Markdown block that now
+// holds its text. A Detachment is never silent.
+function movedDetachments(draft, result, recorded, now) {
+  const generatedIds = generatedBlockIds(draft);
+  const kept = new Set(result.blocks.map((b) => b.id));
+  const listed = new Set(recorded.flatMap((r) => r.previousBlockIds));
+  const original = new Map(draft.blocks.map((b) => [b.id, safeSerialize(b)]));
+  const resultIds = generatedBlockIds(result);
+  const hosts = result.blocks
+    .filter((b) => ownershipKind(b, result.metadata, resultIds) === null)
+    .map((b) => ({ id: b.id, now: safeSerialize(b), was: original.get(b.id) }))
+    .filter((h) => h.now !== h.was);
+  const count = (text, part) => (text ? text.split(part).length - 1 : 0);
+  const records = [];
+  for (const block of draft.blocks) {
+    const kind = ownershipKind(block, draft.metadata, generatedIds);
+    const content = original.get(block.id);
+    if (!kind || kept.has(block.id) || listed.has(block.id)) continue;
+    if (!content.trim()) continue;
+    // The host gained a copy of the dropped Block's text with this edit.
+    const host = hosts.find(
+      (h) => count(h.now, content) > count(h.was, content),
+    );
+    if (host)
+      // Never Restorable: the host also holds text that was not this Block's.
+      records.push(detachmentRecord(host.id, [block], [kind], now, 2));
+  }
+  return records;
 }
 
 function sourcePatch(draft, markdown, now) {
@@ -378,8 +411,15 @@ function sourcePatch(draft, markdown, now) {
       next = [...blocks];
     const left = before.slice(s.start, start),
       right = before.slice(end, s.contentStart);
-    if (!(left + text + right).trim()) {
-      next[seam] = { ...next[seam], separator: left + text + right };
+    const sep = left + text + right;
+    // The Block's text must still start on a new line if it did before;
+    // otherwise its first line runs on from the previous Block's last line.
+    const breaks = (seamText) =>
+      seamText.includes("\n") || s.start === 0 || before[s.start - 1] === "\n";
+    const ownLine =
+      breaks(sep) || !breaks(before.slice(s.start, s.contentStart));
+    if (!sep.trim() && ownLine) {
+      next[seam] = { ...next[seam], separator: sep };
       return { blocks: next, metadata, detachments: [], fallback: false };
     }
     if (s.start < start && end < s.contentStart) {
@@ -465,7 +505,17 @@ function sourcePatch(draft, markdown, now) {
       else if (isCustomMarkdown(blocks[k])) i = k;
       else i = serializeBlock(prev).endsWith("\n") ? k : k - 1;
     }
-  }
+  } else if (
+    i > 0 &&
+    start === segments[i].start &&
+    !serializeBlock(blocks[i - 1]).endsWith("\n") &&
+    start < markdown.length &&
+    markdown[start] !== "\n" &&
+    markdown[start] !== "\r"
+  )
+    // An edit that starts right after a Block's text and leaves text running
+    // on from its last line changes that line, so it touches that Block too.
+    i--;
   if (i < 0) return null;
   let j = i;
   while (j + 1 < segments.length && segments[j + 1].start < end) j++;

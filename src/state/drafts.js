@@ -81,21 +81,48 @@ export function validateDraft(d, { preserveBlockIds = false } = {}) {
   return copy;
 }
 // Downloads (Studio projects, draft and workspace backups) leave out each
-// Detachment record's copy of the detached Block, so text the author removed
-// with a raw edit never travels in a file. Undo and autosave in this browser
-// keep it.
+// Detachment record's copy of the detached Block, records whose Block is gone,
+// and any section name that no longer appears in the Markdown (a generic name
+// takes its place), so text the author removed with a raw edit never travels
+// in a file. Undo and autosave in this browser keep it.
+const GENERIC_LABELS = {
+  builder: "Builder section",
+  component: "Component",
+  generated: "Generated section",
+  shared: "Shared component",
+  profile: "Profile section",
+  banner: "Banner",
+};
 export function withoutDetachedCopies(draft) {
   const records = draft?.metadata?.detachments;
   if (!Array.isArray(records)) return draft;
+  const ids = new Set((draft.blocks || []).map((b) => b?.id));
+  const markdown = typeof draft.markdown === "string" ? draft.markdown : "";
   return {
     ...draft,
     metadata: {
       ...draft.metadata,
-      detachments: records.map((r) =>
-        r && typeof r === "object" && !Array.isArray(r) && "previous" in r
-          ? { ...r, previous: null }
-          : r,
-      ),
+      detachments: records.flatMap((r) => {
+        if (!r || typeof r !== "object" || Array.isArray(r)) return [r];
+        if (typeof r.blockId === "string" && !ids.has(r.blockId)) return [];
+        return [
+          {
+            ...r,
+            ...("previous" in r ? { previous: null } : {}),
+            ...(Array.isArray(r.labels)
+              ? {
+                  labels: r.labels.map((label, i) =>
+                    typeof label === "string" &&
+                    label &&
+                    markdown.includes(label)
+                      ? label
+                      : GENERIC_LABELS[r.kinds?.[i]] || "Section",
+                  ),
+                }
+              : {}),
+          },
+        ];
+      }),
     },
   };
 }

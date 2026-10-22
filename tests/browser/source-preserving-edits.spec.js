@@ -93,3 +93,39 @@ test("raw edits keep untouched builder sections visual and announce detachment",
   await expect(editor(page)).toHaveValue(edited);
   await expect(rows.last()).not.toContainText("Detached");
 });
+test("saving a builder form keeps blank lines typed before its section", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Explore the sample profile" })
+    .click();
+  await page.getByRole("button", { name: "Library", exact: true }).click();
+  await page
+    .locator(".library-grid")
+    .getByRole("button", { name: "Divider" })
+    .click();
+  await page
+    .getByRole("button", { name: "Add to README", exact: true })
+    .click();
+  const built = await editor(page).inputValue();
+  expect(built.endsWith("\n\n---")).toBe(true);
+
+  // A form holds a copy of its section taken when it opened. A raw edit to the
+  // blank lines before that section keeps the section's ID, so saving the copy
+  // afterwards must not write back the old Seam.
+  const saved = await page.evaluate(() => {
+    const app = document.querySelector("app-shell");
+    const form = structuredClone(app.store.draft.blocks.at(-1));
+    const md = app.store.draft.markdown;
+    app.store.raw(md.slice(0, -3) + "\n---");
+    const kept = app.store.draft.blocks.at(-1).id === form.id;
+    app.dispatchEvent(
+      new CustomEvent("commit", { detail: form, bubbles: true }),
+    );
+    return { kept, markdown: app.store.draft.markdown };
+  });
+  expect(saved).toEqual({ kept: true, markdown: built.slice(0, -3) + "\n---" });
+  await expect(page.locator(".toast")).toHaveText("Section saved to README");
+  await expect(editor(page)).toHaveValue(built.slice(0, -3) + "\n---");
+});

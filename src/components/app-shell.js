@@ -564,7 +564,12 @@ export class AppShell extends HTMLElement {
           this.notify("This section changed. Open it again before saving.");
           return;
         }
-        blocks[i] = b;
+        // Seams belong to positions: a form opened before a raw edit to the
+        // whitespace before this section must not write back the old Seam.
+        const separator = blocks[i].separator;
+        blocks[i] = { ...b };
+        if (separator === undefined) delete blocks[i].separator;
+        else blocks[i].separator = separator;
       } else blocks.push(createBlock(b.type, b.settings));
       this.store.blocks(blocks);
       this.showTab("sections");

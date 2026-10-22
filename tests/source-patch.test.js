@@ -587,6 +587,151 @@ describe("Edits that reach a Seam or change several places", () => {
   });
 });
 
+describe("Edits at a Block boundary never leave a changed line Owned", () => {
+  const sample = () =>
+    newDraft("Doc", [
+      createBlock("custom", { markdown: "# Intro\n\nHello" }),
+      createBlock("divider", {}),
+      createBlock("custom", { markdown: "## Tech\n\nWords here" }),
+      createBlock("custom", { markdown: "## End\n" }),
+    ]);
+  it("an edit from the end of a builder line into the next block detaches it", () => {
+    const draft = sample();
+    const start = draft.markdown.indexOf("---") + 3;
+    const end = draft.markdown.indexOf("## Tech") + "## Tech".length;
+    const { result } = golden(draft, { start, end, text: " more" }, [
+      draft.blocks[1].id,
+      draft.blocks[2].id,
+    ]);
+    expect(result.blocks.find((b) => b.id === draft.blocks[1].id)).toBe(
+      undefined,
+    );
+    expect(result.detachments.map((r) => r.previousBlockIds)).toEqual([
+      [draft.blocks[1].id],
+    ]);
+    expect(detachmentNotice(result)).toBe(
+      "Raw edit detached: Divider (builder). Undo restores visual ownership.",
+    );
+    expect(serializeBlock(result.blocks[1])).toBe("--- more\n\nWords here");
+    // A multi-place edit whose change starts right after the divider.
+    const store = new Store(sample());
+    const md = store.draft.markdown;
+    const multi = store.raw(md.replace("---", "----").replace("Tech", "Stack"));
+    expect(serializeBlocks(store.draft.blocks)).toBe(store.draft.markdown);
+    expect(store.draft.blocks.some((b) => b.type === "divider")).toBe(false);
+    expect(multi.detachments[0].kinds).toEqual(["builder"]);
+  });
+  it("an edit that starts a new line after a builder block leaves it Owned", () => {
+    const draft = sample();
+    const start = draft.markdown.indexOf("---") + 3;
+    const end = draft.markdown.indexOf("## Tech") + 2;
+    const { result } = golden(draft, { start, end, text: "\n\nNew\n\n##" }, [
+      draft.blocks[2].id,
+    ]);
+    expect(result.blocks[1]).toEqual(draft.blocks[1]);
+    expect(result.detachments).toEqual([]);
+  });
+  it("removing the line break before a builder heading detaches both blocks", () => {
+    const store = new Store(
+      newDraft("Doc", [
+        createBlock("hero", { name: "Ada", subtitle: "Builds things." }),
+        createBlock("stack", {
+          items: [{ name: "JavaScript" }],
+          style: "text",
+        }),
+      ]),
+    );
+    const notices = [];
+    for (let k = 0; k < 2; k++) {
+      const md = store.draft.markdown,
+        at = md.indexOf("## Tech");
+      notices.push(
+        detachmentNotice(store.raw(md.slice(0, at - 1) + md.slice(at))),
+      );
+    }
+    expect(store.draft.markdown).toBe(
+      "# Ada\n\nBuilds things.## Tech Stack\n\nJavaScript",
+    );
+    expect(notices).toEqual([
+      "",
+      "Raw edit detached: Ada (builder), Tech Stack (builder). Undo restores visual ownership.",
+    ]);
+    expect(store.draft.blocks.map((b) => b.type)).toEqual(["custom"]);
+    // Spaces after the line break only indent the heading: a Seam change.
+    store.undo();
+    store.undo();
+    const md = store.draft.markdown,
+      at = md.indexOf("## Tech");
+    const indent = store.raw(md.slice(0, at) + " " + md.slice(at));
+    expect(indent.detachments).toEqual([]);
+    expect(store.draft.blocks.map((b) => b.type)).toEqual(["hero", "stack"]);
+    expect(store.draft.blocks[1].separator).toBe("\n\n ");
+  });
+  it("a single edit that moves an Owned block records its Detachment", () => {
+    const blocks = [
+      createBlock("custom", { markdown: "# Readme\n\nIntro." }),
+      createBlock("divider", {}),
+      createBlock("component", {
+        name: "Banner",
+        markdown: '<p align="center">Banner</p>',
+      }),
+      createBlock("custom", { markdown: "Closing." }),
+    ];
+    const store = new Store(newDraft("Doc", blocks));
+    const result = store.raw(
+      '# Readme\n\nIntro.\n\n<p align="center">Banner</p>\n\n---\n\nClosing.',
+    );
+    expect(result.fallback).toBe(false);
+    expect(store.draft.blocks.some((b) => b.id === blocks[1].id)).toBe(false);
+    const [record] = result.detachments;
+    expect(record.previousBlockIds).toEqual([blocks[1].id]);
+    expect(record.kinds).toEqual(["builder"]);
+    expect(isRestorable(record)).toBe(false);
+    const host = store.draft.blocks.find((b) => b.id === record.blockId);
+    expect(serializeBlock(host)).toContain("---");
+    expect(detachmentNotice(result)).toBe(
+      "Raw edit detached: Divider (builder). Undo restores visual ownership.",
+    );
+    expect(readDetachments(store.draft.metadata)).toEqual([record]);
+  });
+  it("every reorder in one edit keeps or records each Owned block", () => {
+    const pool = () => [
+      createBlock("custom", { markdown: "# Readme\n\nIntro." }),
+      createBlock("hero", { name: "Ada", subtitle: "Builds things." }),
+      createBlock("stack", { items: [{ name: "JavaScript" }], style: "text" }),
+      createBlock("divider", {}),
+      createBlock("custom", { markdown: "Closing." }),
+    ];
+    const perms = (a) =>
+      a.length <= 1
+        ? [a]
+        : a.flatMap((x, i) =>
+            perms([...a.slice(0, i), ...a.slice(i + 1)]).map((p) => [x, ...p]),
+          );
+    for (const order of perms([0, 1, 2, 3, 4]))
+      for (const edit of [false, true]) {
+        const blocks = pool();
+        const draft = newDraft("Doc", blocks);
+        let next = order.map((k) => serializeBlock(blocks[k])).join("\n\n");
+        if (edit) next = next.replace("Intro.", "Intro, revised.");
+        const result = patchBlocks(draft, next);
+        expect(serializeBlocks(result.blocks)).toBe(next);
+        const ids = new Set(result.blocks.map((b) => b.id));
+        const recorded = new Set(
+          result.detachments.flatMap((r) => r.previousBlockIds),
+        );
+        for (const b of blocks.filter((b) => b.type !== "custom")) {
+          const kept = result.blocks.find((x) => x.id === b.id);
+          if (kept) expect(serializeBlock(kept)).toBe(serializeBlock(b));
+          expect(
+            ids.has(b.id) || recorded.has(b.id),
+            `${order} ${b.type}`,
+          ).toBe(true);
+        }
+      }
+  });
+});
+
 describe("Seams belong to positions", () => {
   it("moving the last split section up never glues it to the next heading", () => {
     const source = fixture("no-final-newline.md");
@@ -664,9 +809,53 @@ describe("Detachment records travel with the document", () => {
     expect(project.document.markdown).toBe(d.markdown);
     expect(project.document.markdown).not.toContain("previousBlockIds");
     const opened = inspectProject(JSON.stringify(project)).draft;
+    // The edit removed "Tech Stack" from the Markdown, so the file names the
+    // section generically.
+    expect(d.markdown).not.toContain("Tech Stack");
     expect(opened.metadata.detachments).toEqual(
-      d.metadata.detachments.map((r) => ({ ...r, previous: null })),
+      d.metadata.detachments.map((r) => ({
+        ...r,
+        labels: ["Builder section"],
+        previous: null,
+      })),
     );
+  });
+  it("leaves out removed section names and records of deleted sections", () => {
+    const draft = newDraft("Doc", [
+      createBlock("about", { title: "Falcon codename plan", body: "Body" }),
+      createBlock("custom", { markdown: "End." }),
+    ]);
+    const store = new Store(draft);
+    store.raw(store.draft.markdown.replace("Falcon codename plan", "About"));
+    const [record] = store.draft.metadata.detachments;
+    expect(record.labels).toEqual(["Falcon codename plan"]);
+    const files = () => [
+      JSON.stringify(createProject(store.draft)),
+      JSON.stringify(createBackup({ drafts: [store.draft], active: "x" })),
+      JSON.stringify(withoutDetachedCopies(store.draft)),
+    ];
+    for (const file of files()) expect(file).not.toContain("Falcon");
+    const copy = withoutDetachedCopies(store.draft);
+    expect(copy.metadata.detachments).toEqual([
+      { ...record, labels: ["Builder section"], previous: null },
+    ]);
+    // A name that is still in the Markdown is kept.
+    const kept = new Store(
+      newDraft("Doc", [
+        createBlock("about", { title: "Falcon", body: "Body" }),
+        createBlock("custom", { markdown: "End." }),
+      ]),
+    );
+    kept.raw(kept.draft.markdown.replace("Body", "Text"));
+    expect(
+      withoutDetachedCopies(kept.draft).metadata.detachments[0].labels,
+    ).toEqual(["Falcon"]);
+    // Deleting the detached section drops its record from downloads.
+    const md = store.draft.markdown;
+    store.raw(md.slice(md.indexOf("End.")));
+    expect(store.draft.metadata.detachments).toHaveLength(1);
+    expect(withoutDetachedCopies(store.draft).metadata.detachments).toEqual([]);
+    for (const file of files()) expect(file).not.toContain("Falcon");
   });
   it("never carries text removed by a raw edit into a download", () => {
     const secret = "Call 555-0100 or private@example.com";
