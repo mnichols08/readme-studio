@@ -157,6 +157,29 @@ describe("guide validation", () => {
       "repository",
     );
   });
+  it("keeps an unknown guide only when an all-drafts backup carries it unchanged", () => {
+    let deep = 1;
+    for (let i = 0; i < 100; i++) deep = [deep];
+    expect(JSON.stringify(deep).length).toBeLessThanOrEqual(GUIDE_LIMIT);
+    expect(validateGuide(deep)).toEqual(defaultGuide());
+    const secret = { version: 2, session: "x", goal: "audit" };
+    expect(validateGuide(secret)).toEqual(defaultGuide());
+    expect(validateGuide({ version: 2, nested: { token: "x" } })).toEqual(
+      defaultGuide(),
+    );
+    // The deepest guide a backup still accepts is kept unchanged.
+    let edge = 1;
+    for (let i = 0; i < 59; i++) edge = [edge];
+    expect(validateGuide(edge)).toEqual(edge);
+    for (const guide of [deep, secret, edge]) {
+      const data = validateWorkspace(workspace(guide));
+      const backup = createBackup(data);
+      expect(backup.guide).toEqual(data.guide);
+      expect(recoverWorkspace(JSON.stringify(workspace(guide))).guide).toEqual(
+        data.guide,
+      );
+    }
+  });
   it("counts the Goal only in a version 1 guide", () => {
     expect(guideGoal({ version: 1, goal: "repository" })).toBe("repository");
     expect(guideGoal({ version: 2, goal: "repository" })).toBeNull();

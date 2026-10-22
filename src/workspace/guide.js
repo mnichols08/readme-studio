@@ -1,6 +1,7 @@
 // Guided start state (ADR 0004): the chosen Goal and the Next steps on/off
 // preference. A workspace field, never a setting, so portable projects, draft
 // JSON and README exports cannot carry it.
+import { portableData } from "../state/portable-data.js";
 export const GUIDE_VERSION = 1,
   GUIDE_LIMIT = 1024;
 export const GOALS = Object.freeze({
@@ -32,12 +33,25 @@ export const defaultGuide = () => ({
   nextSteps: true,
 });
 const object = (v) => v && typeof v === "object" && !Array.isArray(v);
-function guideBytes(value) {
+function guideJson(value) {
   try {
-    const raw = JSON.stringify(value);
-    return raw === undefined ? Infinity : new TextEncoder().encode(raw).length;
+    return JSON.stringify(value);
   } catch {
-    return Infinity;
+    return undefined;
+  }
+}
+// A kept guide must pass the all-drafts backup boundary unchanged: the guide
+// sits one level inside the workspace, so portableData starts at depth 1. Too
+// deep, or holding credential-named keys the backup would strip, means it
+// could not be kept unchanged, so it is replaced by the default instead.
+function keepable(value) {
+  const raw = guideJson(value);
+  if (raw === undefined || new TextEncoder().encode(raw).length > GUIDE_LIMIT)
+    return false;
+  try {
+    return JSON.stringify(portableData(JSON.parse(raw), 1)) === raw;
+  } catch {
+    return false;
   }
 }
 export function validateGuide(value) {
@@ -50,9 +64,7 @@ export function validateGuide(value) {
     };
   // Another version, or a damaged value, is kept as it is so a newer app can
   // still read it; it reads as "no Goal" until the author chooses again.
-  return guideBytes(value) <= GUIDE_LIMIT
-    ? JSON.parse(JSON.stringify(value))
-    : defaultGuide();
+  return keepable(value) ? JSON.parse(JSON.stringify(value)) : defaultGuide();
 }
 export function recoverGuide(value) {
   try {

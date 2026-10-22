@@ -26,15 +26,18 @@ const goalHeadings = {
   audit: "Audit your repository READMEs",
 };
 // The Locality statement. It describes what this browser does today and must
-// stay true: no upload of Markdown and no publishing without its own review.
-// The GitHub sentence must name every flow listed under "Network requests" in
-// docs/privacy.md; extend it when a new GitHub-contacting flow is added.
+// stay true: Markdown leaves only through publishing or the opt-in Writing
+// Assistant, and nothing is published without its own review. The GitHub
+// sentence must name every flow listed under "Network requests" in
+// docs/privacy.md, and every other way data leaves the browser (link checks to
+// third-party sites, the Writing Assistant) must be stated; extend it when a
+// new network flow is added.
 function localityStatement(storageBlocked) {
   return `<section class="guide-locality" aria-labelledby="guide-locality-title"><h2 id="guide-locality-title">Where your work is kept</h2><ul><li>${
     storageBlocked
       ? "Browser storage is unavailable, so this is a temporary workspace: drafts stay in memory only until this tab closes. Download all drafts backup to keep your work."
       : "Drafts are saved only in this browser. They are not encrypted and clearing site data removes them, so download a backup to keep a copy."
-  }</li><li>GitHub is contacted only when you choose a GitHub action: import, autofill, audit, repository lookup, refresh and link checks, evidence and drift checks, or publishing. Your Markdown is not uploaded for analysis. Images and badges in the preview load from their own sites.</li><li>Nothing is published without its own review.</li></ul><a href="${privacyDocs}" target="_blank" rel="noopener noreferrer">Privacy details</a></section>`;
+  }</li><li>GitHub is contacted only when you choose a GitHub action: import, autofill, audit, repository lookup, refresh and link checks, evidence and drift checks, or publishing. Link checks also contact the sites your links point to. Analysis runs in this browser: your Markdown is sent only when you publish it, or when you review and send text to the optional Writing assistant's provider. Images and badges in the preview load from their own sites.</li><li>Nothing is published without its own review.</li></ul><a href="${privacyDocs}" target="_blank" rel="noopener noreferrer">Privacy details</a></section>`;
 }
 
 // Guided start: step 1 asks for a Goal beside the earlier Start paths (their

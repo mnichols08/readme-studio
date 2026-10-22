@@ -29,7 +29,7 @@ The Start paths from earlier versions stay in step 1 under their existing names:
 Guided start always shows the Locality statement:
 
 - Drafts are saved only in this browser. They are not encrypted and clearing site data removes them, so download a backup (**Manage drafts → Download all drafts backup**) to keep a copy.
-- GitHub is contacted only when you choose a GitHub action: import, autofill, audit, repository lookup, refresh and link checks, evidence and drift checks, or publishing. Your Markdown is not uploaded for analysis. Images and badges in the preview load from their own sites.
+- GitHub is contacted only when you choose a GitHub action: import, autofill, audit, repository lookup, refresh and link checks, evidence and drift checks, or publishing. Link checks also contact the sites your links point to. Analysis runs in this browser: your Markdown is sent only when you publish it, or when you review and send text to the optional Writing assistant's provider. Images and badges in the preview load from their own sites.
 
 The GitHub line names every flow listed under [Network requests](privacy.md#network-requests); Guided start itself makes no request.
 
@@ -49,4 +49,4 @@ The goal is stored in an optional `guide` field of the version-1 workspace (ADR 
 | Download draft backup (single-draft JSON) | No                                                                  |
 | Export README / Copy Markdown             | No                                                                  |
 
-A workspace from an earlier version gets the default (no goal). An unknown goal reads as no goal. A `guide` written by a newer version (another `version`) is kept unchanged if it is at most 1 KB of JSON and is treated as no goal until you choose again; a larger one is replaced by the default. Guided start adds no network request, telemetry or storage key of its own.
+A workspace from an earlier version gets the default (no goal). An unknown goal reads as no goal. A `guide` written by a newer version (another `version`) is kept unchanged if it is at most 1 KB of JSON and an all-drafts backup can carry it unchanged (no deeper than the backup allows and no credential-named key such as `token` or `session`); it is treated as no goal until you choose again. Any other one is replaced by the default. Guided start adds no network request, telemetry or storage key of its own.

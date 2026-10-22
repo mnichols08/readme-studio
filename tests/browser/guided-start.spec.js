@@ -81,7 +81,16 @@ test("first run asks for a Goal, keeps every Start path and states where work is
   ])
     await expect(locality).toContainText(flow);
   await expect(locality).not.toContainText("import, autofill or audit");
-  await expect(locality).toContainText("not uploaded for analysis");
+  // Every way Markdown or a request leaves the browser is stated, not only
+  // GitHub: link checks reach third-party sites and the opt-in Writing
+  // Assistant sends reviewed text to its provider.
+  await expect(locality).not.toContainText("not uploaded");
+  await expect(locality).toContainText(
+    "Link checks also contact the sites your links point to.",
+  );
+  await expect(locality).toContainText(
+    "your Markdown is sent only when you publish it, or when you review and send text to the optional Writing assistant's provider",
+  );
   await expect(locality).toContainText(
     "Nothing is published without its own review.",
   );
@@ -483,6 +492,7 @@ test("import journey: a local README imported from Guided start becomes a new dr
 test("offline, the audit's Import existing README fallback imports a local file", async ({
   page,
   context,
+  browserName,
 }) => {
   const requests = watchGitHub(page);
   await page.goto("/");
@@ -494,6 +504,12 @@ test("offline, the audit's Import existing README fallback imports a local file"
   await expect(
     dialog(page).getByRole("heading", { name: "Import README" }),
   ).toBeVisible();
+  // Playwright's WebKit offline emulation also fails local File reads ("The
+  // I/O read operation failed."), through this path and plain Create → Import
+  // alike (see docs/offline.md on WebKit emulation). The offline fallback is
+  // reached offline above; on WebKit only, the local read runs back online.
+  // Chromium and Firefox keep the whole import offline.
+  if (browserName === "webkit") await context.setOffline(false);
   await importLocal(page, "# Offline\n\nImported without a connection.\n");
   expect((await guide(page)).goal).toBe("audit");
   expect(requests).toEqual([]);
