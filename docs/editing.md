@@ -1,6 +1,21 @@
 # Editing and recovery
 
-Markdown is canonical. Builder-owned blocks retain settings while serialization exactly matches their source. Custom Markdown is never silently converted into structured fields. A raw edit can detach ownership; keep editing the text or explicitly recreate a supported component.
+Markdown is canonical. Builder-owned blocks retain settings while serialization exactly matches their source. Custom Markdown is never silently converted into structured fields.
+
+## Source-preserving raw edits
+
+Typing in the Markdown editor changes only the Blocks your edit touches (its Edited scope). Every byte outside it stays identical, including CRLF line endings, a byte order mark, trailing whitespace, fenced code and HTML.
+
+- Editing inside a Custom Markdown block, such as a split section, keeps that block, its section label and its source origin.
+- Typing between two sections, or at the start or end of the document, adds the text to a neighbouring Custom Markdown block or to a new one. Builder, component and generated sections next to it keep their visual ownership.
+- Editing inside an Owned block (a builder section, a component, a generated, shared or profile section, or the inserted banner) causes a Detachment: that block becomes a Custom Markdown block holding exactly what you typed. An edit that spans several blocks merges them into one Custom Markdown block.
+- A Detachment is never silent. A polite status message names what was detached, for example "Raw edit detached: Tech Stack (builder). Undo restores visual ownership.", without moving focus. The Sections list shows "Detached from Tech Stack" on that block.
+- Each Detachment is saved as a Detachment record on the document. Records travel with Undo, autosave, workspace backups and Studio projects, keep only the 20 newest entries, and never appear in exported Markdown. A record that kept the single builder or component section it replaced is Restorable; restoring it through an Ownership review arrives with a later release. Until then, use Undo.
+- In the rare case the patch cannot be proven exact, the whole draft becomes one Custom Markdown block, as in earlier releases, and the message "All sections became Custom Markdown; Undo restores them." appears. Raw editing is never blocked.
+
+Moving or removing a section keeps the spacing between the other sections. Where a moved section's last line has no line break, a blank line is added after it so it never runs into the next heading.
+
+Raw edits work offline and never contact the network. An empty document or an edit that changes nothing creates no Detachment record.
 
 Reorder sections with their up/down controls; drag-and-drop is not required. Undo/redo belongs to the active draft. History retains at most 80 checkpoints and an estimated 8 MB, so large documents retain fewer steps. History is not persisted across reloads. Workspace preferences and whole-workspace replacement are outside document undo.
 

@@ -12,7 +12,7 @@ Version 1.6.2 lets you turn the findings of a [drift check](drift-checks.md) int
 
 After applying, the drift result and proposals are cleared because they describe the previous Markdown, and focus returns to **Run drift check** so you can check the updated text. **Undo** in the editor restores the Markdown as it was before the fixes, as one step.
 
-Applying records the new Markdown as manual source, like editing it in the Markdown pane. A draft that is already one Custom Markdown block stays as it is. A draft built from builder sections, components or generated content is converted to one Custom Markdown block, so stale builder settings cannot overwrite the fixes; the review says so before **Apply**, and the status says so after. **Undo** restores the previous Markdown and builder ownership.
+Applying records the new Markdown as manual source, like editing it in the Markdown pane. A draft that is already one Custom Markdown block stays as it is. In a draft built from builder sections, components or generated content, only the sections whose lines change are detached and become Custom Markdown, so stale builder settings cannot overwrite the fixes; untouched sections keep their ownership. The review says so before **Apply**, and the status names any detached section after. **Undo** restores the previous Markdown and builder ownership.
 
 ## What is proposed
 

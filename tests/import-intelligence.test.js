@@ -364,7 +364,9 @@ describe("import state and ownership", () => {
         .sourceContext,
     ).toBe(null);
     const store = new Store(combined);
-    store.raw(combined.markdown + "\n");
+    // An edit that spans both origins merges them into one mixed-origin block.
+    store.raw("X" + combined.markdown.slice(1) + "\n");
+    expect(store.draft.blocks).toHaveLength(1);
     expect(store.draft.blocks[0].sourceContext).toEqual({ type: "mixed" });
   });
   it("keeps original source context after raw edits to a single-origin import", () => {

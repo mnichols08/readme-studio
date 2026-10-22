@@ -233,11 +233,11 @@ export function applyDriftProposals(checked, current, changes) {
   return result;
 }
 
-// Whether applying would change the draft's structure, not only its
+// Whether applying could change the draft's structure, not only its
 // Markdown. Applying records the new Markdown as manual source (Store.raw),
-// which keeps a draft that is already one Custom Markdown block as it is but
-// converts builder sections, components and generated or autofilled content
-// to a single Custom Markdown block. Undo restores them.
+// which detaches the builder sections, components and generated or autofilled
+// content whose lines change: they become Custom Markdown (ADR epic63-01).
+// Untouched sections keep their ownership. Undo restores them.
 export function convertsBuilder(draft) {
   const blocks = draft?.blocks || [];
   if (!blocks.length) return false;

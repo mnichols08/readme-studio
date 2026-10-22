@@ -633,7 +633,7 @@ describe("drift fix review dialog", () => {
     el.remove();
   });
 
-  it("says before Apply when applying converts builder sections to Custom Markdown", () => {
+  it("says before Apply when applying can detach builder sections", () => {
     const custom = { type: "custom", settings: { markdown: source } };
     expect(convertsBuilder({ blocks: [] })).toBe(false);
     expect(convertsBuilder({ blocks: [custom] })).toBe(false);
@@ -654,7 +654,7 @@ describe("drift fix review dialog", () => {
     };
     expect(review([custom])).toBeNull();
     expect(review([{ type: "hero" }, custom]).textContent).toContain(
-      "Applying converts this draft to one Custom Markdown block",
+      "Applying detaches any builder section, component or generated content whose lines change",
     );
   });
 

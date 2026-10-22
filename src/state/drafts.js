@@ -57,6 +57,27 @@ export function validateDraft(d, { preserveBlockIds = false } = {}) {
       ref.blockId = mapped;
     else delete copy.metadata.bannerReference;
   }
+  // Detachment records follow their Block through ID remapping. Malformed
+  // entries are left as they are; a record whose Block is gone is dropped.
+  if (Array.isArray(copy.metadata.detachments))
+    copy.metadata.detachments = copy.metadata.detachments.flatMap((r) => {
+      if (!r || typeof r !== "object" || typeof r.blockId !== "string")
+        return [r];
+      if (!blockIds.has(r.blockId)) return [];
+      return [
+        {
+          ...r,
+          blockId: blockIds.get(r.blockId),
+          ...(Array.isArray(r.previousBlockIds)
+            ? {
+                previousBlockIds: r.previousBlockIds.map((id) =>
+                  blockIds.has(id) ? blockIds.get(id) : id,
+                ),
+              }
+            : {}),
+        },
+      ];
+    });
   return copy;
 }
 export function readDrafts(storage = localStorage) {

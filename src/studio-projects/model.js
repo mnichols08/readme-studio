@@ -26,6 +26,7 @@ const metadataKeys = [
   "importSource",
   "importHistory",
   "detachedGenerated",
+  "detachments",
   "dismissedSuggestions",
   "publishing",
   "studioProject",

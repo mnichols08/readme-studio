@@ -28,7 +28,7 @@ Guided start asks whether you want to write a profile README, write a repository
 - Save portable `.readme-studio.json` projects or export Markdown, packs and full workspace backups.
 - Optionally publish reviewed README, asset and workflow changes through a separately configured GitHub App service.
 
-Manual Markdown remains available. Raw edits detach structured ownership when synchronization is unsafe. Themes guide generated content; they cannot style GitHub itself. The app light/dark switch updates preview too, with a separate preview override.
+Manual Markdown remains available. Raw edits change only the sections they touch: untouched builder sections keep their visual ownership, and any section that is detached is named in a status message and in the Sections list. Themes guide generated content; they cannot style GitHub itself. The app light/dark switch updates preview too, with a separate preview override.
 
 ## Your data
 

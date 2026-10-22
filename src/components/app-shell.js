@@ -113,6 +113,12 @@ import {
 } from "../state/workspace-backup.js";
 import { safeFilename } from "../state/download.js";
 import { contextForBlock } from "../markdown/source-context.js";
+import {
+  detachedSummary,
+  detachmentFor,
+  detachmentNotice,
+  moveBlock,
+} from "../markdown/source-patch.js";
 export class AppShell extends HTMLElement {
   connectedCallback() {
     let saved;
@@ -433,14 +439,11 @@ export class AppShell extends HTMLElement {
       );
     });
     this.addEventListener("markdown-change", (e) => {
-      const detached =
-        e.detail !== this.store.draft.markdown &&
-        this.store.draft.blocks.some((b) => b.type === "component");
-      this.store.raw(e.detail);
-      if (detached)
-        this.notify(
-          "Component source was manually edited and is now Custom Markdown. Undo restores visual ownership.",
-        );
+      // Raw edits detach only the Blocks they touch; announce each new
+      // Detachment record politely without moving focus.
+      const result = this.store.raw(e.detail);
+      const message = detachmentNotice(result);
+      if (message) this.notify(message);
     });
     this.addEventListener("undo", () => this.store.undo());
     this.addEventListener("redo", () => this.store.redo());
@@ -1560,7 +1563,7 @@ export class AppShell extends HTMLElement {
     const checked = panel.driftChecked;
     const run = () => panel.querySelector("[data-drift-run]")?.focus();
     try {
-      const { applyDriftProposals, convertsBuilder, DriftConflict } =
+      const { applyDriftProposals, DriftConflict } =
         await import("../workspace/drift-remediation.js");
       const draft = this.store.draft;
       if (
@@ -1576,15 +1579,15 @@ export class AppShell extends HTMLElement {
         draft.markdown,
         changes,
       );
-      // Store.raw converts builder sections to one Custom Markdown block, as
-      // the review said before Apply; Undo restores them.
-      const converted = convertsBuilder(draft);
-      this.store.raw(markdown);
+      // Store.raw detaches only the Owned blocks the fixes touch, as the review
+      // said before Apply; Undo restores them.
+      const result = this.store.raw(markdown);
+      const converted = !!(result?.detachments.length || result?.fallback);
       const saved = this.save();
       panel.driftChecked = null;
       panel.configure(this.evidenceState());
       panel.status(
-        `Applied ${applied} reviewed change${applied === 1 ? "" : "s"} to your Markdown${saved ? " and saved it in this browser" : ""}.${converted ? " The draft is now one Custom Markdown block." : ""} Undo in the editor restores the previous Markdown${converted ? " and builder ownership" : ""}. Nothing was published or written to GitHub; use Publish to GitHub to review and publish separately. Run the drift check again to check the updated Markdown.`,
+        `Applied ${applied} reviewed change${applied === 1 ? "" : "s"} to your Markdown${saved ? " and saved it in this browser" : ""}.${converted ? (result.fallback ? " The draft is now one Custom Markdown block." : ` Now Custom Markdown: ${detachedSummary(result)}.`) : ""} Undo in the editor restores the previous Markdown${converted ? " and builder ownership" : ""}. Nothing was published or written to GitHub; use Publish to GitHub to review and publish separately. Run the drift check again to check the updated Markdown.`,
       );
       run();
     } catch (error) {
@@ -2157,7 +2160,14 @@ export class AppShell extends HTMLElement {
       return;
     }
     const blocks = this.store.draft.blocks;
-    this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button>${this.store.draft.metadata.importSource?.type === "github" ? '<button class="wide" data-action="reimport">Re-import current GitHub README</button>' : ""}<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(b.type.startsWith("doc-") ? b.settings.title || blockTypes[b.type] : b.section?.title || (b.type === "component" ? "Edit visually: " + b.settings.name : blockTypes[b.type]) || "Section")}</strong><small>${html((b.type.startsWith("doc-") ? "Structured documentation" : b.section ? `Suggested ${b.section.kind} · Custom Markdown` : "") || b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small></span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p>' : ""}${this.store.draft.markdown ? '<button class="wide" data-action="split">Split into sections</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for GitHub READMEs</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
+    const detached = (b) => {
+      const record =
+        b.type === "custom" && detachmentFor(this.store.draft.metadata, b.id);
+      return record
+        ? `<small class="detached" data-detached>Detached from ${html(record.labels.slice(0, 3).join(", ") + (record.labels.length > 3 ? ` and ${record.labels.length - 3} more` : ""))}</small>`
+        : "";
+    };
+    this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button>${this.store.draft.metadata.importSource?.type === "github" ? '<button class="wide" data-action="reimport">Re-import current GitHub README</button>' : ""}<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(b.type.startsWith("doc-") ? b.settings.title || blockTypes[b.type] : b.section?.title || (b.type === "component" ? "Edit visually: " + b.settings.name : blockTypes[b.type]) || "Section")}</strong><small>${html((b.type.startsWith("doc-") ? "Structured documentation" : b.section ? `Suggested ${b.section.kind} · Custom Markdown` : "") || b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small>${detached(b)}</span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p>' : ""}${this.store.draft.markdown ? '<button class="wide" data-action="split">Split into sections</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for GitHub READMEs</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
   }
   edit(block) {
     if (block.type === "component") {
@@ -2196,7 +2206,6 @@ export class AppShell extends HTMLElement {
       this.copy(serializeBlock(blocks[i]));
       return;
     }
-    if (action === "remove") blocks.splice(i, 1);
     if (action === "duplicate")
       blocks.splice(i + 1, 0, {
         ...createBlock(blocks[i].type, structuredClone(blocks[i].settings)),
@@ -2205,12 +2214,13 @@ export class AppShell extends HTMLElement {
           ? { section: structuredClone(blocks[i].section) }
           : {}),
       });
-    if (action === "up" || action === "down") {
+    if (["up", "down", "remove"].includes(action)) {
       const j = i + (action === "up" ? -1 : 1);
-      if (j < 0 || j >= blocks.length) return;
-      [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
-    }
-    this.store.blocks(blocks);
+      if (action !== "remove" && (j < 0 || j >= blocks.length)) return;
+      // Seams belong to positions, so moving the last split section never
+      // glues its text onto the next heading.
+      this.store.blocks(moveBlock(blocks, i, action));
+    } else this.store.blocks(blocks);
     const target =
       this.content.querySelector(
         `[data-id="${id}"][data-block-action="${action}"]:not(:disabled)`,

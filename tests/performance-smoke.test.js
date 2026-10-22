@@ -34,3 +34,22 @@ it("bounds search results across large reusable libraries", () => {
     ),
   ).toHaveLength(50);
 });
+it("source-preserving raw edits stay O(n) per keystroke on 250 KB", async () => {
+  const { splitDraft } = await import("../src/state/import-plan.js");
+  const { Store } = await import("../src/state/store.js");
+  const section = (i) =>
+    `## Section ${i}\n\nParagraph text for section ${i}.\n\n`;
+  let source = "";
+  for (let i = 0; source.length < 250 * 1024; i++) source += section(i);
+  const d = newDraft("Large", [createBlock("custom", { markdown: source })]);
+  const store = new Store({ ...d, blocks: splitDraft(d) });
+  const started = performance.now();
+  for (let k = 0; k < 20; k++) {
+    const at = Math.floor(store.draft.markdown.length / 2);
+    store.raw(
+      store.draft.markdown.slice(0, at) + "x" + store.draft.markdown.slice(at),
+    );
+  }
+  expect(store.draft.blocks.length).toBeGreaterThan(1000);
+  expect((performance.now() - started) / 20).toBeLessThan(250);
+}, 30000);

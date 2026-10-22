@@ -334,13 +334,23 @@ test("component customizer saves presets, duplicates independently and detaches 
     exact: true,
   });
   const source = await editor.inputValue();
-  await editor.fill(source + "\nManual addition");
-  await expect(page.locator(".toast")).toContainText("now Custom Markdown");
-  expect(
-    await page
+  const types = () =>
+    page
       .locator("app-shell")
-      .evaluate((el) => el.store.draft.blocks[0].type),
-  ).toBe("custom");
+      .evaluate((el) => el.store.draft.blocks.map((b) => b.type));
+  // Appending after the components keeps them visual.
+  await editor.fill(source + "\nManual addition");
+  expect((await types()).filter((t) => t === "component")).toHaveLength(2);
+  // Editing inside one component detaches only that component.
+  await editor.fill(
+    source.replace("First heading", "First heading edited") +
+      "\nManual addition",
+  );
+  await expect(page.locator(".toast")).toContainText("(component)");
+  await expect(page.locator(".toast")).toContainText(
+    "Undo restores visual ownership",
+  );
+  expect((await types()).filter((t) => t === "component")).toHaveLength(1);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   expect(
     await page
