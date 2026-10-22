@@ -264,3 +264,55 @@ test("checks in-document anchors offline without GitHub and explains ineligible 
     panel.getByRole("button", { name: "Set document target" }),
   ).toBeFocused();
 });
+
+test("discards a drift check when the Markdown changes while GitHub is read", async ({
+  page,
+}) => {
+  await start(page);
+  let release;
+  const held = new Promise((resolve) => (release = resolve));
+  let reading;
+  const started = new Promise((resolve) => (reading = resolve));
+  await page.unroute("https://api.github.com/**");
+  await page.route("https://api.github.com/**", async (route) => {
+    const url = route.request().url();
+    if (url.includes("/commits?"))
+      return route.fulfill({
+        json: [{ sha: sha("1"), commit: { tree: { sha: sha("2") } } }],
+      });
+    if (url.includes("/git/trees/")) {
+      reading();
+      await held;
+      return route.fulfill({ json: tree }).catch(() => {});
+    }
+    if (url.endsWith(`/git/blobs/${sha("4")}`))
+      return route.fulfill({ json: blob(packageJson) });
+    if (url.endsWith(`/git/blobs/${sha("7")}`))
+      return route.fulfill({ json: blob("# Usage\n\n## Install\n") });
+    return route.fulfill({ status: 404, json: {} });
+  });
+  await openDrift(page);
+  const panel = page.locator("evidence-snapshots");
+  await panel.getByRole("button", { name: "Run drift check" }).click();
+  await started;
+  const edited = source + "\nEdited during the check.\n";
+  await page.evaluate(
+    (text) => document.querySelector("app-shell").store.raw(text),
+    edited,
+  );
+  release();
+  await expect(panel.locator("[data-status]")).toContainText(
+    "Drift check failed: The document, its Markdown or its target changed while the check ran.",
+    firstRead,
+  );
+  await expect(panel.locator("[data-status]")).toContainText(
+    "Nothing was saved",
+  );
+  // No result for the old Markdown is shown.
+  await expect(panel.locator("[data-drift-counts]")).toHaveCount(0);
+  await expect(
+    panel.getByRole("button", { name: "Run drift check" }),
+  ).toBeFocused();
+  // The edit made during the check is kept.
+  expect(await markdown(page)).toBe(edited);
+});

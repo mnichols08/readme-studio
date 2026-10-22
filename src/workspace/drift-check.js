@@ -66,6 +66,8 @@ const PROMPTED = new Set([
   "bash-session",
   "terminal",
 ]);
+const POWERSHELL = new Set(["powershell", "pwsh", "ps", "ps1"]),
+  CMD = new Set(["cmd", "bat", "batch"]);
 const ENV_LANGS = new Set(["env", "dotenv", ".env"]);
 // Paths under these folders are usually created by a build or install, and
 // files like `.env` are usually ignored by Git, so their absence is uncertain.
@@ -118,24 +120,113 @@ const valued = new Set([
   "--userconfig",
   "--cache",
 ]);
+// Interpreters that take a script file, by family.
 const runners = {
-  node: 1,
-  nodejs: 1,
-  python: 1,
-  python3: 1,
-  py: 1,
-  bash: 1,
-  sh: 1,
-  zsh: 1,
-  pwsh: 1,
-  ruby: 1,
-  perl: 1,
-  php: 1,
-  tsx: 1,
-  "ts-node": 1,
-  source: 1,
-  ".": 1,
+  node: "node",
+  nodejs: "node",
+  tsx: "node",
+  "ts-node": "node",
+  python: "python",
+  python3: "python",
+  py: "python",
+  bash: "shell",
+  sh: "shell",
+  zsh: "shell",
+  pwsh: "pwsh",
+  ruby: "ruby",
+  perl: "perl",
+  php: "php",
+  source: "source",
+  ".": "source",
 };
+// Per family: options that mean no script file is run, options whose value
+// is the next word, and short options known to take no value. Any other
+// short option before the script makes the claimed file uncertain, since it
+// may have consumed the word.
+const runnerFlags = {
+  node: {
+    none: ["-e", "--eval", "-p", "--print", "-c", "--check", "-h", "--help"],
+    valued: [
+      "-r",
+      "--require",
+      "--import",
+      "--loader",
+      "--experimental-loader",
+      "-C",
+      "--conditions",
+      "--env-file",
+      "--env-file-if-exists",
+      "--input-type",
+      "--title",
+      "--watch-path",
+      "-P",
+      "--project",
+      "-O",
+      "--compiler-options",
+      "--compiler",
+      "--tsconfig",
+    ],
+    plain: ["-i", "-v", "-T"],
+  },
+  python: {
+    none: ["-m", "-c", "-h", "--help", "-V", "--version"],
+    valued: ["-W", "-X", "-Q"],
+    plain: ["-u", "-O", "-OO", "-B", "-E", "-I", "-s", "-S", "-q", "-b", "-d"],
+  },
+  shell: {
+    none: ["-c", "-s", "--help", "--version"],
+    valued: ["-o", "-O", "+o", "+O"],
+    plain: ["-e", "-u", "-x", "-v", "-l", "-i", "-n"],
+  },
+  pwsh: {
+    none: ["-c", "-Command", "-command", "-EncodedCommand", "-h", "-Help"],
+    valued: ["-ExecutionPolicy", "-ep", "-ex"],
+    plain: ["-NoProfile", "-nop", "-NoLogo", "-NonInteractive", "-File", "-f"],
+  },
+  ruby: {
+    none: ["-e", "-h", "--help", "-v", "--version", "-C"],
+    valued: ["-I", "-r", "-E", "-F"],
+    plain: ["-w", "-W", "-d"],
+  },
+  perl: {
+    none: ["-e", "-E", "-h", "-v"],
+    valued: ["-I", "-M", "-m"],
+    plain: ["-w", "-W", "-T", "-d"],
+  },
+  php: {
+    none: ["-r", "-S", "-h", "-v", "-i", "-a", "-m"],
+    valued: ["-t", "-c", "-d", "-z", "-f"],
+    plain: ["-n", "-q", "-e"],
+  },
+  source: { none: [], valued: [], plain: [] },
+  deno: {
+    none: ["-h", "--help"],
+    valued: [
+      "-c",
+      "--config",
+      "--import-map",
+      "--lock",
+      "--cert",
+      "--location",
+      "--seed",
+    ],
+    plain: ["-A", "-q", "-r", "-L"],
+  },
+};
+// Node resolves an extensionless entry point (`node server`) by trying these
+// suffixes; tsx and ts-node add TypeScript ones.
+const NODE_SUFFIXES = [
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".json",
+  ".node",
+  ".ts",
+  ".mts",
+  ".cts",
+  ".tsx",
+  ".jsx",
+];
 const makefiles = ["Makefile", "makefile", "GNUmakefile"],
   composeFiles = [
     "compose.yaml",
@@ -145,12 +236,13 @@ const makefiles = ["Makefile", "makefile", "GNUmakefile"],
   ];
 
 // A word that names a repository path: relative, no variables, globs,
-// placeholders, URLs or home/absolute/Windows paths.
+// placeholders, URLs, specifiers such as `npm:vite` or `localhost:8000`, or
+// home/absolute/Windows paths.
 function pathWord(word) {
   if (
     !word ||
     word.length > 300 ||
-    /^[-~/]|^[A-Za-z]:|[$*?{}<>%`\\|]|:\/\/|^path\/to\//i.test(word)
+    /^[-~/]|[$*?{}<>%`\\|:]|^path\/to\//i.test(word)
   )
     return null;
   try {
@@ -158,6 +250,18 @@ function pathWord(word) {
   } catch {
     return null;
   }
+}
+// The path a command word may produce: an option's `=value`, a downloaded
+// URL's file name, or the word itself.
+function mentionedPath(word) {
+  let value = word.startsWith("-") ? word.split("=")[1] || "" : word;
+  if (/^https?:\/\//i.test(value))
+    try {
+      value = decodeURIComponent(new URL(value).pathname.split("/").pop());
+    } catch {
+      return null;
+    }
+  return pathWord(value);
 }
 // Splits one command line into segments of words. Quotes group words,
 // `&&`, `||`, `;`, `|` and `&` end a segment, `#` at a word start begins a
@@ -211,22 +315,30 @@ function segments(line) {
 function commandLines(text, lang) {
   const lines = [];
   let pending = null;
+  // Continuations: a backtick in PowerShell, `^` in cmd and `\` elsewhere
+  // (in POSIX shells a trailing backtick closes a command substitution).
+  const continued = POWERSHELL.has(lang) ? /`$/ : CMD.has(lang) ? /\^$/ : /\\$/;
+  // npm and others echo `> pkg@1.0.0 build` lines as output, so in session
+  // blocks a bare `>` is not a prompt.
+  const prompts = PROMPTED.has(lang)
+    ? /^(?:PS(?: [^>]*)?>|\$|%)\s+/
+    : /^(?:PS(?: [^>]*)?>|\$|>|%)\s+/;
   text.split("\n").forEach((raw, index) => {
     let line = raw.trim();
     if (pending) {
-      pending.text += " " + line.replace(/(?:\\|`|\^)$/, "");
-      if (!/(?:\\|`|\^)$/.test(line)) {
+      pending.text += " " + line.replace(continued, "");
+      if (!continued.test(line)) {
         lines.push(pending);
         pending = null;
       }
       return;
     }
-    const prompt = line.match(/^(?:PS(?: [^>]*)?>|\$|>|%)\s+/);
+    const prompt = line.match(prompts);
     if (PROMPTED.has(lang) && !prompt) return;
     if (prompt) line = line.slice(prompt[0].length);
     if (!line || line.startsWith("#") || line.startsWith("//")) return;
-    if (/(?:\\|`|\^)$/.test(line))
-      pending = { text: line.replace(/(?:\\|`|\^)$/, ""), index };
+    if (continued.test(line))
+      pending = { text: line.replace(continued, ""), index };
     else lines.push({ text: line, index });
   });
   if (pending) lines.push(pending);
@@ -234,7 +346,8 @@ function commandLines(text, lang) {
 }
 
 // Interprets one command segment. `context` carries what earlier commands in
-// the same block did: `cd` steps, created paths and clone directory names.
+// the same block did: `cd` steps, created paths, clone directory names and
+// words that earlier commands mentioned (which may be files they created).
 function commandClaims(words, context, claim) {
   while (/^[A-Za-z_]\w*=/.test(words[0] || "")) words = words.slice(1);
   while (["sudo", "env", "time", "exec", "command"].includes(words[0]))
@@ -252,16 +365,17 @@ function commandClaims(words, context, claim) {
     else plain.push(args[i]);
   }
   const positional = plain.filter((word) => !word.startsWith("-"));
+  const under = (value, base) => value === base || value.startsWith(base + "/");
   const path = (word, extra = {}) => {
     const value = pathWord(word);
-    if (
-      value &&
-      ![...context.created].some(
-        (created) => value === created || value.startsWith(created + "/"),
-      )
-    )
-      claim({ kind: "path", path: value, ...extra });
+    if (!value || [...context.created].some((made) => under(value, made)))
+      return;
+    // An earlier command that is not modelled (a compiler's `-o`, a
+    // download, `python -m venv env`) may have created it.
+    const made = [...context.mentioned].find((word) => under(value, word));
+    claim({ kind: "path", path: value, ...(made ? { made } : {}), ...extra });
   };
+  const help = ["--version", "-V", "--help", "-h"];
   switch (tool) {
     case "cd": {
       // `cd` alone, `cd -`, `cd ..` and unusual targets make the working
@@ -274,13 +388,18 @@ function commandClaims(words, context, claim) {
     case "git":
       if (plain[0] === "clone") {
         const [url, dir] = positional.slice(1);
-        const name =
-          dir ||
-          (url || "")
-            .replace(/\.git$/, "")
-            .split(/[/:]/)
-            .pop();
-        if (name) context.clones.add(name);
+        const cloned = (url || "")
+          .replace(/\/+$/, "")
+          .replace(/\.git$/, "")
+          .split(/[/:]/)
+          .pop();
+        const name = dir || cloned;
+        // Only a clone of this repository (or a fork, which keeps its name)
+        // is this repository's root; `cd` into any other clone leaves it.
+        if (!name) return;
+        if (cloned.toLowerCase() === context.repository.toLowerCase())
+          context.clones.add(name);
+        else context.foreign.add(name);
       }
       return;
     case "mkdir":
@@ -310,6 +429,7 @@ function commandClaims(words, context, claim) {
     case "make": {
       const file = flagValue(plain, ["-f", "--file", "--makefile"]);
       if (flagValue(plain, ["-C", "--directory"]) !== undefined) return;
+      if (plain.some((word) => [...help, "-v"].includes(word))) return;
       return file
         ? path(file, { tool: "make" })
         : claim({ kind: "path", anyOf: makefiles, tool: "make" });
@@ -317,7 +437,20 @@ function commandClaims(words, context, claim) {
     case "cargo": {
       const manifest = flagValue(plain, ["--manifest-path"]);
       if (manifest) return path(manifest, { tool: "cargo" });
-      if (["install", "new", "init", "search", "login"].includes(positional[0]))
+      if (plain.some((word) => [...help, "--list"].includes(word))) return;
+      if (
+        [
+          "install",
+          "uninstall",
+          "new",
+          "init",
+          "search",
+          "login",
+          "logout",
+          "help",
+          "version",
+        ].includes(positional[0])
+      )
         return;
       return claim({
         kind: "path",
@@ -329,6 +462,12 @@ function commandClaims(words, context, claim) {
     case "docker-compose":
     case "docker": {
       if (tool === "docker" && positional[0] !== "compose") return;
+      const sub = positional[tool === "docker" ? 1 : 0];
+      if (
+        ["version", "ls"].includes(sub) ||
+        plain.some((word) => [...help, "-v"].includes(word))
+      )
+        return;
       const file = flagValue(plain, ["-f", "--file"]);
       return file
         ? path(file, { tool: "docker compose" })
@@ -341,20 +480,43 @@ function commandClaims(words, context, claim) {
       return;
     }
     case "deno":
-      if (positional[0] === "run") path(positional[1]);
+      if (positional[0] === "run")
+        runnerFile("deno", plain.slice(plain.indexOf("run") + 1), path);
       return;
     case "go":
       if (positional[0] === "run" && /\.go$/.test(positional[1] || ""))
         path(positional[1]);
       return;
   }
-  if (runners[tool]) {
-    // `python -m module` and `node -e code` name no file.
-    if (plain.some((word) => ["-m", "-c", "-e", "--eval"].includes(word)))
-      return;
-    return path(positional[0]);
-  }
+  if (runners[tool]) return runnerFile(runners[tool], plain, path, tool);
   if (/^\.\.?\//.test(tool)) path(tool);
+}
+// The script an interpreter runs: the first word that is not an option or
+// an option's value. `python -m module` and `node -e code` name no file.
+function runnerFile(family, words, path, tool = "") {
+  const flags = runnerFlags[family];
+  let loose = false;
+  for (let i = 0; i < words.length; i++) {
+    let word = words[i];
+    if (word === "--") word = words[i + 1];
+    else if (/^[-+]./.test(word)) {
+      const [flag] = word.split("=");
+      if (flags.none.includes(flag)) return;
+      if (flags.valued.includes(flag)) {
+        if (!word.includes("=")) i++;
+      } else if (!flags.plain.includes(flag) && !flag.startsWith("--"))
+        loose = true;
+      continue;
+    }
+    if (!word) return;
+    // `tsx watch src/index.ts`
+    if (tool === "tsx" && word === "watch" && i + 1 < words.length) continue;
+    const extra = loose ? { loose: true } : {};
+    // `node server` runs server.js, server/index.js and so on.
+    if (family === "node" && !/\.[^/]*$/.test(word))
+      extra.suffixes = NODE_SUFFIXES;
+    return path(word, extra);
+  }
 }
 function flagValue(words, names) {
   for (let i = 0; i < words.length; i++) {
@@ -415,7 +577,12 @@ function packageClaims(manager, words, context, claim, path) {
     // `bun run file.ts` runs a file, not a script.
     return /[./]/.test(name) ? path(name) : script(name, false);
   }
-  if (!command) return manager === "yarn" ? install(false) : undefined; // bare `yarn` installs
+  // Bare `yarn` installs; `yarn --version` and `yarn --help` do not.
+  if (!command)
+    return manager === "yarn" &&
+      !words.some((word) => ["--version", "-v", "--help", "-h"].includes(word))
+      ? install(false)
+      : undefined;
   if (command === "install" || (manager === "pnpm" && command === "i"))
     return positional.length === 1 ? install(false) : undefined;
   if (command === "run") return script(name, manager === "pnpm");
@@ -437,6 +604,36 @@ export function slug(text) {
     .replace(/\s/g, "-");
 }
 const loose = (value) => value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+// Heading text keeps character references as written (`Q&amp;A`); GitHub
+// slugs the rendered text (`Q&A`), so the common ones are decoded.
+const ENTITIES = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  copy: "©",
+  reg: "®",
+  trade: "™",
+  hellip: "…",
+  mdash: "—",
+  ndash: "–",
+};
+function decodeEntities(text) {
+  return text.replace(/&(#\d{1,7}|#x[\da-f]{1,6}|[a-z]+);/gi, (all, name) => {
+    if (name[0] !== "#") return ENTITIES[name.toLowerCase()] ?? all;
+    const code =
+      name[1] === "x" || name[1] === "X"
+        ? parseInt(name.slice(2), 16)
+        : Number(name.slice(1));
+    try {
+      return String.fromCodePoint(code);
+    } catch {
+      return all;
+    }
+  });
+}
 function inlineText(tokens = []) {
   return tokens
     .map((token) =>
@@ -446,21 +643,27 @@ function inlineText(tokens = []) {
           ? ""
           : token.tokens?.length
             ? inlineText(token.tokens)
-            : token.text || "",
+            : token.type === "text"
+              ? decodeEntities(token.text || "")
+              : token.text || "",
     )
     .join("");
 }
 export function markdownAnchors(markdown) {
   const anchors = new Set(),
     counts = new Map();
-  visitTokens(marked.lexer(String(markdown)), (token) => {
+  visitTokens(marked.lexer(String(markdown).replace(/^﻿/, "")), (token) => {
     if (token.type === "heading") {
       const base = slug(inlineText(token.tokens));
       const count = counts.get(base) || 0;
       counts.set(base, count + 1);
       anchors.add(count ? `${base}-${count}` : base);
     }
-    const html = token.type === "html" ? token.text : "";
+    // Commented-out HTML renders nothing, so its anchors do not count.
+    const html =
+      token.type === "html"
+        ? token.text.replace(/<!--[\s\S]*?(?:-->|$)/g, "")
+        : "";
     for (const match of html.matchAll(
       /\s(?:id|name)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi,
     ))
@@ -494,7 +697,7 @@ export function packageEvidence(text) {
 }
 export function envKeys(text) {
   const keys = new Set();
-  for (const line of String(text).split(/\r?\n/)) {
+  for (const line of String(text).replace(/^﻿/, "").split(/\r?\n/)) {
     const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
     if (match) keys.add(match[1]);
   }
@@ -560,8 +763,10 @@ export function driftClaims(markdown, destination) {
     else claims.push({ id: `claim-${claims.length + 1}`, ...value });
   };
   const command = (text, line, where, context) => {
-    for (const words of segments(text))
-      commandClaims(words, context, (value) =>
+    for (const words of segments(text)) {
+      const claimed = new Set();
+      commandClaims(words, context, (value) => {
+        if (value.path) claimed.add(value.path);
         add({
           category: "command",
           ...value,
@@ -571,13 +776,23 @@ export function driftClaims(markdown, destination) {
           cd: [...context.cd],
           bases: context.bases,
           clones: [...context.clones],
-        }),
-      );
+          foreign: [...context.foreign],
+        });
+      });
+      // Later commands in the block may use what this one produced.
+      for (const word of words) {
+        const value = mentionedPath(word);
+        if (value && !claimed.has(value)) context.mentioned.add(value);
+      }
+    }
   };
   const freshContext = (bases) => ({
     cd: [],
     created: new Set(),
+    mentioned: new Set(),
     clones: new Set([repository]),
+    foreign: new Set(),
+    repository,
     bases,
   });
   const link = (value, image, line) => {
@@ -619,12 +834,24 @@ export function driftClaims(markdown, destination) {
     }
     const github = githubLink(text, destination);
     if (github?.other) otherRefs++;
-    else if (github?.path)
+    else if (github?.path === destination.path) {
+      // A link to this document itself: its anchors are checked against the
+      // local Markdown, not the README currently on GitHub.
+      if (github.anchor)
+        add({
+          category: "link",
+          kind: "anchor",
+          anchor: github.anchor,
+          text,
+          line,
+        });
+    } else if (github?.path)
       add({
         category: "link",
         kind: "link",
         path: github.path,
         anchor: github.anchor,
+        ...(github.ref ? { ref: github.ref } : {}),
         image,
         text,
         line,
@@ -648,9 +875,25 @@ export function driftClaims(markdown, destination) {
     visitTokens([block], (token) => {
       if (token.type === "code" && token.codeBlockStyle !== "indented") {
         const lang = (token.lang || "").trim().split(/\s+/)[0].toLowerCase();
-        // The first content line, or the line after the opening fence.
+        // The first content line, or the line after the opening fence. The
+        // search starts at the opening fence, so list prose before it that
+        // repeats the text is not taken for the command.
+        const fence = /^[ \t>]*(?:`{3,}|~{3,})/gm;
+        fence.lastIndex = cursors.code;
+        const opening = fence.exec(block.raw);
+        if (opening) cursors.code = opening.index + opening[0].length;
         const first = token.text.split("\n")[0];
-        const start = first ? lineOf(first) : lineOf(token.raw) + 1;
+        const start = first
+          ? lineOf(first)
+          : (opening ? lineAt(offset + opening.index) : lineOf(token.raw)) + 1;
+        // Continue after the closing fence.
+        if (opening) {
+          let end = block.raw.indexOf("\n", opening.index);
+          const lines = token.text ? token.text.split("\n").length : 0;
+          for (let n = lines + 1; n > 0 && end !== -1; n--)
+            end = block.raw.indexOf("\n", end + 1);
+          if (end !== -1) cursors.code = Math.max(cursors.code, end);
+        }
         if (ENV_LANGS.has(lang)) {
           token.text.split("\n").forEach((line, index) => {
             const key = line.match(/^\s*(?:export\s+)?([A-Za-z_]\w*)\s*=/)?.[1];
@@ -784,9 +1027,8 @@ export function githubLink(url, destination) {
   if (!/^https?:$/.test(parsed.protocol)) return null;
   const host = parsed.hostname.toLowerCase();
   const parts = parsed.pathname.split("/").filter(Boolean);
-  let owner, repo, rest;
+  let owner, repo, rest, kind;
   if (host === "github.com" || host === "www.github.com") {
-    let kind;
     [owner, repo, kind, ...rest] = parts;
     if (!["blob", "tree", "raw"].includes(kind)) return null;
   } else if (host === "raw.githubusercontent.com")
@@ -803,9 +1045,17 @@ export function githubLink(url, destination) {
   const path = reference.slice(branch.length + 1);
   if (!path) return null;
   try {
+    const resolved = resolveRelativePath(path);
+    // The URL could instead name a longer branch (`release/1.0` when the
+    // document's branch is `release`): its first segment may be a ref part.
+    const ref =
+      resolved.includes("/") || kind === "tree"
+        ? `${branch}/${resolved.split("/")[0]}`
+        : "";
     return {
-      path: resolveRelativePath(path),
+      path: resolved,
       anchor: decodeSafe(parsed.hash.slice(1)),
+      ...(ref ? { ref } : {}),
     };
   } catch {
     return null;
@@ -878,20 +1128,48 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
     const near = lower.get(path.toLowerCase());
     return near && near !== path ? near : "";
   };
+  // The Git submodule a path is inside, if any: the tree lists a submodule
+  // as one commit entry, not its files.
+  const submodule = (path) => {
+    const parts = path.split("/");
+    for (let i = 1; i < parts.length; i++) {
+      const prefix = parts.slice(0, i).join("/");
+      if (listing.get(prefix)?.type === "commit") return prefix;
+    }
+    return "";
+  };
   // "present", "absent" (confirmed by a complete tree) or "unknown".
   const state = (path) =>
-    listing.has(path) ? "present" : tree === "complete" ? "absent" : "unknown";
+    listing.has(path)
+      ? "present"
+      : tree === "complete" && !submodule(path)
+        ? "absent"
+        : "unknown";
   const treeNote =
     tree === "truncated"
       ? "Not in GitHub's truncated tree listing, so its state is unknown."
       : "The repository tree could not be read, so its state is unknown.";
+  const unknownNote = (path) => {
+    const sub = submodule(path);
+    return sub
+      ? `It is inside the Git submodule ${sub}, whose files this tree does not list, so its state is unknown.`
+      : treeNote;
+  };
+  // Heading anchors per linked file, computed once each.
+  const anchorCache = new Map();
+  const anchorsOf = (path, text) => {
+    if (!anchorCache.has(path)) anchorCache.set(path, markdownAnchors(text));
+    return anchorCache.get(path);
+  };
   // Follows `cd` steps from the root. Returns a repository directory ("" is
   // the root) or null when the directory is unknown. Changing into a clone
-  // directory named like the repository stays at the root.
-  const resolveCd = (steps, clones) => {
+  // of this repository stays at the root; into a clone of another
+  // repository, the directory is unknown.
+  const resolveCd = (steps, clones, foreign = []) => {
     let dir = "";
     for (const step of steps) {
       if (step === null) return null;
+      if (!dir && foreign.includes(step)) return null;
       if (!dir && clones.includes(step)) continue;
       const next = resolvePath(dir, step);
       if (next === null || listing.get(next)?.type !== "tree") return null;
@@ -903,7 +1181,11 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
   const directories = (claim) => [
     ...new Set(
       (claim.bases || [[]]).map((base) =>
-        resolveCd([...base, ...(claim.cd || [])], claim.clones || []),
+        resolveCd(
+          [...base, ...(claim.cd || [])],
+          claim.clones || [],
+          claim.foreign || [],
+        ),
       ),
     ),
   ];
@@ -976,15 +1258,26 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
       const where = state(claim.path);
       const what = claim.image ? "Image" : "Linked path";
       if (where === "unknown") {
-        result(claim, "unknown", `${claim.path}: ${treeNote}`, claim.path);
+        result(
+          claim,
+          "unknown",
+          `${claim.path}: ${unknownNote(claim.path)}`,
+          claim.path,
+        );
         continue;
       }
       if (where === "absent") {
         const near = nearPath(claim.path);
+        // `blob/release/1.0/x` on branch `release` may name branch
+        // `release/1.0` when no `1.0` folder exists.
+        const ref =
+          claim.ref && state(claim.path.split("/")[0]) === "absent"
+            ? claim.ref
+            : "";
         result(
           claim,
-          "mismatch",
-          `${what} ${claim.path} is not in the repository at ${short(evidence.head)}.${near ? ` ${near} exists; GitHub paths are case-sensitive.` : ""}`,
+          ref ? "uncertain" : "mismatch",
+          `${what} ${claim.path} is not in the repository at ${short(evidence.head)}.${near ? ` ${near} exists; GitHub paths are case-sensitive.` : ""}${ref ? ` The URL may point at another branch, such as ${ref}, which was not checked.` : ""}`,
           claim.path,
         );
         continue;
@@ -1007,7 +1300,7 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
         );
         continue;
       }
-      const anchors = markdownAnchors(file.text);
+      const anchors = anchorsOf(claim.path, file.text);
       const anchor = claim.anchor.toLowerCase().replace(/^user-content-/, "");
       if (anchors.includes(anchor))
         result(claim, "matches", `${claim.path} has #${anchor}.`, claim.path);
@@ -1031,7 +1324,10 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
         const out = [];
         for (const name of names) {
           const path = resolvePath(dir, name);
-          if (path) out.push(path);
+          if (path) {
+            out.push(path);
+            for (const suffix of claim.suffixes || []) out.push(path + suffix);
+          }
           if (claim.ancestors) {
             const parts = dir ? dir.split("/") : [];
             while (parts.length) {
@@ -1060,29 +1356,49 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
         );
         continue;
       }
-      if (paths.some((path) => state(path) === "unknown")) {
-        result(claim, "unknown", `${label}: ${treeNote}`);
+      const unread = paths.find((path) => state(path) === "unknown");
+      if (unread !== undefined) {
+        result(claim, "unknown", `${label}: ${unknownNote(unread)}`);
         continue;
       }
       const target = paths[0] || claim.path;
       const generated = !claim.anyOf && GENERATED.test(target);
       const ignored = !claim.anyOf && IGNORED.test(target);
       const ambiguous = known.length > 1 || dirs.length > known.length;
+      // An earlier command mentioned it (or a folder above it) and that
+      // word is not in the tree either, so the command may have created it.
+      const made =
+        claim.made &&
+        state(resolvePath(known[0], claim.made) ?? claim.made) !== "present"
+          ? claim.made
+          : "";
       const near = !claim.anyOf && nearPath(target);
       const where = known[0] ? ` in ${known[0]}/` : "";
       const reason = generated
         ? " It is under a folder that builds or installs usually create, so it may be generated."
         : ignored
           ? " Files like this are usually ignored by Git, so it may be created locally."
-          : ambiguous
-            ? " The command may run from another directory."
-            : inlineNote(claim);
+          : made
+            ? ` An earlier command in this block mentions ${made}, so it may create it.`
+            : claim.loose
+              ? " An option before it may take it as a value, so it may not be a file."
+              : ambiguous
+                ? " The command may run from another directory."
+                : inlineNote(claim);
+      const extensions = claim.suffixes
+        ? " No file with a Node.js extension or folder of that name exists either."
+        : "";
       result(
         claim,
-        generated || ignored || ambiguous || claim.where === "inline"
+        generated ||
+          ignored ||
+          made ||
+          claim.loose ||
+          ambiguous ||
+          claim.where === "inline"
           ? "uncertain"
           : "mismatch",
-        `${claim.anyOf ? `${label}${where}` : `${target}`}: not in the repository at ${short(evidence.head)}.${near ? ` ${near} exists; GitHub paths are case-sensitive.` : ""}${reason}`,
+        `${claim.anyOf ? `${label}${where}` : `${target}`}: not in the repository at ${short(evidence.head)}.${extensions}${near ? ` ${near} exists; GitHub paths are case-sensitive.` : ""}${reason}`,
         claim.anyOf ? "" : target,
       );
       continue;
@@ -1154,6 +1470,22 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
               ? `The repository has ${others.join(", ")} but no ${lockfiles.join(" or ")}, which suggests a different package manager than ${claim.manager}.`
               : `package.json declares packageManager ${declared}; this command uses ${claim.manager}.`,
             others[0] || "package.json",
+          );
+        // No lockfile at all: the install depends only on package.json.
+        else if (pkg.unknown)
+          result(claim, "unknown", pkg.unknown, "package.json");
+        else if (pkg.absent)
+          result(
+            claim,
+            "uncertain",
+            `No package.json or lockfile at the repository root at ${short(evidence.head)}, so there is nothing to install.${ambiguous ? " The command may run from another directory." : inlineNote(claim)}`,
+          );
+        else
+          result(
+            claim,
+            "matches",
+            "package.json exists; the repository has no lockfile, so nothing suggests another package manager.",
+            "package.json",
           );
         continue;
       }

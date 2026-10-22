@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { marked } from "marked";
 import {
   driftClaims,
   evaluateDrift,
@@ -132,7 +133,10 @@ describe("drift claims", () => {
         "console",
         "$ yarn lint",
         "npm run output-line",
-        "> pnpm run serve",
+        // npm echoes its script as `> pkg@1.0.0 build` / `> node ...`.
+        "> widget@1.0.0 build",
+        "> node scripts/missing.js",
+        "PS> pnpm run serve",
       ),
       fence("js", 'exec("npm run from-js")'),
       fence("", "npm run unlabeled"),
@@ -519,8 +523,30 @@ describe("drift evaluation", () => {
       evidence({ listing }),
     );
     expect(status(noLock, "npm ci")).toEqual(["mismatch"]);
-    // No lockfile at all says nothing about npm install.
-    expect(status(noLock, "npm install")).toEqual([]);
+    // With no lockfile at all, npm install only needs package.json.
+    expect(status(noLock, "npm install")).toEqual(["matches"]);
+    expect(one(noLock, "npm install").message).toContain("no lockfile");
+    const empty = check(
+      fence("bash", "npm install", "yarn"),
+      evidence({ listing: listingOf([["src", "tree"]]) }),
+    );
+    expect(status(empty, "npm install")).toEqual(["uncertain"]);
+    expect(status(empty, "yarn")).toEqual(["uncertain"]);
+    expect(one(empty, "npm install").message).toContain(
+      "No package.json or lockfile",
+    );
+    expect(
+      status(
+        check(
+          fence("bash", "npm install"),
+          evidence({
+            tree: "truncated",
+            listing: listingOf([["src", "tree"]]),
+          }),
+        ),
+        "npm install",
+      ),
+    ).toEqual(["unknown"]);
     const result = check(
       fence("bash", "npm ci", "yarn install", "yarn", "pnpm install"),
     );
@@ -1015,5 +1041,313 @@ describe("drift check dialog", () => {
       snapshots: undefined,
     });
     expect(el.querySelector("[data-drift-run]")).toBeNull();
+  });
+});
+
+// Review findings for v1.6.1: each case below was once reported as an
+// observed mismatch (or missed) although the repository did not contradict
+// the claim.
+describe("drift false positives", () => {
+  const statuses = (result) =>
+    result.results.map((item) => [item.text, item.status]);
+
+  it("resolves extensionless Node entry points and folders like Node does", () => {
+    const listing = listingOf([
+      ["package.json"],
+      ["server.js"],
+      ["scripts", "tree"],
+      ["scripts/seed.mjs"],
+      ["api", "tree"],
+      ["api/index.js"],
+      ["cli.ts"],
+    ]);
+    const result = check(
+      fence(
+        "bash",
+        "node server",
+        "node scripts/seed",
+        "node api",
+        "tsx cli",
+        "node missing",
+        "python server",
+      ),
+      evidence({ listing }),
+    );
+    expect(status(result, "node server")).toEqual(["matches"]);
+    expect(one(result, "node server").message).toBe("server.js exists.");
+    expect(status(result, "node scripts/seed")).toEqual(["matches"]);
+    expect(status(result, "node api")).toEqual(["matches"]);
+    expect(status(result, "tsx cli")).toEqual(["matches"]);
+    // Nothing Node could resolve: still an observed mismatch.
+    expect(one(result, "node missing").status).toBe("mismatch");
+    expect(one(result, "node missing").message).toContain(
+      "No file with a Node.js extension",
+    );
+    // Python does not add extensions.
+    expect(status(result, "python server")).toEqual(["mismatch"]);
+  });
+
+  it("skips interpreter option values and subcommands instead of reading them as files", () => {
+    const lines = [
+      "node -r dotenv/config scripts/setup.js",
+      "node --require=dotenv/config scripts/setup.js",
+      "node --import tsx scripts/setup.js",
+      "tsx watch scripts/setup.js",
+      "python -X dev scripts/setup.js",
+      "python -W ignore scripts/setup.js",
+      "php -S localhost:8000 -t public",
+      "deno run npm:vite",
+      "deno run --allow-net --config deno.json scripts/setup.js",
+      "node -p process.version",
+      "bash -o pipefail scripts/setup.js",
+    ];
+    expect(kinds(fence("bash", ...lines))).toEqual(
+      Array(8).fill("path:scripts/setup.js"),
+    );
+    const result = check(fence("bash", ...lines));
+    expect(result.counts.mismatch).toBe(0);
+    // A file after the option values is still checked.
+    expect(
+      status(
+        check(fence("bash", "node -r dotenv/config scripts/gone.js")),
+        "node -r dotenv/config scripts/gone.js",
+      ),
+    ).toEqual(["mismatch"]);
+    // An option that is not known to take no value may have consumed the
+    // word, so a missing "file" is only uncertain.
+    const unknownFlag = one(
+      check(fence("bash", "python -Z thing scripts/setup.js")),
+      "python -Z thing scripts/setup.js",
+    );
+    expect(unknownFlag.status).toBe("uncertain");
+    expect(unknownFlag.message).toContain("An option before it");
+  });
+
+  it("does not need project files for version and help commands", () => {
+    const listing = listingOf([["package.json"], ["package-lock.json"]]);
+    const result = check(
+      fence(
+        "bash",
+        "cargo --version",
+        "cargo -V",
+        "make --version",
+        "make -v",
+        "docker compose version",
+        "docker-compose --version",
+        "yarn --version",
+        "make build",
+      ),
+      evidence({ listing }),
+    );
+    expect(statuses(result)).toEqual([["make build", "mismatch"]]);
+  });
+
+  it("keeps files that earlier unmodelled commands may create uncertain", () => {
+    const result = check(
+      fence(
+        "bash",
+        "python3 -m venv env",
+        "source env/bin/activate",
+        "go build -o bin/server ./cmd/server",
+        "./bin/server",
+        "gcc main.c -o hello && ./hello",
+        "curl -LO https://example.com/get/install.sh",
+        "bash install.sh",
+        "ls scripts",
+        "node scripts/gone.js",
+      ),
+    );
+    for (const text of [
+      "source env/bin/activate",
+      "./bin/server",
+      "gcc main.c -o hello && ./hello",
+      "bash install.sh",
+    ]) {
+      expect(status(result, text), text).toEqual(["uncertain"]);
+      expect(one(result, text).message).toContain("An earlier command");
+    }
+    // A mentioned folder that is already in the tree was not created by the
+    // command, so a missing file inside it is still a mismatch.
+    expect(status(result, "node scripts/gone.js")).toEqual(["mismatch"]);
+  });
+
+  it("reports commands inside a Git submodule as unknown", () => {
+    const listing = listingOf([
+      ["vendor", "tree"],
+      ["vendor/lib", "commit"],
+    ]);
+    const result = check(
+      [
+        fence("bash", "git submodule update --init", "bash vendor/lib/run.sh"),
+        "[docs](vendor/lib/README.md)",
+      ].join("\n\n"),
+      evidence({ listing }),
+    );
+    expect(statuses(result)).toEqual([
+      ["bash vendor/lib/run.sh", "unknown"],
+      ["vendor/lib/README.md", "unknown"],
+    ]);
+    expect(result.results[0].message).toContain("Git submodule vendor/lib");
+  });
+
+  it("does not treat a clone of another repository as this repository's root", () => {
+    const result = check(
+      fence(
+        "bash",
+        "git clone https://github.com/vendor/libfoo.git",
+        "cd libfoo",
+        "./bootstrap.sh",
+        "make",
+      ),
+    );
+    expect(statuses(result)).toEqual([
+      ["./bootstrap.sh", "unknown"],
+      ["make", "unknown"],
+    ]);
+    // A clone of this repository, or a fork with the same name, stays at
+    // the root.
+    for (const url of [
+      "https://github.com/example/widget.git",
+      "git@github.com:someone/widget.git",
+    ]) {
+      const own = check(
+        fence("bash", `git clone ${url}`, "cd widget", "node scripts/gone.js"),
+      );
+      expect(status(own, "node scripts/gone.js"), url).toEqual(["mismatch"]);
+    }
+    const renamed = check(
+      fence(
+        "bash",
+        "git clone https://github.com/example/widget.git app",
+        "cd app",
+        "node scripts/setup.js",
+      ),
+    );
+    expect(status(renamed, "node scripts/setup.js")).toEqual(["matches"]);
+  });
+
+  it("ignores npm's echoed script lines in console sessions", () => {
+    const markdown = fence(
+      "console",
+      "$ npm run build",
+      "",
+      "> widget@1.0.0 build",
+      "> node scripts/build.js",
+    );
+    expect(kinds(markdown)).toEqual(["npm:build"]);
+  });
+
+  it("only joins lines on the continuation character of the fence's shell", () => {
+    expect(
+      kinds(fence("bash", "export V=`git describe`", "npm run lint")),
+    ).toEqual(["env:V", "npm:lint"]);
+    expect(
+      kinds(fence("powershell", "node `", "  scripts/setup.js", "npm test")),
+    ).toEqual(["path:scripts/setup.js", "npm:test"]);
+    expect(
+      kinds(fence("cmd", "node ^", "  scripts/setup.js", "npm test")),
+    ).toEqual(["path:scripts/setup.js", "npm:test"]);
+  });
+
+  it("checks absolute links to this document against the local Markdown", () => {
+    const self = "https://github.com/example/widget/blob/main/README.md";
+    const markdown = `## Install\n\n[a](${self}#install) [b](${self}#removed) [c](${self})\n`;
+    expect(kinds(markdown)).toEqual(["#install", "#removed"]);
+    const result = evaluateDrift(plan(markdown), null);
+    expect(statuses(result)).toEqual([
+      [`${self}#removed`, "mismatch"],
+      [`${self}#install`, "matches"],
+    ]);
+    // Nothing needs to be read from GitHub for them.
+    expect(needsGitHub(plan(markdown))).toBe(false);
+  });
+
+  it("keeps links that may name a longer branch uncertain", () => {
+    const destination = { ...target, branch: "release" };
+    const base = "https://github.com/example/widget";
+    const markdown = [
+      `[a](${base}/blob/release/1.0/README.md)`,
+      `[b](${base}/blob/release/docs/gone.md)`,
+      `[c](${base}/tree/release/2.0)`,
+      `[d](${base}/blob/release/GONE.md)`,
+    ].join("\n");
+    const result = evaluateDrift(plan(markdown, destination), evidence());
+    expect(statuses(result)).toEqual([
+      [`${base}/blob/release/docs/gone.md`, "mismatch"],
+      [`${base}/blob/release/GONE.md`, "mismatch"],
+      [`${base}/blob/release/1.0/README.md`, "uncertain"],
+      [`${base}/tree/release/2.0`, "uncertain"],
+    ]);
+    expect(result.results[2].message).toContain("release/1.0");
+  });
+
+  it("reads anchors from BOM-prefixed files, ignores commented-out anchors and decodes entities", async () => {
+    const guide = '﻿# Intro\n\n## Q&amp;A\n\n<!-- <a name="old"></a> -->\n';
+    expect(markdownAnchors(guide)).toEqual(["intro", "qa"]);
+    expect(envKeys("﻿API_URL=\n")).toEqual(["API_URL"]);
+    // Through the real reader: GitHub returns the BOM bytes.
+    const { client } = github({
+      tree: treeOf([
+        ["docs", "tree", "7"],
+        ["docs/guide.md", "blob", "8"],
+      ]),
+      blobs: { [sha("8")]: blob(guide) },
+    });
+    const markdown =
+      "[a](docs/guide.md#intro) [b](docs/guide.md#qa) [c](docs/guide.md#old)\n\n## Q&amp;A\n\n[d](#qa)\n";
+    const drift = plan(markdown);
+    const read = await readDriftEvidence({ client, target, plan: drift });
+    expect(read.files.get("docs/guide.md").text.charCodeAt(0)).toBe(0xfeff);
+    expect(statuses(evaluateDrift(drift, read))).toEqual([
+      ["docs/guide.md#old", "mismatch"],
+      ["docs/guide.md#intro", "matches"],
+      ["docs/guide.md#qa", "matches"],
+      ["#qa", "matches"],
+    ]);
+  });
+
+  it("puts fenced commands in list items on their own lines", () => {
+    const markdown = [
+      "1. Run npm install first, then:",
+      "",
+      "   ```bash",
+      "   npm install",
+      "   npm run lint",
+      "   ```",
+      "",
+      "   Then npm run lint again:",
+      "",
+      "   ```bash",
+      "   npm run lint",
+      "   ```",
+    ].join("\n");
+    expect(plan(markdown).claims.map((claim) => claim.line)).toEqual([
+      4, 5, 11,
+    ]);
+  });
+
+  it("parses each linked Markdown file once, however many anchors point into it", () => {
+    const headings = Array.from(
+      { length: 300 },
+      (_, n) => `## Heading ${n}\n\nText.\n`,
+    ).join("\n");
+    const markdown = Array.from(
+      { length: CLAIM_LIMIT },
+      (_, n) => `[h${n}](docs/usage.md#heading-${n})`,
+    ).join("\n");
+    const drift = plan(markdown);
+    const lexer = vi.spyOn(marked, "lexer");
+    try {
+      const result = evaluateDrift(
+        drift,
+        evidence({
+          files: { "docs/usage.md": { status: "read", text: headings } },
+        }),
+      );
+      expect(result.counts.matches).toBe(CLAIM_LIMIT);
+      expect(lexer).toHaveBeenCalledTimes(1);
+    } finally {
+      lexer.mockRestore();
+    }
   });
 });

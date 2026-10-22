@@ -6,6 +6,7 @@
 - Report each claim as an observed mismatch, an uncertain finding (inline mentions, fallback-capable commands, generated or ignored paths, ambiguous working directories, prose and near anchors) or unknown when evidence is missing, failed or truncated; unknown is never drift.
 - Read at most the tree, the root `package.json`, one `.env` example and ten anchored Markdown files by blob revision, 256 KB each, through the shared public client. Content is parsed as data and discarded; nothing is run, saved or written, and in-document anchors are checked offline without requests.
 - Annotate results with what changed since a same-target Baseline. Share the tree reader, relative path resolution and URL walk with evidence snapshot capture.
+- Fewer false observed mismatches: interpreter options and their values, extensionless Node.js entry points, version/help commands, files earlier commands may create, other repositories' clones, submodule paths, npm's echoed output in `console` sessions and possible longer branch names are no longer reported as contradictions. Absolute links to the document itself use local headings; BOM-prefixed files, HTML entities and commented-out anchors are handled; each linked file is parsed once.
 
 ## 1.6.0
 
