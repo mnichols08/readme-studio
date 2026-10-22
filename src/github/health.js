@@ -37,10 +37,15 @@ const decode = (s) =>
 // tokens plus a/img/source attributes in raw HTML. Entities are decoded;
 // nothing is resolved, fetched or rewritten.
 export function sourceUrls(source) {
+  return tokenUrls(marked.lexer(source));
+}
+// The same walk over already-lexed tokens, so callers that track source
+// positions per block share one URL extraction.
+export function tokenUrls(tokens) {
   const urls = [];
   const add = (value, image) =>
     urls.push({ value: decode(value || ""), image });
-  visitTokens(marked.lexer(source), (t) => {
+  visitTokens(tokens, (t) => {
     if (t.type === "link") add(t.href, false);
     if (t.type === "image") add(t.href, true);
     if (t.type === "html") {

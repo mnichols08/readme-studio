@@ -43,7 +43,7 @@ Snapshots for the current document are listed newest first. Each shows its captu
 - `removed` — captured before and confirmed absent now;
 - `unknown` — could not be read in the snapshot or now. Unknown is never reported as drift.
 
-The branch head comparison is shown separately. A changed head with every file unchanged usually means commits touched other files. Interpreting changes in commands, links or configuration is planned for later releases; this release does not inspect file contents or propose edits.
+The branch head comparison is shown separately. A changed head with every file unchanged usually means commits touched other files. Snapshots and change checks never inspect file contents or propose edits. To see which commands, paths, links or config keys in your Markdown no longer match the repository, run a [drift check](drift-checks.md); with a Baseline pinned, its results also say which evidence files changed since the Baseline.
 
 ## Retention, storage and recovery
 

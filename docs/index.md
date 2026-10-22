@@ -64,3 +64,5 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 - [Batch review](batch-review.md) — attention-queue progression and reviewed common sections for selected repositories.
 
 - [Evidence snapshots](evidence-snapshots.md) — explicit, read-only records of repository revisions, Baselines and change checks for documentation drift.
+
+- [Drift checks](drift-checks.md) — read-only warnings when commands, paths, links or config keys in your Markdown no longer match the repository, with observed mismatches kept apart from heuristics.

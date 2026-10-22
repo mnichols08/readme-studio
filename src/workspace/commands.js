@@ -34,6 +34,7 @@ export const commandGroups = {
     ["repository-health", "Check links"],
     ["refresh-github", "Refresh GitHub data"],
     ["evidence-snapshots", "Evidence snapshots"],
+    ["drift-check", "Drift check"],
     ["publish-github", "Publish to GitHub"],
     ["workflows", "Workflows"],
   ],

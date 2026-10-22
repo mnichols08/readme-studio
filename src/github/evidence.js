@@ -3,7 +3,12 @@ import { githubRepository } from "../badges/providers/github.js";
 import { manifests } from "../stack-intelligence/manifests.js";
 import { isRelativeUrl } from "../markdown/resolve-urls.js";
 import { sourceUrls } from "./health.js";
-import { evidencePath, LINK_LIMIT } from "../workspace/evidence-snapshots.js";
+import { driftFiles, READ_LIMIT } from "../workspace/drift-check.js";
+import {
+  resolveRelativePath,
+  OUTSIDE_ROOT,
+  LINK_LIMIT,
+} from "../workspace/evidence-snapshots.js";
 
 // Recognised root Evidence files: the Stack Intelligence manifest registry
 // plus common lockfiles. Only revisions are recorded; content is never read.
@@ -29,22 +34,8 @@ const types = { blob: "file", tree: "directory", commit: "submodule" };
 
 // Repository paths the document's own Source links to by relative URL,
 // resolved against its README path. Read-only; the Source is not changed.
-// Resolution is done segment by segment (not with URL against a synthetic
-// origin) so a link that climbs above the repository root is reported, never
-// clamped onto a root file. Links that cannot be decoded are reported too.
-const OUTSIDE = Symbol("outside");
-function resolveLink(raw, directory) {
-  const segments = raw.startsWith("/") ? [] : [...directory];
-  for (const encoded of raw.split("/")) {
-    const part = decodeURIComponent(encoded);
-    if (!part || part === ".") continue;
-    if (part === "..") {
-      if (!segments.length) throw OUTSIDE;
-      segments.pop();
-    } else segments.push(part);
-  }
-  return evidencePath(segments.join("/"));
-}
+// Links that climb above the repository root or cannot be decoded are
+// reported, never clamped onto a root file (see `resolveRelativePath`).
 export function linkedPaths(markdown, readmePath) {
   const directory = readmePath.split("/").slice(0, -1);
   const paths = [];
@@ -58,9 +49,9 @@ export function linkedPaths(markdown, readmePath) {
     if (!raw) continue;
     let path;
     try {
-      path = resolveLink(raw, directory);
+      path = resolveRelativePath(raw, directory);
     } catch (error) {
-      if (error === OUTSIDE) outside++;
+      if (error === OUTSIDE_ROOT) outside++;
       else if (error instanceof URIError) undecodable++;
       continue;
     }
@@ -86,14 +77,9 @@ export function linkedPaths(markdown, readmePath) {
 
 // Reads the branch head and one recursive tree listing. Failure to read the
 // head throws (nothing to record). A failed or truncated tree still yields a
-// result whose unreadable entries are `failed`, meaning unknown.
-export async function readEvidence({
-  client,
-  target,
-  linked = [],
-  notes = [],
-  signal,
-}) {
+// result: `tree` says how far the listing can be trusted, and paths not in
+// `listing` are only confirmed absent when `tree` is "complete".
+export async function readTree({ client, target, signal }) {
   const base = "/repos/" + githubRepository(target.repository);
   const { data: commits } = await client.request(
     `${base}/commits?sha=${encodeURIComponent(target.branch)}&per_page=1`,
@@ -105,8 +91,13 @@ export async function readEvidence({
       "response",
       "GitHub returned no readable branch head for this target.",
     );
-  const result = { head: head.sha, tree: "complete", entries: [], notes };
-  let listing = new Map();
+  const result = {
+    base,
+    head: head.sha,
+    tree: "complete",
+    listing: new Map(),
+    notes: [],
+  };
   try {
     const { data } = await client.request(
       `${base}/git/trees/${head.commit.tree.sha}?recursive=1`,
@@ -120,23 +111,39 @@ export async function readEvidence({
         types[item.type] &&
         SHA.test(item.sha)
       )
-        listing.set(item.path, item);
+        result.listing.set(item.path, item);
     if (data.truncated === true) {
       result.tree = "truncated";
-      result.notes = [
-        ...result.notes,
+      result.notes.push(
         "GitHub truncated the repository tree; files not listed are unknown.",
-      ];
+      );
     }
   } catch (error) {
     signal?.throwIfAborted();
     result.tree = "failed";
-    result.notes = [
-      ...result.notes,
+    result.notes.push(
       `Repository tree could not be read: ${String(error.message).slice(0, 200)}`,
-    ];
-    listing = new Map();
+    );
+    result.listing = new Map();
   }
+  return result;
+}
+
+export async function readEvidence({
+  client,
+  target,
+  linked = [],
+  notes = [],
+  signal,
+}) {
+  const read = await readTree({ client, target, signal });
+  const result = {
+    head: read.head,
+    tree: read.tree,
+    entries: [],
+    notes: [...notes, ...read.notes],
+  };
+  const listing = read.listing;
   const record = (path, kind, optional = false) => {
     const item = listing.get(path);
     if (item)
@@ -168,4 +175,87 @@ export async function readEvidence({
       record(path, "linked");
   signal?.throwIfAborted();
   return result;
+}
+
+// Reads one regular file's text by its blob revision from the tree, so every
+// read describes the same commit. Bounded by READ_LIMIT; symbolic links,
+// submodules, binary and non-UTF-8 content are refused. The text is returned
+// to the caller only; nothing here stores it.
+async function readBlob(client, base, item, signal) {
+  if (item.type !== "blob" || item.mode === "120000")
+    throw Error("Not a regular file.");
+  if (Number(item.size) > READ_LIMIT)
+    throw Error("Larger than the 256 KB read limit.");
+  const { data } = await client.request(
+    `${base}/git/blobs/${item.sha}`,
+    signal,
+  );
+  if (
+    data?.encoding !== "base64" ||
+    typeof data.content !== "string" ||
+    !Number.isSafeInteger(data.size) ||
+    data.size < 0 ||
+    data.size > READ_LIMIT ||
+    data.content.length > READ_LIMIT * 2
+  )
+    throw Error("GitHub returned unreadable or oversized file content.");
+  let bytes;
+  try {
+    bytes = Uint8Array.from(atob(data.content.replace(/\s/g, "")), (c) =>
+      c.charCodeAt(0),
+    );
+  } catch {
+    throw Error("GitHub returned unreadable file content.");
+  }
+  if (bytes.length !== data.size) throw Error("Incomplete file content.");
+  try {
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
+      bytes,
+    );
+  } catch {
+    throw Error("Not UTF-8 text.");
+  }
+}
+
+// Evidence for a Drift check: the tree plus the bounded set of files whose
+// content the plan's claims need (see `driftFiles`). A file that cannot be
+// read is recorded as failed, so its claims stay unknown. A rate limit or
+// denied request stops further reads; the remaining files are failed too.
+export async function readDriftEvidence({ client, target, plan, signal }) {
+  const read = await readTree({ client, target, signal });
+  const files = new Map();
+  const wanted = driftFiles(plan, read);
+  let stopped = "";
+  for (const path of wanted.paths) {
+    signal?.throwIfAborted();
+    if (stopped) {
+      files.set(path, { status: "failed", note: stopped });
+      continue;
+    }
+    try {
+      const text = await readBlob(
+        client,
+        read.base,
+        read.listing.get(path),
+        signal,
+      );
+      files.set(path, { status: "read", text });
+    } catch (error) {
+      signal?.throwIfAborted();
+      files.set(path, {
+        status: "failed",
+        note: String(error.message).slice(0, 200),
+      });
+      if (["rate-limit", "forbidden"].includes(error.kind))
+        stopped = `Not read: ${String(error.message).slice(0, 200)}`;
+    }
+  }
+  signal?.throwIfAborted();
+  return {
+    head: read.head,
+    tree: read.tree,
+    listing: read.listing,
+    files,
+    notes: [...read.notes, ...wanted.notes],
+  };
 }
