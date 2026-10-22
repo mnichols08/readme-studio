@@ -92,7 +92,8 @@ function segmentMatches(pattern, segment) {
       "^" +
         pattern
           .split("*")
-          .map((part) => part.replace(/[.+^$()|]/g, "\$&"))
+          // Every other character is literal: escape all RegExp syntax.
+          .map((part) => part.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&"))
           .join("[^/]*") +
         "$",
     );
@@ -132,7 +133,9 @@ function pnpmPackages(source, notices) {
     found = false;
   for (const raw of source.replace(/\r\n?/g, "\n").split("\n")) {
     if (!raw.trim() || /^\s*#/.test(raw)) continue;
-    if (!/^\s/.test(raw)) {
+    // YAML allows sequence items at the key's own indentation.
+    const topItem = inside && /^-(?:\s|$)/.test(raw);
+    if (!/^\s/.test(raw) && !topItem) {
       inside = false;
       const key = raw.match(/^packages\s*:\s*(#.*)?$/);
       if (key) {
@@ -149,7 +152,7 @@ function pnpmPackages(source, notices) {
     }
     if (!inside) continue;
     const item = raw.match(
-      /^\s+-\s+(?:"([^"\\]*)"|'([^']*)'|([^\s"'#&*!|>{}[\],][^#]*?))\s*(?:#.*)?$/,
+      /^\s*-\s+(?:"([^"\\]*)"|'([^']*)'|([^\s"'#&*!|>{}[\],][^#]*?))\s*(?:#.*)?$/,
     );
     if (!item) {
       notices.push(

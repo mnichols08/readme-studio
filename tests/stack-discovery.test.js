@@ -149,11 +149,31 @@ describe("Workspace declarations", () => {
       "packages:\n  - &anchor apps/*\n",
       "packages:\n  - { path: x }\n",
       "packages:\n  key: value\n",
+      "packages:\n- &anchor apps/*\n",
     ]) {
       const result = workspacePatterns({ "pnpm-workspace.yaml": yaml });
       expect(result.patterns).toEqual([]);
       expect(result.notices.join(" ")).toContain("not interpreted");
     }
+  });
+  it("reads a pnpm packages list indented at the key's own column", () => {
+    for (const eol of ["\n", "\r\n"]) {
+      const yaml = ["packages:", "- 'apps/*'", "- packages/*", "catalog:"];
+      const read = workspacePatterns({
+        "pnpm-workspace.yaml": [...yaml, "  react: ^19", ""].join(eol),
+      });
+      expect(read.patterns.map((p) => p.pattern)).toEqual([
+        "apps/*",
+        "packages/*",
+      ]);
+      expect(read.notices).toEqual([]);
+    }
+    // A top-level item under another key is not read as a member.
+    expect(
+      workspacePatterns({
+        "pnpm-workspace.yaml": "other:\n- apps/*\npackages:\n- libs/*\n",
+      }).patterns.map((p) => p.pattern),
+    ).toEqual(["libs/*"]);
   });
   it("reads Cargo members/exclude, go.work use forms and uv members", () => {
     const read = workspacePatterns({
@@ -222,6 +242,19 @@ describe("pattern matching", () => {
     expect(matchPattern("a.b/*", "aXb/c")).toBe(false);
     expect(matchPattern("{a,b}", "a")).toBe(false);
     expect(matchPattern("[x]", "x")).toBe(false);
+  });
+  it("treats regular-expression characters in a segment as literal text", () => {
+    expect(matchPattern("apps/pkg.a*", "apps/pkg.ab")).toBe(true);
+    expect(matchPattern("apps/pkg.a*", "apps/pkgXab")).toBe(false);
+    expect(matchPattern("apps/a(b)*", "apps/a(b)c")).toBe(true);
+    expect(matchPattern("x|*", "packages")).toBe(false);
+    expect(matchPattern("x|*", "x|y")).toBe(true);
+    expect(matchPattern("libs/c++*", "libs/c++-core")).toBe(true);
+    expect(matchPattern("libs/c++*", "libs/ccc")).toBe(false);
+    expect(matchPattern("a(*", "a(z")).toBe(true);
+    expect(matchPattern("a$^*", "a$^q")).toBe(true);
+    for (const pattern of ["c++*", "pkg(*", "x)*", "^*$", "a+*"])
+      expect(() => matchPattern(pattern, "anything")).not.toThrow();
   });
 });
 
@@ -519,6 +552,33 @@ describe("Nested discovery through StackClient", () => {
     expect(record.issues).toContain(
       "GitHub truncated the repository tree; nested manifests not listed are unknown.",
     );
+  });
+  it("keeps the scan and root manifests when a workspace pattern holds regular-expression characters", async () => {
+    const { client } = mockClient({
+      "package.json": pkg({
+        workspaces: ["libs/c++*", "apps/a(*", "x|*", "apps/pkg.a*"],
+        dependencies: { react: "19" },
+      }),
+      "libs/c++-core/package.json": "{}",
+      "apps/a(b/package.json": "{}",
+      "apps/pkgXab/package.json": "{}",
+    });
+    const records = [];
+    await scanStacks([repo], {
+      client: new StackClient({ client }),
+      nested: true,
+      onResult: (r) => records.push(r),
+    });
+    expect(records[0].status).toBe("read");
+    expect(records[0].manifests.map((m) => m.path)).toContain("package.json");
+    expect(
+      Object.fromEntries(records[0].projects.map((p) => [p.path, p.role])),
+    ).toEqual({
+      "": "root",
+      "apps/a(b": "member",
+      "apps/pkgXab": "nested",
+      "libs/c++-core": "member",
+    });
   });
   it("falls back to root-only reading when the tree fails", async () => {
     const { client, calls } = mockClient(files, {
