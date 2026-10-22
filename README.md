@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.0.** Stack Intelligence can include nested manifests in monorepos with a separate, session-only consent, mapping each Manifest to the repository root, a Workspace member or a Nested project. Discovery reads one tree at the head commit, stays within depth, read and request limits, and rejects unsafe paths, symlinks and submodules with notices. [Stack Intelligence](docs/stack-intelligence.md#nested-discovery-monorepos) · [Stack-to-README](docs/stack-to-readme.md) · [GitHub publishing](docs/github-publishing.md)
+**Version 1.9.1.** Usability scripts define seven novice and experienced scenarios with step budgets that scripted runs enforce, Guided start can restore a backup, and exports and backups now ask before leaving out unsaved section edits. No sessions with real participants have been run yet. [Usability scripts](docs/usability-scripts.md) · [Usability findings](docs/usability-findings.md) · [Guided start](docs/guided-start.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
