@@ -26,6 +26,7 @@ import {
 } from "../badges/collections.js";
 import { validateDraft } from "./drafts.js";
 import { validateActivity } from "../workspace/commands.js";
+import { validateGuide, recoverGuide } from "../workspace/guide.js";
 export const BACKUP_LIMIT = 50_000_000;
 export const workspaceSettings = (s = {}) => ({
   pane: ["build", "markdown", "preview", "health"].includes(s?.pane)
@@ -98,6 +99,7 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     active: active || drafts[0].id,
     settings: workspaceSettings(data.settings),
     activity: validateActivity(data.activity),
+    guide: validateGuide(data.guide),
     badgeCollections: validateCollections(data.badgeCollections),
     visualLibrary: validateVisualLibrary(data.visualLibrary),
     componentLibrary: validateComponents(data.componentLibrary),
@@ -186,6 +188,7 @@ export function recoverWorkspace(raw) {
           componentLibrary: recoverComponents(data.componentLibrary),
           sharedComponents: recoverShared(data.sharedComponents),
           reviewBatch: recoverBatch(data.reviewBatch),
+          guide: recoverGuide(data.guide),
           evidenceSnapshots: recoverSnapshots(
             data.evidenceSnapshots,
             new Map(drafts.map((d) => [d.id, d.id])),

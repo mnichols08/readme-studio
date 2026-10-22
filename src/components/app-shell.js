@@ -37,6 +37,7 @@ import {
 import { saveProjectDialog, openProjectDialog } from "../studio-projects/ui.js";
 import { bindDialogDismissal } from "./dialog-dismissal.js";
 import { installWorkspace } from "../workspace/ui.js";
+import { validateGuide } from "../workspace/guide.js";
 import "./workflow-builder.js";
 import "./publish-dialog.js";
 import "./refactor-dialog.js";
@@ -159,11 +160,15 @@ export class AppShell extends HTMLElement {
     };
     this.systemThemeQuery.addEventListener("change", this.onSystemThemeChange);
     this.data.badgeCollections ||= { version: 1, items: [] };
+    this.data.guide = validateGuide(this.data.guide);
     this.draw();
     this.load(this.data.active);
     this.mobile(this.data.settings.pane || "build", false);
     window.addEventListener("pagehide", () => this.save());
-    if (!saved) this.welcome();
+    // A saved workspace that could not be read is not a first run: its
+    // recovery notice (original recovery data, restore) comes first, and a
+    // modal Guided start would make that notice inert.
+    if (!saved && this.recoveryRaw === undefined) this.welcome();
     if (this.storageError) this.storageNotice(this.storageError);
     this.onRuntimeError = () => this.runtimeError();
     window.addEventListener("error", this.onRuntimeError);
@@ -2316,20 +2321,8 @@ export class AppShell extends HTMLElement {
     });
   }
   welcome() {
-    this.modal(
-      `<div class="eyebrow">WELCOME TO YOUR WORKSPACE</div><h1>A README that feels like you.</h1><p>Start with a little structure. Make every line your own.</p><div class="welcome-options"><button class="primary" data-start="templates">Start from a template <span>→</span></button><button data-action="profile">Autofill from GitHub <span>↗</span></button><button data-start="import">Import GitHub README <span>↥</span></button><button data-action="open-project">Open Studio project <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button></div><p class="hint">Your drafts stay in this browser. No sign-in required.</p><button class="text-button" data-start="sample">Explore the sample profile →</button>`,
-    );
-    this.querySelectorAll("[data-start]").forEach(
-      (b) =>
-        (b.onclick = () => {
-          if (b.dataset.start === "templates") this.templates();
-          else if (b.dataset.start === "import") this.importDialog();
-          else {
-            this.closeDialog();
-            if (b.dataset.start === "blank") this.addDraft("Untitled", []);
-          }
-        }),
-    );
+    // Guided start (workspace/ui.js) keeps every earlier Start path.
+    this.openStart({ firstRun: true });
   }
   addDraft(name, blocks, metadata = {}) {
     if (this.data.drafts.length >= 500) {

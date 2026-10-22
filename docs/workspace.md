@@ -1,6 +1,6 @@
 # Workspace
 
-Tools are grouped into Create, Design, Review, GitHub and Save. Each group can be collapsed with its keyboard-operable disclosure; that choice stays in this browser. The builder's existing section controls retain edit, copy, duplicate, move and remove actions. Project and generated-content tools keep their explicit refresh/review flows.
+Tools are grouped into Create, Design, Review, GitHub and Save. **Create → Guided start** reopens the [first-run goal chooser](guided-start.md) with your current goal marked. Each group can be collapsed with its keyboard-operable disclosure; that choice stays in this browser. The builder's existing section controls retain edit, copy, duplicate, move and remove actions. Project and generated-content tools keep their explicit refresh/review flows.
 
 Use **Search workspace** or **Ctrl/Cmd+K** to search commands, current sections/projects, saved badge collections, saved snippets and widgets. Results are limited to 50; add search terms to narrow them. Enter opens the first result, Arrow Down enters the results and Tab explores them. Search opens the relevant editor/library; it never inserts, applies a refactor or publishes automatically. Escape returns focus and respects unsaved editor changes.
 

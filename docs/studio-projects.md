@@ -8,7 +8,7 @@ Reusable snippets, badge collections and visual libraries remain workspace-globa
 
 ## Open and recover
 
-Use **Open Studio project** from Save or the welcome dialog. Before opening, Studio shows name, schema, file size, block count, asset count, creation date and GitHub-reference status. You can inspect exact source, cancel, or download recovered Markdown. Opening creates a new draft. Names receive numbered suffixes on collision; it never replaces the current draft or writes back to the original file.
+Use **Open Studio project** from Save or from **Other ways to start** in [Guided start](guided-start.md). Before opening, Studio shows name, schema, file size, block count, asset count, creation date and GitHub-reference status. You can inspect exact source, cancel, or download recovered Markdown. Opening creates a new draft. Names receive numbered suffixes on collision; it never replaces the current draft or writes back to the original file.
 
 Workspace preferences are applied only when selected. Embedded libraries merge only when selected, keeping both colliding entries. Authentication is never restored from a file. Public repository references and prior publish SHAs do not authorize a write: reconnect and review the current remote state.
 

@@ -97,7 +97,9 @@ test("corrupted storage stays untouched and recovery/download remain available",
   page,
 }) => {
   await page.addInitScript((k) => localStorage.setItem(k, "{broken"), key);
-  await start(page);
+  // Unreadable storage is not a first run: no Guided start covers the notice.
+  await page.goto("/");
+  await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.locator(".recovery-notice")).toContainText(
     "original storage is untouched",
   );

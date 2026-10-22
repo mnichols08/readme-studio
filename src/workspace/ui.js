@@ -7,8 +7,154 @@ import {
   validateActivity,
 } from "./commands.js";
 import { widgetRegistry as widgets } from "../widgets/registry.js";
+import { template } from "../data/templates.js";
+import {
+  GOALS,
+  goalIds,
+  knownGoal,
+  guideGoal,
+  chooseGoal,
+  goalOptions,
+  blankDocument,
+} from "./guide.js";
+
+const privacyDocs =
+  "https://github.com/mnichols08/readme-studio/blob/main/docs/privacy.md";
+const goalHeadings = {
+  profile: "Start your profile README",
+  repository: "Start a repository README",
+  audit: "Audit your repository READMEs",
+};
+// The Locality statement. It describes what this browser does today and must
+// stay true: Markdown leaves only through publishing or the opt-in Writing
+// Assistant, and nothing is published without its own review. The GitHub
+// sentence must name every flow listed under "Network requests" in
+// docs/privacy.md, and every other way data leaves the browser (link checks to
+// third-party sites, the Writing Assistant) must be stated; extend it when a
+// new network flow is added.
+// Storage that works but holds an unreadable workspace is told apart from
+// blocked storage: the original is still there and only recovery data has it.
+function storageSentence(app) {
+  if (app.storageBlocked && app.recoveryRaw !== undefined)
+    return "Your saved workspace could not be read, so this is a temporary workspace: the original is left untouched in this browser, and nothing is saved over it until you restore a backup. Download original recovery data to keep the original; drafts you make now stay in memory only until this tab closes, so download all drafts backup to keep them.";
+  if (app.storageBlocked)
+    return "Browser storage is unavailable, so this is a temporary workspace: drafts stay in memory only until this tab closes. Download all drafts backup to keep your work.";
+  return "Drafts are saved only in this browser. They are not encrypted and clearing site data removes them, so download a backup to keep a copy.";
+}
+function localityStatement(app) {
+  return `<section class="guide-locality" aria-labelledby="guide-locality-title"><h2 id="guide-locality-title">Where your work is kept</h2><ul><li>${storageSentence(
+    app,
+  )}</li><li>GitHub is contacted only when you choose a GitHub action: import, autofill, audit, repository lookup, refresh and link checks, evidence and drift checks, or publishing. Link checks also contact the sites your links point to. Analysis runs in this browser: your Markdown is sent only when you publish it, or when you review and send text to the optional Writing assistant's provider. Images and badges in the preview load from their own sites.</li><li>Nothing is published without its own review.</li></ul><a href="${privacyDocs}" target="_blank" rel="noopener noreferrer">Privacy details</a></section>`;
+}
+
+// Guided start: step 1 asks for a Goal beside the earlier Start paths (their
+// accessible names are kept); step 2 offers existing flows for that Goal. Every
+// option opens its tool's normal flow, so no document is changed here.
+function installGuidedStart(app) {
+  let firstRun = false;
+  const content = () => app.querySelector(".dialog-content");
+  const goalStep = (focusGoal) => {
+    const current = guideGoal(app.data.guide);
+    app.modal(
+      `<div class="eyebrow">GUIDED START</div><h1>What do you want to do first?</h1><p>Choose a goal for a few ways to begin. Your goal never changes a document, and you can choose again from Create → Guided start.</p><ul class="guide-goals" aria-label="Goals">${goalIds
+        .map(
+          (id) =>
+            `<li><button data-goal="${id}" aria-describedby="guide-goal-${id}${id === current ? " guide-current" : ""}"${id === current ? ' aria-current="true"' : ""}>${html(GOALS[id].label)} <span aria-hidden="true">→</span></button><p id="guide-goal-${id}">${html(GOALS[id].description)}</p>${id === current ? '<p class="guide-current" id="guide-current">Your current goal</p>' : ""}</li>`,
+        )
+        .join(
+          "",
+        )}</ul><section class="guide-paths" aria-labelledby="guide-paths-title"><h2 id="guide-paths-title">Other ways to start</h2><div class="welcome-options"><button data-start="templates">Start from a template <span>→</span></button><button data-action="profile">Autofill from GitHub <span>↗</span></button><button data-start="import">Import GitHub README <span>↥</span></button><button data-action="open-project">Open Studio project <span>↥</span></button><button data-start="blank">Start blank <span>+</span></button></div><button class="text-button" data-start="sample">Explore the sample profile →</button></section>${localityStatement(app)}`,
+    );
+    content()
+      .querySelectorAll("[data-goal]")
+      .forEach(
+        (b) =>
+          (b.onclick = () => {
+            app.data.guide = chooseGoal(app.data.guide, b.dataset.goal);
+            app.save();
+            optionStep(b.dataset.goal);
+          }),
+      );
+    content()
+      .querySelectorAll("[data-start]")
+      .forEach(
+        (b) =>
+          (b.onclick = () => {
+            const start = b.dataset.start;
+            if (start === "templates") app.templates();
+            else if (start === "import") app.importDialog();
+            else {
+              app.closeDialog();
+              if (start === "blank") app.addDraft("Untitled", []);
+              // On first run the sample is already open; later it is a copy.
+              if (start === "sample" && !firstRun)
+                app.addDraft("My developer profile", template(), {
+                  workspaceDocument: blankDocument("profile"),
+                });
+            }
+          }),
+      );
+    const target = focusGoal || current;
+    if (target) content().querySelector(`[data-goal="${target}"]`)?.focus();
+  };
+  const optionStep = (goal) => {
+    const online = navigator.onLine !== false;
+    app.modal(
+      `<div class="eyebrow">GUIDED START</div><h1 tabindex="-1">${goalHeadings[goal]}</h1><p>${html(GOALS[goal].description)}</p><div class="welcome-options guide-options">${goalOptions(
+        goal,
+        { online },
+      )
+        .map((o) =>
+          o.unavailable
+            ? `<button data-option="${o.id}" aria-disabled="true" aria-describedby="guide-unavailable">${html(o.label)}</button><p id="guide-unavailable" class="guide-unavailable">${html(o.unavailable)}</p>`
+            : `<button data-option="${o.id}">${html(o.label)}</button>`,
+        )
+        .join(
+          "",
+        )}</div><button data-guide-back>Back</button><p class="hint">Each choice opens the tool's normal flow, with its usual review and Undo.</p>`,
+    );
+    content()
+      .querySelectorAll("[data-option]")
+      .forEach(
+        (b) =>
+          (b.onclick = () => {
+            const id = b.dataset.option;
+            // Unavailable means unavailable: what is announced is what happens,
+            // even if the connection returns while this step is open.
+            if (b.getAttribute("aria-disabled") === "true") return;
+            if (id.startsWith("blank-")) {
+              const kind = id.slice(6);
+              app.closeDialog();
+              app.addDraft(
+                kind === "profile" ? "Profile README" : "Repository README",
+                [],
+                { workspaceDocument: blankDocument(kind) },
+              );
+              return;
+            }
+            app.action(id);
+            // The shared templates dialog lists the repository builder first;
+            // this option promised profile templates, so start on the first.
+            if (id === "templates")
+              content().querySelector("[data-template]")?.focus();
+          }),
+      );
+    content().querySelector("[data-guide-back]").onclick = () => goalStep(goal);
+    content().querySelector("h1").focus();
+  };
+  app.openStart = ({ goal, firstRun: first = false } = {}) => {
+    firstRun = first;
+    if (app.dialog.open && !first) {
+      app.closeDialog();
+      if (app.dialog.open) return;
+    }
+    if (knownGoal(goal)) optionStep(goal);
+    else goalStep();
+  };
+}
 
 export function installWorkspace(app) {
+  installGuidedStart(app);
   const actions = app.querySelector(".header-actions");
   actions.innerHTML =
     '<button data-action="command-palette">Search workspace <kbd>Ctrl K</kbd></button>';
@@ -131,6 +277,10 @@ export function installWorkspace(app) {
     render();
   };
   app.workspaceAction = (action) => {
+    if (action === "guided-start") {
+      app.openStart();
+      return true;
+    }
     if (action === "command-palette") {
       app.openCommandPalette();
       return true;
