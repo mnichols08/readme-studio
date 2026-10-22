@@ -1351,3 +1351,220 @@ describe("drift false positives", () => {
     }
   });
 });
+
+describe("drift false positives, round 2", () => {
+  const statuses = (result) =>
+    result.results.map((item) => [item.text, item.status]);
+  const tree = (...entries) =>
+    evidence({
+      listing: listingOf(
+        entries.map((path) =>
+          path.endsWith("/") ? [path.slice(0, -1), "tree"] : [path],
+        ),
+      ),
+    });
+
+  it("gives raw HTML headings anchors, as GitHub does", () => {
+    expect(
+      markdownAnchors(
+        '<h1 align="center">My Project</h1>\n\n<h2>Getting Started</h2>\n\n## Getting Started\n\n<h3 align="center">\n  <img src="logo.png"><br>\n  Q&amp;A <code>v2</code>\n</h3>\n',
+      ),
+    ).toEqual(["my-project", "getting-started", "getting-started-1", "qa-v2"]);
+    const markdown =
+      '<h1 align="center">My Project</h1>\n\n- [Start](#getting-started)\n\n<h2>Getting Started</h2>\n\nText\n\n[top](#my-project) [gone](#gone) [guide](docs/usage.md#setup)\n';
+    const result = evaluateDrift(
+      plan(markdown),
+      evidence({
+        files: {
+          "docs/usage.md": {
+            status: "read",
+            text: '<h2 align="center">Setup</h2>\n\n## Usage\n',
+          },
+        },
+      }),
+    );
+    expect(statuses(result)).toEqual([
+      ["#gone", "mismatch"],
+      ["#getting-started", "matches"],
+      ["#my-project", "matches"],
+      ["docs/usage.md#setup", "matches"],
+    ]);
+  });
+
+  it("keeps executables that earlier build, unpack or setup steps may produce uncertain", () => {
+    const listing = tree(
+      "package.json",
+      "package-lock.json",
+      "Makefile",
+      "Cargo.toml",
+      "autogen.sh",
+      "requirements.txt",
+      "src/",
+      "src/main.c",
+    );
+    for (const markdown of [
+      fence("sh", "./autogen.sh", "./configure", "make"),
+      fence("sh", "make", "./widget --help"),
+      fence("sh", "unzip release.zip", "./widget"),
+      [
+        fence("sh", "python3 -m venv env"),
+        "Then",
+        fence(
+          "sh",
+          "source env/bin/activate",
+          "pip install -r requirements.txt",
+        ),
+      ].join("\n\n"),
+      [fence("sh", "cargo build --release"), fence("sh", "./widget")].join(
+        "\n\n",
+      ),
+    ]) {
+      const result = check(markdown, listing);
+      expect(result.counts.mismatch, markdown).toBe(0);
+      expect(result.counts.uncertain, markdown).toBe(1);
+      expect(result.results[0].message, markdown).toMatch(/earlier command/i);
+    }
+    // Without a build step, a missing script is still an observed mismatch.
+    expect(
+      statuses(
+        check(
+          fence(
+            "sh",
+            "git clone https://github.com/example/widget.git",
+            "cd widget",
+            "./install.sh",
+            "python app.py",
+          ),
+          listing,
+        ),
+      ),
+    ).toEqual([
+      ["./install.sh", "mismatch"],
+      ["python app.py", "mismatch"],
+    ]);
+    // A build step does not make a missing source file uncertain.
+    expect(
+      status(
+        check(fence("sh", "make", "python app.py"), listing),
+        "python app.py",
+      ),
+    ).toEqual(["mismatch"]);
+  });
+
+  it("treats build output folders themselves as generated", () => {
+    const listing = tree("package.json", "package-lock.json", "src/");
+    const result = check(
+      fence(
+        "bash",
+        "npm run build",
+        "cp -r dist /var/www/html",
+        "node build",
+        "node dist",
+        "chmod +x build",
+      ),
+      listing,
+    );
+    for (const text of [
+      "cp -r dist /var/www/html",
+      "node build",
+      "node dist",
+      "chmod +x build",
+    ]) {
+      expect(status(result, text), text).toEqual(["uncertain"]);
+      expect(one(result, text).message).toContain("builds or installs");
+    }
+  });
+
+  it("treats cd into the repository's name as ambiguous when the tree has that folder", () => {
+    const listing = tree("widget/", "widget/manage.py", "widget/server.js");
+    const result = check(
+      fence(
+        "bash",
+        "cd widget",
+        "python manage.py runserver",
+        "node server.js",
+        "node gone.js",
+      ),
+      listing,
+    );
+    expect(statuses(result)).toEqual([
+      ["node gone.js", "uncertain"],
+      ["python manage.py runserver", "matches"],
+      ["node server.js", "matches"],
+    ]);
+    // After an explicit clone, a second `cd widget` enters the folder.
+    const cloned = check(
+      fence(
+        "bash",
+        "git clone https://github.com/example/widget.git",
+        "cd widget",
+        "cd widget",
+        "node gone.js",
+      ),
+      listing,
+    );
+    expect(statuses(cloned)).toEqual([["node gone.js", "mismatch"]]);
+    expect(cloned.results[0].message).toContain("widget/gone.js");
+  });
+
+  it("follows pushd, popd and subshells, and skips heredoc bodies", () => {
+    const listing = tree("docs/", "docs/server.js", "server.js");
+    const result = check(
+      [
+        fence("bash", "pushd docs", "node server.js", "popd", "node server.js"),
+        fence("bash", "(cd docs && node server.js)", "node server.js"),
+        fence("bash", "cat <<'EOF' > run.sh", "node tools/missing.js", "EOF"),
+        fence("bash", "echo $(git describe --tags)"),
+        fence(
+          "powershell",
+          "$script = @'",
+          "node tools/missing.js",
+          "'@",
+          "node server.js",
+        ),
+      ].join("\n\n"),
+      listing,
+    );
+    expect(result.counts.mismatch).toBe(0);
+    expect(result.results.every((item) => item.status === "matches")).toBe(
+      true,
+    );
+    expect(result.results.map((item) => item.text)).toEqual([
+      "node server.js",
+      "node server.js",
+      "(cd docs && node server.js)",
+      "node server.js",
+      "node server.js",
+    ]);
+  });
+
+  it("does not read assignments or prose that starts with an interpreter name as commands", () => {
+    const markdown = [
+      fence("", "[tool.poetry.dependencies]", 'python = "^3.9"'),
+      fence("", "source code lives in src/", "node is required"),
+      fence("bash", "python = 3.11", "python: 3.11"),
+      fence("", "python scripts/gone.py"),
+    ].join("\n\n");
+    expect(kinds(markdown)).toEqual(["path:scripts/gone.py"]);
+  });
+
+  it("does not treat a missing committed .env template as a locally ignored file", () => {
+    const listing = tree(".env.sample");
+    const result = check(
+      [
+        fence("bash", "cp .env.example .env", "cat .env.local"),
+        "[t](.env.example)",
+      ].join("\n\n"),
+      listing,
+    );
+    expect(status(result, "cp .env.example .env")).toEqual(["mismatch"]);
+    expect(status(result, ".env.example")).toEqual(["mismatch"]);
+    expect(status(result, "cat .env.local")).toEqual([]);
+    expect(
+      one(
+        check(fence("bash", "source .env.local"), listing),
+        "source .env.local",
+      ).status,
+    ).toBe("uncertain");
+  });
+});

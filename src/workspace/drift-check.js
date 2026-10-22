@@ -69,11 +69,13 @@ const PROMPTED = new Set([
 const POWERSHELL = new Set(["powershell", "pwsh", "ps", "ps1"]),
   CMD = new Set(["cmd", "bat", "batch"]);
 const ENV_LANGS = new Set(["env", "dotenv", ".env"]);
-// Paths under these folders are usually created by a build or install, and
-// files like `.env` are usually ignored by Git, so their absence is uncertain.
+// These folders (and paths under them) are usually created by a build or
+// install, and files like `.env` are usually ignored by Git, so their absence
+// is uncertain. Committed templates such as `.env.example` are not ignored.
 const GENERATED =
-  /(?:^|\/)(?:dist|build|out|target|node_modules|\.venv|venv|coverage|\.next|\.nuxt|\.output|\.cache|tmp)\//;
-const IGNORED = /(?:^|\/)\.env(?:\.[\w-]+)?$/;
+  /(?:^|\/)(?:dist|build|out|target|node_modules|\.venv|venv|coverage|\.next|\.nuxt|\.output|\.cache|tmp)(?:\/|$)/;
+const IGNORED =
+  /(?:^|\/)\.env(?!\.(?:example|sample|template|dist|defaults?)$)(?:\.[\w-]+)?$/;
 const MARKDOWN = /\.(?:md|markdown|mdx)$/i;
 
 const yarnBuiltins = new Set(
@@ -242,7 +244,8 @@ function pathWord(word) {
   if (
     !word ||
     word.length > 300 ||
-    /^[-~/]|[$*?{}<>%`\\|:]|^path\/to\//i.test(word)
+    /^[-~/]|[$*?{}<>%`\\|:=()]|^path\/to\//i.test(word) ||
+    !/[\p{L}\p{N}]/u.test(word)
   )
     return null;
   try {
@@ -265,12 +268,15 @@ function mentionedPath(word) {
 }
 // Splits one command line into segments of words. Quotes group words,
 // `&&`, `||`, `;`, `|` and `&` end a segment, `#` at a word start begins a
-// comment, and redirects become ">" / "<" markers before their target.
+// comment, and redirects become ">" / "<" markers before their target (a
+// heredoc's `<<EOF` too). A subshell's `(` and `)` become segments of their
+// own; `$(…)` stays inside its word.
 function segments(line) {
   const out = [[]];
   let word = "",
     quote = "",
-    started = false;
+    started = false,
+    substitution = 0;
   const push = () => {
     if (started) out.at(-1).push(word);
     word = "";
@@ -286,6 +292,15 @@ function segments(line) {
     if (c === '"' || c === "'") {
       quote = c;
       started = true;
+    } else if (c === "(" && word.endsWith("$")) {
+      word += c;
+      substitution++;
+    } else if (c === ")" && substitution) {
+      word += c;
+      substitution--;
+    } else if ((c === "(" && !started) || c === ")") {
+      push();
+      out.push([c], []);
     } else if (/\s/.test(c)) push();
     else if (c === "#" && !started) break;
     else if (c === "&" || c === "|" || c === ";") {
@@ -297,7 +312,14 @@ function segments(line) {
         word = "";
         started = false;
       } else push();
-      if (line[i + 1] === ">") i++;
+      // `>>`, and a heredoc's `<<`, `<<-` or `<<<`.
+      if (line[i + 1] === c) {
+        i++;
+        if (c === "<") {
+          if (line[i + 1] === "<") i++;
+          else if (line[i + 1] === "-") i++;
+        }
+      }
       if (line[i + 1] === "&") {
         i++;
         while (/[\d-]/.test(line[i + 1] || "")) i++;
@@ -323,8 +345,22 @@ function commandLines(text, lang) {
   const prompts = PROMPTED.has(lang)
     ? /^(?:PS(?: [^>]*)?>|\$|%)\s+/
     : /^(?:PS(?: [^>]*)?>|\$|>|%)\s+/;
+  // The body of a heredoc (`<<EOF` … `EOF`) or a PowerShell here-string
+  // (`@'` … `'@`) is text, not commands. Sessions already skip it: its lines
+  // have no prompt.
+  let body = null;
   text.split("\n").forEach((raw, index) => {
     let line = raw.trim();
+    if (body) {
+      if (line.replace(prompts, "") === body) body = null;
+      return;
+    }
+    const heredoc = line.match(/<<-?\s*(["']?)([A-Za-z_][\w.-]*)\1/);
+    const hereString = POWERSHELL.has(lang) && line.match(/@(["'])$/);
+    if (!PROMPTED.has(lang)) {
+      if (heredoc && !/<<</.test(line)) body = heredoc[2];
+      else if (hereString) body = hereString[1] + "@";
+    }
     if (pending) {
       pending.text += " " + line.replace(continued, "");
       if (!continued.test(line)) {
@@ -348,13 +384,17 @@ function commandLines(text, lang) {
 // Interprets one command segment. `context` carries what earlier commands in
 // the same block did: `cd` steps, created paths, clone directory names and
 // words that earlier commands mentioned (which may be files they created).
-function commandClaims(words, context, claim) {
+function commandWords(words) {
   while (/^[A-Za-z_]\w*=/.test(words[0] || "")) words = words.slice(1);
   while (["sudo", "env", "time", "exec", "command"].includes(words[0]))
     words = words.slice(1);
   while (/^[A-Za-z_]\w*=/.test(words[0] || "")) words = words.slice(1);
-  const [tool, ...args] = words;
-  if (!tool) return;
+  return words;
+}
+function commandClaims(words, context, claim) {
+  const [tool, ...args] = commandWords(words);
+  // `python = "^3.9"` and `node: 20` are settings, not commands.
+  if (!tool || /^[=:]/.test(args[0] || "")) return;
   // Redirect targets are created (">") or read ("<"); neither is a word.
   const plain = [];
   for (let i = 0; i < args.length; i++) {
@@ -377,7 +417,9 @@ function commandClaims(words, context, claim) {
   };
   const help = ["--version", "-V", "--help", "-h"];
   switch (tool) {
+    case "pushd":
     case "cd": {
+      if (tool === "pushd") context.pushed.push(context.cd.length);
       // `cd` alone, `cd -`, `cd ..` and unusual targets make the working
       // directory unknown (null) rather than guessed.
       const dir = positional[0];
@@ -385,6 +427,10 @@ function commandClaims(words, context, claim) {
       context.cd.push(pathWord(dir || "") ?? null);
       return;
     }
+    case "popd":
+      if (context.pushed.length) context.cd.length = context.pushed.pop();
+      else context.cd.push(null);
+      return;
     case "git":
       if (plain[0] === "clone") {
         const [url, dir] = positional.slice(1);
@@ -488,12 +534,29 @@ function commandClaims(words, context, claim) {
         path(positional[1]);
       return;
   }
-  if (runners[tool]) return runnerFile(runners[tool], plain, path, tool);
-  if (/^\.\.?\//.test(tool)) path(tool);
+  if (runners[tool])
+    return runnerFile(runners[tool], plain, path, tool, context.untagged);
+  // An earlier build, unpack or setup step may have produced the program.
+  if (/^\.\.?\//.test(tool))
+    path(tool, context.built ? { built: context.built } : {});
 }
+// Commands that may produce files they do not name: builds, generated
+// scripts, archives, downloads and package managers. A `./script` run counts
+// too (`./autogen.sh` generates `./configure`).
+const BUILDERS = new Set(
+  "make cmake ninja meson autoreconf autoconf automake bazel scons gcc g++ cc clang clang++ rustc javac tsc go cargo mvn gradle ant dotnet swift zig unzip tar gunzip bunzip2 7z curl wget npm pnpm yarn bun pip pip3 virtualenv".split(
+    " ",
+  ),
+);
+const builds = (words) => {
+  const tool = commandWords(words)[0] || "";
+  return BUILDERS.has(tool) || /^\.\.?\//.test(tool) ? tool : "";
+};
 // The script an interpreter runs: the first word that is not an option or
 // an option's value. `python -m module` and `node -e code` name no file.
-function runnerFile(family, words, path, tool = "") {
+// In untagged fences, which often hold prose or settings, and for `source`,
+// only a word that looks like a file (with `.` or `/`) is taken.
+function runnerFile(family, words, path, tool = "", untagged = false) {
   const flags = runnerFlags[family];
   let loose = false;
   for (let i = 0; i < words.length; i++) {
@@ -511,6 +574,7 @@ function runnerFile(family, words, path, tool = "") {
     if (!word) return;
     // `tsx watch src/index.ts`
     if (tool === "tsx" && word === "watch" && i + 1 < words.length) continue;
+    if ((untagged || family === "source") && !/[./]/.test(word)) return;
     const extra = loose ? { loose: true } : {};
     // `node server` runs server.js, server/index.js and so on.
     if (family === "node" && !/\.[^/]*$/.test(word))
@@ -593,8 +657,8 @@ function packageClaims(manager, words, context, claim, path) {
 }
 
 // GitHub's heading anchors (github-slugger): lower-case, punctuation removed,
-// spaces to hyphens, duplicates suffixed -1, -2. Explicit HTML id/name
-// attributes count too. Approximate for unusual punctuation, which is why a
+// spaces to hyphens, duplicates suffixed -1, -2. Raw HTML headings and
+// explicit HTML id/name attributes count too. Approximate for unusual punctuation, which is why a
 // near match makes a missing anchor uncertain rather than a mismatch.
 export function slug(text) {
   return text
@@ -652,18 +716,54 @@ function inlineText(tokens = []) {
 export function markdownAnchors(markdown) {
   const anchors = new Set(),
     counts = new Map();
-  visitTokens(marked.lexer(String(markdown).replace(/^﻿/, "")), (token) => {
-    if (token.type === "heading") {
-      const base = slug(inlineText(token.tokens));
-      const count = counts.get(base) || 0;
-      counts.set(base, count + 1);
-      anchors.add(count ? `${base}-${count}` : base);
+  const heading = (text) => {
+    const base = slug(text);
+    const count = counts.get(base) || 0;
+    counts.set(base, count + 1);
+    anchors.add(count ? `${base}-${count}` : base);
+  };
+  // GitHub anchors raw HTML headings (`<h1 align="center">…</h1>`) too, by
+  // their text. A heading may span several tokens, so its text is gathered
+  // until the closing tag.
+  let open = null;
+  const scan = (html) => {
+    while (html) {
+      if (open) {
+        const close = html.match(new RegExp(`</h${open.level}\\s*>`, "i"));
+        if (!close) {
+          open.text += html;
+          return;
+        }
+        open.text += html.slice(0, close.index);
+        heading(
+          decodeEntities(open.text.replace(/<[^>]*>/g, ""))
+            .replace(/\s+/g, " ")
+            .trim(),
+        );
+        open = null;
+        html = html.slice(close.index + close[0].length);
+      } else {
+        const start = html.match(/<h([1-6])(?=[\s/>])[^>]*>/i);
+        if (!start) return;
+        open = { level: start[1], text: "" };
+        html = html.slice(start.index + start[0].length);
+      }
     }
+  };
+  visitTokens(marked.lexer(String(markdown).replace(/^﻿/, "")), (token) => {
+    if (token.type === "heading") heading(inlineText(token.tokens));
+    else if (
+      open &&
+      !token.tokens?.length &&
+      !["html", "image", "space"].includes(token.type)
+    )
+      open.text += token.text || "";
     // Commented-out HTML renders nothing, so its anchors do not count.
     const html =
       token.type === "html"
         ? token.text.replace(/<!--[\s\S]*?(?:-->|$)/g, "")
         : "";
+    scan(html);
     for (const match of html.matchAll(
       /\s(?:id|name)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi,
     ))
@@ -764,6 +864,16 @@ export function driftClaims(markdown, destination) {
   };
   const command = (text, line, where, context) => {
     for (const words of segments(text)) {
+      // A subshell's `cd` ends with it.
+      if (words[0] === "(") {
+        context.subshells.push(context.cd.length);
+        continue;
+      }
+      if (words[0] === ")") {
+        if (context.subshells.length)
+          context.cd.length = context.subshells.pop();
+        continue;
+      }
       const claimed = new Set();
       commandClaims(words, context, (value) => {
         if (value.path) claimed.add(value.path);
@@ -777,22 +887,38 @@ export function driftClaims(markdown, destination) {
           bases: context.bases,
           clones: [...context.clones],
           foreign: [...context.foreign],
+          home: repository,
         });
       });
-      // Later commands in the block may use what this one produced.
+      // Later commands (in this block or later ones) may use what this one
+      // produced.
       for (const word of words) {
         const value = mentionedPath(word);
         if (value && !claimed.has(value)) context.mentioned.add(value);
       }
+      context.built = builds(words) || context.built;
     }
   };
-  const freshContext = (bases) => ({
-    cd: [],
+  // Files that earlier blocks created, mentioned or built stay possible in
+  // later blocks; `cd` carries over separately, as bases.
+  const produced = {
     created: new Set(),
     mentioned: new Set(),
-    clones: new Set([repository]),
+    built: "",
+  };
+  const freshContext = (bases, untagged = false, shared = null) => ({
+    cd: [],
+    pushed: [],
+    subshells: [],
+    created: shared ? shared.created : new Set(),
+    mentioned: shared ? shared.mentioned : new Set(),
+    built: shared ? shared.built : "",
+    // Explicit clones of this repository; `cd <name>` without one may be the
+    // clone or a folder of that name.
+    clones: new Set(),
     foreign: new Set(),
     repository,
+    untagged,
     bases,
   });
   const link = (value, image, line) => {
@@ -916,7 +1042,7 @@ export function driftClaims(markdown, destination) {
         const bases = [[]];
         if (carried.length) bases.push(carried);
         if (readmeDir.length) bases.push([readmeDir.join("/")]);
-        const context = freshContext(bases);
+        const context = freshContext(bases, lang === "", produced);
         for (const { text, index } of commandLines(token.text, lang)) {
           const exported = text.match(/^export\s+([A-Za-z_]\w*)=/);
           if (exported)
@@ -930,6 +1056,7 @@ export function driftClaims(markdown, destination) {
           else command(text, start + index, "block", context);
         }
         carried = context.cd.length ? context.cd : carried;
+        produced.built = context.built;
         return;
       }
       if (token.type === "codespan") {
@@ -1161,30 +1288,42 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
     if (!anchorCache.has(path)) anchorCache.set(path, markdownAnchors(text));
     return anchorCache.get(path);
   };
-  // Follows `cd` steps from the root. Returns a repository directory ("" is
-  // the root) or null when the directory is unknown. Changing into a clone
-  // of this repository stays at the root; into a clone of another
-  // repository, the directory is unknown.
-  const resolveCd = (steps, clones, foreign = []) => {
-    let dir = "";
+  // Follows `cd` steps from the root. Returns the possible repository
+  // directories ("" is the root; null when the directory is unknown).
+  // Changing into a clone of this repository stays at the root; into a clone
+  // of another repository, the directory is unknown. `cd <repository name>`
+  // with no clone in the block may be the clone or a folder of that name, so
+  // when the tree has that folder both are possible.
+  const resolveCd = (steps, clones, foreign = [], home = "") => {
+    let branches = [{ dir: "", moved: false }];
     for (const step of steps) {
-      if (step === null) return null;
-      if (!dir && foreign.includes(step)) return null;
-      if (!dir && clones.includes(step)) continue;
-      const next = resolvePath(dir, step);
-      if (next === null || listing.get(next)?.type !== "tree") return null;
-      dir = next;
+      if (step === null) return [null];
+      branches = branches.flatMap(({ dir, moved }) => {
+        if (dir === null) return [{ dir }];
+        const start = !dir && !moved;
+        const into = resolvePath(dir, step);
+        const folder =
+          into !== null && listing.get(into)?.type === "tree"
+            ? [{ dir: into, moved: true }]
+            : [];
+        if (start && foreign.includes(step)) return [{ dir: null }];
+        if (start && clones.includes(step)) return [{ dir: "", moved: true }];
+        if (start && step === home)
+          return [{ dir: "", moved: true }, ...folder];
+        return folder.length ? folder : [{ dir: null }];
+      });
     }
-    return dir;
+    return branches.map(({ dir }) => dir);
   };
-  // The claim's possible working directories, one per base.
+  // The claim's possible working directories, from every base.
   const directories = (claim) => [
     ...new Set(
-      (claim.bases || [[]]).map((base) =>
+      (claim.bases || [[]]).flatMap((base) =>
         resolveCd(
           [...base, ...(claim.cd || [])],
           claim.clones || [],
           claim.foreign || [],
+          claim.home || "",
         ),
       ),
     ),
@@ -1375,16 +1514,18 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
       const near = !claim.anyOf && nearPath(target);
       const where = known[0] ? ` in ${known[0]}/` : "";
       const reason = generated
-        ? " It is under a folder that builds or installs usually create, so it may be generated."
+        ? " It is, or is under, a folder that builds or installs usually create, so it may be generated."
         : ignored
           ? " Files like this are usually ignored by Git, so it may be created locally."
           : made
-            ? ` An earlier command in this block mentions ${made}, so it may create it.`
-            : claim.loose
-              ? " An option before it may take it as a value, so it may not be a file."
-              : ambiguous
-                ? " The command may run from another directory."
-                : inlineNote(claim);
+            ? ` An earlier command mentions ${made}, so it may create it.`
+            : claim.built
+              ? ` An earlier command (${claim.built}) builds, unpacks or installs files, so it may create it.`
+              : claim.loose
+                ? " An option before it may take it as a value, so it may not be a file."
+                : ambiguous
+                  ? " The command may run from another directory."
+                  : inlineNote(claim);
       const extensions = claim.suffixes
         ? " No file with a Node.js extension or folder of that name exists either."
         : "";
@@ -1393,6 +1534,7 @@ export function evaluateDrift(plan, evidence, { baseline = null } = {}) {
         generated ||
           ignored ||
           made ||
+          claim.built ||
           claim.loose ||
           ambiguous ||
           claim.where === "inline"
