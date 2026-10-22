@@ -1,5 +1,10 @@
 import { validateBatch, recoverBatch } from "../workspace/batch-review.js";
 import {
+  validateSnapshots,
+  recoverSnapshots,
+  mergeSnapshots,
+} from "../workspace/evidence-snapshots.js";
+import {
   validateShared,
   recoverShared,
   mergeShared,
@@ -68,6 +73,7 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
   )
     throw new Error("Workspace backup must contain between 1 and 500 drafts.");
   const ids = new Set(),
+    documentIds = new Map(),
     drafts = [];
   let active;
   for (const original of data.drafts) {
@@ -81,6 +87,8 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     )
       d.id = original.id;
     ids.add(d.id);
+    if (typeof original.id === "string" && !documentIds.has(original.id))
+      documentIds.set(original.id, d.id);
     drafts.push(d);
     if (!active && original.id === data.active) active = d.id;
   }
@@ -95,6 +103,7 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     componentLibrary: validateComponents(data.componentLibrary),
     sharedComponents: validateShared(data.sharedComponents),
     reviewBatch: validateBatch(data.reviewBatch),
+    evidenceSnapshots: validateSnapshots(data.evidenceSnapshots, documentIds),
     ...(typeof data.createdAt === "string"
       ? { createdAt: data.createdAt }
       : {}),
@@ -129,6 +138,10 @@ export function restoreWorkspace(current, backup, mode) {
     ...current,
     drafts,
     sharedComponents,
+    evidenceSnapshots: mergeSnapshots(
+      current.evidenceSnapshots,
+      incoming.evidenceSnapshots,
+    ).snapshots,
     componentLibrary: mergeComponents(
       current.componentLibrary,
       incoming.componentLibrary,
@@ -153,12 +166,13 @@ export function recoverWorkspace(raw) {
     const drafts = [];
     for (const d of data.drafts) {
       try {
-        drafts.push(
-          validateDraft({
-            ...d,
-            name: typeof d?.name === "string" ? d.name : "Recovered draft",
-          }),
-        );
+        const draft = validateDraft({
+          ...d,
+          name: typeof d?.name === "string" ? d.name : "Recovered draft",
+        });
+        // Keep the stored ID so recovered snapshots can follow their document.
+        if (typeof d.id === "string" && d.id) draft.id = d.id;
+        drafts.push(draft);
       } catch {
         /* Keep unreadable originals in the recovery download. */
       }
@@ -172,6 +186,10 @@ export function recoverWorkspace(raw) {
           componentLibrary: recoverComponents(data.componentLibrary),
           sharedComponents: recoverShared(data.sharedComponents),
           reviewBatch: recoverBatch(data.reviewBatch),
+          evidenceSnapshots: recoverSnapshots(
+            data.evidenceSnapshots,
+            new Map(drafts.map((d) => [d.id, d.id])),
+          ),
         })
       : null;
   } catch {

@@ -33,6 +33,7 @@ export const commandGroups = {
     ["intelligence", "Profile Intelligence"],
     ["repository-health", "Check links"],
     ["refresh-github", "Refresh GitHub data"],
+    ["evidence-snapshots", "Evidence snapshots"],
     ["publish-github", "Publish to GitHub"],
     ["workflows", "Workflows"],
   ],

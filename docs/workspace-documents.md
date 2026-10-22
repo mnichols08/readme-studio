@@ -6,6 +6,8 @@ Version 1.5.0 lets one local workspace hold profile and repository READMEs toget
 
 Use **Documents** in the workspace bar or **Save → Workspace documents**. Search by name, repository, path or branch. Documents appear under **Profile**, **Repositories** and **Local documents**. The current item is marked in text and with an accessible current state. The existing Current draft dropdown is a grouped quick switcher. Keyboard selection returns focus to that switcher.
 
+The Documents dialog also opens **Evidence snapshots** for the current document: read-only records of its GitHub target's branch head, README revision, manifests, lockfiles and linked files. See [Evidence snapshots](evidence-snapshots.md).
+
 Create a **New document**, or use existing templates, import, audit and draft duplication. Use **Manage drafts** to rename, duplicate, delete or export a document. Each document has independent Markdown, builder metadata and GitHub target. The workspace retains the existing limit of 500 local documents.
 
 In Documents, edit the current document's group and, if applicable, repository (`owner/repository`), branch and relative README path. These are validated local settings; saving them does not contact GitHub. Selecting Local documents explicitly clears its target. Profile and repository groups organize the list, without asserting repository ownership or access.
@@ -24,7 +26,7 @@ Switching flushes the current document to local storage and updates preview and 
 
 Undo and Redo survive switches within this tab and cannot cross document IDs. History is session-only: reload, workspace restore or memory eviction resets it. Each active Store retains its existing 80-checkpoint / 8 MB bounds; inactive document histories share a 32 MB budget, evicting older histories first. Eviction never removes current Markdown. Neither history nor active GitHub/AI credentials enter portable exports.
 
-**Download all drafts backup** preserves all document sources, builder data, targets and workspace settings. Restore validates before applying and retains existing collision/recovery behavior. A Studio project carries one document and its target. Plain README export remains exact Markdown without Studio metadata. Malformed builder data can still recover source as Custom Markdown. Existing imported/published target metadata is recognized without rewriting older drafts; drafts without a valid target remain usable locally.
+**Download all drafts backup** preserves all document sources, builder data, targets, workspace settings and [evidence snapshots](evidence-snapshots.md). Restore validates before applying and retains existing collision/recovery behavior. A Studio project carries one document and its target, never its evidence snapshots, which stay machine-local. Deleting a document also deletes its evidence snapshots; the confirmation says so. Plain README export remains exact Markdown without Studio metadata. Malformed builder data can still recover source as Custom Markdown. Existing imported/published target metadata is recognized without rewriting older drafts; drafts without a valid target remain usable locally.
 
 If browser storage fails, source stays in memory and the existing recovery notice offers backup. Download it before closing the tab. No account or network connection is required for local editing, navigation, Health or export after the app loads.
 

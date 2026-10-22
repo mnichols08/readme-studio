@@ -4,13 +4,14 @@ README Studio's core editor is local-first. Markdown rendering, section building
 
 ## Stored in this browser
 
-Drafts, builder metadata, public GitHub snapshots, reusable badge collections, themes, snippets, favorites, recent choices and workspace preferences use browser storage. The optional local activity list stores bounded command identifiers and timestamps, not source or search terms. Publishing recovery keeps a local pre-publish source checkpoint and a bounded list of non-secret commit references.
+Drafts, builder metadata, public GitHub snapshots, reusable badge collections, themes, snippets, favorites, recent choices and workspace preferences use browser storage. The optional local activity list stores bounded command identifiers and timestamps, not source or search terms. Publishing recovery keeps a local pre-publish source checkpoint and a bounded list of non-secret commit references. Evidence snapshots store repository paths, Git revisions, capture times and a fingerprint of your Markdown, never repository file content; they are included in all-drafts backups but not in Studio projects.
 
 Browser storage is not encrypted by Studio. Other users or software with access to the browser profile may read it. Download backups before clearing site data, changing devices or relying on private-browsing persistence. Portable exports contain the source and metadata you choose to include; treat them as documents that may contain personal information.
 
 ## Network requests
 
 - GitHub import, autofill, repository lookup and explicit refresh/link checks contact GitHub or the requested public endpoint and use the identifiers you provide.
+- Evidence snapshot capture and change checks send the document's repository and branch to the public GitHub API (latest commit and repository tree), without credentials. Your Markdown is not sent.
 - Remote images, badges and widget previews contact their providers. The URL, URL parameters and your network address are visible to that provider. Studio does not proxy those requests or send the full draft as an analysis request.
 - Clicking external links opens their sites. Their own privacy policies apply.
 - Optional GitHub publishing sends the specifically reviewed file content and target to the same-origin publishing server and GitHub. Authentication credentials stay in that server's temporary session memory. Closing or clearing the browser alone is not a substitute for revoking an App grant on GitHub.

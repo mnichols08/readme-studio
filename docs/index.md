@@ -62,3 +62,5 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 - [Cross-README updates](cross-readme-updates.md) — affected counts and recipient selection beside document diffs.
 
 - [Batch review](batch-review.md) — attention-queue progression and reviewed common sections for selected repositories.
+
+- [Evidence snapshots](evidence-snapshots.md) — explicit, read-only records of repository revisions, Baselines and change checks for documentation drift.

@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.5.4.** App appearance follows your device's light/dark preference by default, with a manual override in the editor toolbar. README preview appearance can still be controlled separately.
+**Version 1.6.0.** Capture explicit, read-only evidence snapshots of a document's repository revisions, pin a Baseline and run change checks to spot documentation drift. [Evidence snapshots](docs/evidence-snapshots.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -23,6 +23,7 @@ Choose a template, import Markdown, open a Studio project, or start blank. Use t
 - Coordinate themes, generate local light/dark SVG banners, and configure attributed external widget embeds.
 - Import public GitHub data, review refreshes, analyze compatibility and apply explicit, undoable refactors.
 - Audit selected public repositories with advisory expectations for 14 project types, then choose the next README from the attention queue.
+- Record read-only evidence snapshots of a repository's branch head, README, manifests and linked files, then check what changed since a pinned Baseline.
 - Save portable `.readme-studio.json` projects or export Markdown, packs and full workspace backups.
 - Optionally publish reviewed README, asset and workflow changes through a separately configured GitHub App service.
 

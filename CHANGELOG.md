@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.0
+
+- Add explicit, read-only evidence snapshots for documents with a GitHub target: branch head, README revision, recognised root manifests/lockfiles, relatively linked files and a local Markdown fingerprint. Revisions only; no repository file content is stored.
+- Save partial snapshots when the tree is unavailable or truncated; unreadable files are unknown, never drift. Head failures, offline use, cancellation and storage failures save nothing and keep existing snapshots.
+- Pin one Baseline per document and run a change check that reports unchanged, changed, added, removed and unknown evidence without saving. Snapshots for a changed target are labelled Different target and cannot be compared.
+- Bound retention to five snapshots per document plus its Baseline, 100 per workspace. Include snapshots in workspace backup/recovery but not in Studio projects or README exports.
+- Merge restore never evicts local snapshots; incoming snapshots that do not fit stay in the backup and are counted. A fresh capture is never dropped by retention, recovery cannot fail on excess Baselines, and draft deletion warns that the document's snapshots go too. Links above the repository root or with undecodable paths are noted instead of mis-recorded or silently dropped.
+
 ## 1.5.5
 
 - Suppress the new-version notice on first service-worker installation; offer updates only when a waiting worker can replace an active worker.
