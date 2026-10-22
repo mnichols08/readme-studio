@@ -4,7 +4,14 @@ import { sourceHash } from "../state/source-hash.js";
 
 import { finding, historyFindings } from "./signals.js";
 
-export async function reviewReadme(repo, readme, { client, signal } = {}) {
+// `reviewedAt` is when the checks finished; plans cite it for link, image and
+// history evidence instead of the time the audit read the README.
+export async function reviewReadme(repo, readme, options = {}) {
+  const review = await checks(repo, readme, options);
+  return { ...review, reviewedAt: options.client.now() };
+}
+
+async function checks(repo, readme, { client, signal } = {}) {
   const findings = [],
     notes = [];
   if (readme.source === null)

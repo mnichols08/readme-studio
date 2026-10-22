@@ -79,6 +79,7 @@ export class ReadmeAttentionQueue extends HTMLElement {
       if (event.key === ATTENTION_KEY || event.key === null) {
         this.preferences.read();
         this.draw();
+        this.changed();
       }
     };
     window.addEventListener("storage", this.onStorage);
@@ -238,6 +239,7 @@ export class ReadmeAttentionQueue extends HTMLElement {
       try {
         this.preferences.reset();
         this.draw();
+        this.changed();
         this.status("Attention settings reset. Drafts are unchanged.");
       } catch (error) {
         this.status(error.message);
@@ -292,18 +294,23 @@ export class ReadmeAttentionQueue extends HTMLElement {
     }
     this.draw();
     this.status(message);
-    this.dispatchEvent(
-      new CustomEvent("plan-decision", {
-        bubbles: true,
-        detail: { repository },
-      }),
-    );
+    this.changed(repository);
     const plan = [...this.querySelectorAll("[data-plan]")].find(
       (element) => element.plan?.repository === repository,
     );
     // A dismissal can remove the item's last attention reason.
     if (plan) plan.focusAfter(focus);
     else this.querySelector("h2").focus();
+  }
+  // Tells the audit rows that plans changed: one repository, or every row
+  // when attention settings were reread or reset.
+  changed(repository = "") {
+    this.dispatchEvent(
+      new CustomEvent("plan-decision", {
+        bubbles: true,
+        detail: { repository },
+      }),
+    );
   }
   // Records a queue decision. Returns the status message or throws.
   remember(repo, kind, revision) {
@@ -319,13 +326,17 @@ export class ReadmeAttentionQueue extends HTMLElement {
     try {
       const message = this.remember(item.repo, kind, item.revision);
       this.draw();
+      this.changed(item.repo.full_name);
       this.status(message);
       const next =
         this.querySelector("[data-items] button:not(:disabled)") ||
         this.querySelector("h2");
       next.focus();
     } catch (error) {
-      if (this.preferences.error) this.draw();
+      if (this.preferences.error) {
+        this.draw();
+        this.changed();
+      }
       this.status(error.message);
     }
   }

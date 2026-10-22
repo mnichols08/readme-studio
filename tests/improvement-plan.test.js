@@ -1,12 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  AUDIT_RULES_VERSION,
-  classifyReadme,
-} from "../src/repository-audit/classify.js";
+import { classifyReadme } from "../src/repository-audit/classify.js";
 import { reviewReadme } from "../src/repository-audit/review.js";
 import {
   PLAN_LIMIT,
-  PLAN_RULES_VERSION,
   findingTitle,
   improvementPlan,
   planDecision,
@@ -63,6 +59,8 @@ const ids = (plan) => plan.recommendations.map((rec) => rec.id);
 const band = (plan, id) => plan.recommendations.find((r) => r.id === id)?.band;
 const response = (status) => new Response("{}", { status });
 
+// Check history and links runs two hours after the audit read the README.
+const later = now + 2 * 3600000;
 async function reviewed(rec, source, links = []) {
   const commits = Array.from({ length: 10 }, (_, i) => ({
     sha: `c${i}`,
@@ -73,7 +71,7 @@ async function reviewed(rec, source, links = []) {
     { source, path: "README.md", sha },
     {
       client: {
-        now: () => now,
+        now: () => later,
         history: async () => ({ updated: "2026-01-01T00:00:00Z", commits }),
         fetcher: async (url) =>
           response(links.some((l) => url.includes(l)) ? 404 : 200),
@@ -86,10 +84,6 @@ async function reviewed(rec, source, links = []) {
 beforeEach(() => invalidateHealth());
 
 describe("finding kinds map to Recommendations and Plan bands", () => {
-  it("exports the rule versions snapshots record", () => {
-    expect(AUDIT_RULES_VERSION).toBe(2);
-    expect(PLAN_RULES_VERSION).toBe(1);
-  });
   it("starts a missing README with one Recommendation listing key topics", () => {
     const plan = improvementPlan(record("missing", null, { topics: ["cli"] }));
     expect(ids(plan)).toEqual(["readme:missing"]);
@@ -191,6 +185,17 @@ describe("finding kinds map to Recommendations and Plan bands", () => {
       "Last observed README update: 2026-01-01",
       "10 distinct recent commits after it, spanning at least seven days",
     ]);
+    // Their evidence cites when the check ran, not when the audit read the README.
+    for (const rec of [link, image, history]) {
+      expect(rec.evidence).toContain("Checked 2026-09-28T14:00:00.000Z");
+      expect(rec.evidence).not.toContain("Observed 2026-09-28T12:00:00.000Z");
+      expect(rec.evidence).toContain("README revision abcdef1");
+    }
+    delete rec.review.reviewedAt;
+    expect(
+      improvementPlan(rec).recommendations.find((r) => r.id === link.id)
+        .evidence,
+    ).toContain("Check time unknown");
   });
 });
 
@@ -233,7 +238,11 @@ describe("plans are deterministic, bounded and explainable", () => {
     for (const r of plan.recommendations) {
       expect(r.evidence.length).toBeGreaterThan(2);
       expect(r.evidence).toContain("README revision abcdef1");
-      expect(r.evidence).toContain("Observed 2026-09-28T12:00:00.000Z");
+      expect(r.evidence).toContain(
+        /^(link|image|history):/.test(r.id)
+          ? "Checked 2026-09-28T14:00:00.000Z"
+          : "Observed 2026-09-28T12:00:00.000Z",
+      );
       expect(r.applicability).toMatch(/API \(type from repository topic/);
       expect(r.title).toMatch(/^(Add|Replace|Review|Expand)\b/);
     }
@@ -310,9 +319,39 @@ describe("type-specific false positives", () => {
     const api = plan.recommendations.find((r) => r.id === "topic:api");
     expect(api.band).toBe("optional");
     expect(api.applicability).toContain(
-      "README links to external documentation, which may be a deliberate alternative",
+      "README has 1 link whose text or address names documentation, which may be a deliberate alternative",
     );
     expect(band(plan, "topic:installation")).toBe("next");
+  });
+  it("keeps the API reference in Next when the only links are not documentation", () => {
+    const source = [
+      "# Parser lib",
+      paragraph("overview"),
+      "## Installation",
+      paragraph("installation"),
+      "```sh\nnpm i parser-lib\n```",
+      "## Usage",
+      paragraph("usage"),
+      "## License",
+      "Released under the MIT license, see [LICENSE](LICENSE) for the full text. Visit the [website](https://parser.example.org) or the [status page](https://status.parser.example.org).",
+    ].join("\n\n");
+    const rec = record("parser", source, { topics: ["library"] });
+    expect(rec.result.metrics.projectLinks).toBe(3);
+    expect(rec.result.metrics.documentationLinks).toBe(0);
+    const api = improvementPlan(rec).recommendations.find(
+      (r) => r.id === "topic:api",
+    );
+    expect(api.band).toBe("next");
+    expect(api.applicability).not.toContain("names documentation");
+    // Link text or an address naming documentation counts, relative or not.
+    for (const link of [
+      "[API reference](https://parser.example.org/v1)",
+      "[Read more](docs/usage.md)",
+      "[Read more](https://parser.readthedocs.io)",
+    ])
+      expect(
+        classifyReadme(`${prose}\n\n${link}`).metrics.documentationLinks,
+      ).toBe(1);
   });
   it("says authentication may not apply to a public API", () => {
     const plan = improvementPlan(record("svc", prose, { topics: ["api"] }));
@@ -395,6 +434,25 @@ describe("type-specific false positives", () => {
         ),
       ).caveats,
     ).toEqual([]);
+  });
+  it("keeps key topics in Next when only Overview, Examples or Links headings matched", () => {
+    for (const heading of ["Overview", "Examples", "Links"]) {
+      const source = [
+        "# Notes",
+        `## ${heading}`,
+        paragraph("overview"),
+        paragraph("design"),
+        "## Background",
+        paragraph("background"),
+        paragraph("history"),
+      ].join("\n\n");
+      const plan = improvementPlan(
+        record("notes", source, { topics: ["cli"] }),
+      );
+      expect(plan.caveats).toEqual([]);
+      expect(band(plan, "topic:installation")).toBe("next");
+      expect(band(plan, "topic:commands")).toBe("next");
+    }
   });
   it("ignores TODO inside a code fence", () => {
     const plan = improvementPlan(
@@ -485,6 +543,19 @@ describe("session Skip and Dismiss", () => {
     expect(
       attentionItem(rec, { now, dismissed }).gaps.includes("controls"),
     ).toBe(true);
+  });
+  it("does not call a dismissal stale when the current revision is unknown", () => {
+    const rec = record("game", prose, { topics: ["game"] });
+    rec.readme.sha = "";
+    const dismissed = new Map([["topic:controls", `sha:${sha}`]]);
+    const plan = improvementPlan(rec, { decisions: { dismissed } });
+    const controls = plan.recommendations.find(
+      (r) => r.id === "topic:controls",
+    );
+    expect(controls.stale).toBeUndefined();
+    expect(controls.unverified).toBe(`sha:${sha}`);
+    expect(plan.hidden.stale).toEqual([]);
+    expect(plan.hidden.dismissed).toEqual([]);
   });
   it("never hides a thin README through a dismissal", () => {
     const dismissed = new Map([["readme:thin", `sha:${sha}`]]);

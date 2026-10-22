@@ -226,6 +226,68 @@ test("intentionally minimal survives reload, returns after changed README, and d
   await expect(queue).toContainText("1 without current attention signals");
 });
 
+test("queue decisions and other-tab changes refresh the audit-row improvement plan", async ({
+  page,
+}) => {
+  await page.route("https://api.github.com/**", (route) =>
+    route.fulfill({
+      json: route.request().url().includes("/users/")
+        ? [repo("small")]
+        : file(prose),
+    }),
+  );
+  await audit(page);
+  await scan(page);
+  const queue = page.locator("readme-attention-queue");
+  const view = (name) =>
+    page
+      .locator("repository-audit")
+      .getByRole("button", { name, exact: true })
+      .click();
+  const plan = page.locator("[data-audit-results] improvement-plan");
+  const thin = plan
+    .locator("li[data-rec]")
+    .filter({ hasText: "Expand the README" });
+  const note = "Marked intentionally minimal for this README revision.";
+  const mark = thin.getByRole("button", {
+    name: "Mark intentionally minimal",
+  });
+  // Open the row plan first so later queue decisions must redraw it.
+  await view("Audit results");
+  await plan.locator("summary").click();
+  await expect(mark).toBeVisible();
+  await view("README Attention Queue");
+  await queue
+    .getByRole("button", { name: "Mark intentionally minimal", exact: true })
+    .click();
+  await expect(queue.locator("[data-item]")).toHaveCount(0);
+  await view("Audit results");
+  await expect(thin).toContainText(note);
+  await expect(mark).toHaveCount(0);
+  const minimal = await page.evaluate(() =>
+    localStorage.getItem("readme-studio:attention:v1"),
+  );
+  await view("README Attention Queue");
+  await queue
+    .getByLabel("Queue visibility", { exact: true })
+    .selectOption("only");
+  await queue
+    .getByRole("button", { name: "Return to queue", exact: true })
+    .click();
+  await view("Audit results");
+  await expect(thin).not.toContainText(note);
+  await expect(mark).toBeVisible();
+  // Another tab marks it minimal again.
+  await page.evaluate((value) => {
+    localStorage.setItem("readme-studio:attention:v1", value);
+    window.dispatchEvent(
+      new StorageEvent("storage", { key: "readme-studio:attention:v1" }),
+    );
+  }, minimal);
+  await expect(thin).toContainText(note);
+  await expect(mark).toHaveCount(0);
+});
+
 test("damaged and unwritable attention storage stays visible and does not lose drafts or falsely suppress items", async ({
   page,
 }) => {

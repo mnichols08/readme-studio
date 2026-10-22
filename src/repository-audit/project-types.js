@@ -207,6 +207,9 @@ const definitions = {
 };
 
 export const topicLabel = (key) => definitions[key]?.[0] || key;
+// Whether a heading title uses any English topic term the audit looks for.
+export const namesTopic = (title) =>
+  Object.values(definitions).some(([, pattern]) => pattern.test(title));
 
 // sectionHas only accepts populated sections outside comments/code examples.
 export function documentationFacts(metrics, sectionHas) {

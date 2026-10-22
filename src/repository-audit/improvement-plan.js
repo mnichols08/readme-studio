@@ -5,8 +5,6 @@ import { dismissalApplies, readmeRevision } from "./attention.js";
 // author's decisions (ADR epic64-01). Pure: no fetch, no source re-parse, no
 // scores. Each Recommendation maps to exactly one Audit finding ID.
 
-// Bump only when mapping, band or evidence rules change; Audit snapshots record it.
-export const PLAN_RULES_VERSION = 1;
 export const PLAN_LIMIT = 30;
 export const planBands = [
   ["start", "Start here"],
@@ -86,19 +84,13 @@ const alsoChecked = {
   visuals: "no non-badge image",
   links: "no project/documentation link",
 };
-// Facts detected without English heading terms.
-const languageNeutral = {
-  overview: (m) => m.substantiveParagraphs > 0,
-  examples: (m) => m.codeExamples > 0,
-  visuals: (m) => m.supportingImages > 0,
-  links: (m) => m.projectLinks > 0,
-};
 const ANYWHERE = "may be covered under another heading or linked elsewhere";
 const WEAK_TYPE =
   "Project type is a weak inference; choose a type if this is wrong";
 const NOT_ENGLISH =
   "Headings may not be in English; topic detection uses English terms";
-// Kind- and type-specific caveats. `optional` downgrades the Recommendation.
+// Kind- and type-specific caveats. `optional` downgrades the Recommendation;
+// a function `text` quotes the metric that triggered it.
 const topicCaveats = [
   {
     topic: "authentication",
@@ -106,8 +98,9 @@ const topicCaveats = [
   },
   {
     topic: "api",
-    when: (m) => m?.projectLinks > 0,
-    text: "README links to external documentation, which may be a deliberate alternative",
+    when: (m) => m?.documentationLinks > 0,
+    text: (m) =>
+      `README has ${m.documentationLinks} ${m.documentationLinks === 1 ? "link" : "links"} whose text or address names documentation, which may be a deliberate alternative`,
     optional: true,
   },
   {
@@ -142,8 +135,10 @@ function revisionLabel(revision) {
  * has no successful result (a failed fetch is never a missing README).
  * decisions.dismissed: Map(finding ID -> Observed revision); decisions.minimal:
  * Intentionally minimal applies to this revision; skipped: Set(finding ID).
- * A dismissal made for another revision is a Stale decision: the
+ * A dismissal made for another known revision is a Stale decision: the
  * Recommendation stays visible (also listed in hidden.stale) and is not applied.
+ * With no current revision a dismissal is not applied either, and the
+ * Recommendation is marked `unverified` rather than stale.
  * Repository activity (and `now`) never changes a plan.
  */
 export function improvementPlan(
@@ -163,39 +158,54 @@ export function improvementPlan(
         ? suggestion.source
         : "fallback";
   const revision = readmeRevision(record);
-  const observed = Number.isFinite(record.checkedAt)
-    ? new Date(record.checkedAt).toISOString()
-    : "";
+  const revisionLine = revisionLabel(revision) || "README revision unavailable";
+  const at = (time) =>
+    Number.isFinite(time) ? new Date(time).toISOString() : "";
+  // README evidence was observed when the audit read it; link, image and
+  // history evidence when Check history and links ran.
   const observedLines = [
-    revisionLabel(revision) || "README revision unavailable",
-    observed ? `Observed ${observed}` : "Observation time unknown",
+    revisionLine,
+    at(record.checkedAt)
+      ? `Observed ${at(record.checkedAt)}`
+      : "Observation time unknown",
+  ];
+  const checkedLines = [
+    revisionLine,
+    at(record.review?.reviewedAt)
+      ? `Checked ${at(record.review.reviewedAt)}`
+      : "Check time unknown",
   ];
   const origin = `${type.name} (${typeOrigin(typeSource, suggestion)})`;
   const caveats = [];
   if (typeSource === "name" || typeSource === "fallback")
     caveats.push(WEAK_TYPE);
-  // Substantial prose under headings, yet no heading matched any English
-  // topic term and no setup/usage phrase was recognised.
+  // Substantial prose under headings, yet no heading used any English topic
+  // term and no setup/usage phrase was recognised.
   if (
     m &&
     m.meaningfulWords >= 80 &&
     m.headings >= 2 &&
+    m.topicHeadings === 0 &&
     !m.setup &&
-    !m.usage &&
-    Object.entries(result.documentation || {}).every(
-      ([key, detected]) => !detected || languageNeutral[key]?.(m),
-    )
+    !m.usage
   )
     caveats.push(NOT_ENGLISH);
 
   const found = new Map();
-  const add = (id, band, evidence, applicability, extra = {}) => {
+  const add = (
+    id,
+    band,
+    evidence,
+    applicability,
+    extra = {},
+    when = observedLines,
+  ) => {
     if (found.has(id)) return;
     found.set(id, {
       id,
       band,
       title: findingTitle(id),
-      evidence: [...evidence, ...observedLines],
+      evidence: [...evidence, ...when],
       applicability: id.startsWith("topic:")
         ? applicability
         : `${applicability} Project type: ${origin}.`,
@@ -254,7 +264,9 @@ export function improvementPlan(
           (!caveat.type || caveat.type === type.id) &&
           (!caveat.when || caveat.when(m))
         ) {
-          notes.push(caveat.text);
+          notes.push(
+            typeof caveat.text === "function" ? caveat.text(m) : caveat.text,
+          );
           if (caveat.optional) band = "optional";
         }
       if (caveats.length) band = "optional";
@@ -277,6 +289,7 @@ export function improvementPlan(
         [finding.url || finding.message, "HTTP 404/410 at check time"],
         "Applies to any project type; the URL may have moved or be temporarily unavailable.",
         { url: finding.url },
+        checkedLines,
       );
     else if (kind === "history")
       add(
@@ -289,6 +302,8 @@ export function improvementPlan(
             ]
           : [finding.message],
         "Applies to any project type; commit activity does not prove the README is outdated.",
+        {},
+        checkedLines,
       );
   }
 
@@ -325,10 +340,12 @@ export function improvementPlan(
       hidden.dismissed.push(rec);
     else if (skipped?.has(rec.id)) hidden.skipped.push(rec);
     else {
-      if (!thin && stored) {
-        rec.stale = stored; // Not applied: the README changed since.
+      // Not applied: the README changed since (stale), or this audit has no
+      // revision to compare against (unverified).
+      if (!thin && stored && revision) {
+        rec.stale = stored;
         hidden.stale.push(rec);
-      }
+      } else if (!thin && stored) rec.unverified = stored;
       visible.push(rec);
     }
   }

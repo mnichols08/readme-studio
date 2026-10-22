@@ -501,6 +501,18 @@ test("optional history and link review preserves assessments and explains uncert
   await expect(
     page.getByRole("button", { name: "Check history and links" }),
   ).toBeFocused();
+  // Link evidence cites when the check ran, not when the audit read the README.
+  const plan = page.locator("[data-audit-results] improvement-plan");
+  await plan.locator("summary").click();
+  const image = plan
+    .locator("li[data-rec]")
+    .filter({ hasText: "Review unavailable image" });
+  await expect(image).toContainText("HTTP 404/410 at check time");
+  await expect(image).toContainText(/Checked \d{4}-\d\d-\d\dT/);
+  await expect(image).not.toContainText("Observed");
+  await expect(
+    plan.locator("li[data-rec]").filter({ hasText: "Review TODO text" }),
+  ).toContainText(/Observed \d{4}-\d\d-\d\dT/);
   expect(historyCalls).toBe(2);
   expect(linkCalls).toBe(2);
   await page.getByRole("button", { name: "Check history and links" }).click();

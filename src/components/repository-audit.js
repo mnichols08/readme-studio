@@ -41,11 +41,11 @@ export class RepositoryAudit extends HTMLElement {
     this.addEventListener("plan-action", (event) =>
       this.planAction(event.detail),
     );
+    // Queue decisions and attention-setting changes redraw the affected rows.
     this.addEventListener("plan-decision", (event) => {
-      const repo = this.visible?.find(
-        (r) => r.full_name === event.detail.repository,
-      );
-      if (repo) this.result(repo);
+      const name = event.detail?.repository;
+      for (const repo of this.visible || [])
+        if (!name || repo.full_name === name) this.result(repo);
     });
     this.showView(this.getAttribute("data-start-view") || "audit");
     this.querySelector("form").onsubmit = (e) => {
@@ -269,7 +269,10 @@ export class RepositoryAudit extends HTMLElement {
       this.status(message);
       plan().focusAfter(focus);
     } catch (error) {
-      if (action === "minimal") queue.setData(this.state, this.busy);
+      if (action === "minimal") {
+        queue.setData(this.state, this.busy);
+        queue.changed(); // Storage failures disable minimal in every row.
+      }
       this.status(error.message);
     }
   }
