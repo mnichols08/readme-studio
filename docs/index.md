@@ -51,7 +51,7 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 
 [Project-specific documentation](project-documentation.md): CLI, API, packages, games, Rust crates and web-app recommendations and forms.
 
-- [Stack Intelligence](stack-intelligence.md) — opt-in manifest analysis, including monorepo [Nested discovery](stack-intelligence.md#nested-discovery-monorepos).
+- [Stack Intelligence](stack-intelligence.md) — opt-in manifest analysis, including monorepo [Nested discovery](stack-intelligence.md#nested-discovery-monorepos) and per-declaration [Provenance, confidence and staleness](stack-intelligence.md#provenance-confidence-and-staleness).
 
 - [Stack-to-README suggestions](stack-to-readme.md) — review detected stack, commands and links before inserting.
 

@@ -2,7 +2,7 @@
 
 Open **README audit**, load a public account, select repositories, and check **Allow read-only manifest analysis for this session**. Then choose **Analyze selected manifests**. Loading repositories or auditing READMEs does not trigger manifest reads. Closing the workspace resets consent; completed evidence remains in this tab.
 
-Results are titled **Detected in selected repositories**. They describe declarations in repository files, not developer skill, proficiency, runtime usage or a complete resolved dependency graph. Each result identifies its repository, observed branch/time, manifest, ecosystem and dependency role. TOML and line-based declarations include source lines.
+Results are titled **Detected in selected repositories**. They describe declarations in repository files, not developer skill, proficiency, runtime usage or a complete resolved dependency graph. Each result identifies its repository, observed branch/time, manifest, ecosystem, dependency role and [confidence basis](#provenance-confidence-and-staleness). TOML and line-based declarations include source lines.
 
 ## Initial scope
 
@@ -58,6 +58,27 @@ A Manifest beyond a limit is listed as found but not read, never as absent. Hitt
 Each repository's details list **Project boundaries** after the observed line: the repository root, then "Workspace members (declared by …)", then "Nested projects (not declared by a workspace)". Each boundary shows its Manifests, whether each was read, and its dependency count. A summary reads "N manifests found, M read, K not read", followed by the paths not read and why. Dependencies are grouped by boundary; the same package in two boundaries stays two records. Evidence and Stack DNA name the full Manifest path, for example `packages/web/package.json`.
 
 Stack-to-README suggestions still come from root Manifests only; per-project commands are not offered yet.
+
+## Provenance, confidence and staleness
+
+Every Declaration in the results carries its **Provenance**: the repository, branch, Project boundary, full Manifest path, the file's blob SHA, the section and the line when the format has one, and **Observed at**, the time Studio read the file from GitHub. Observed at is not the time the file last changed. A cached result keeps the time it was first observed, never the time the cache was hit. Each dependency line reads `Manifest path · section · line N · basis: <basis> · observed <time> on <branch> · blob <7 characters>`, with the full blob SHA in the tooltip. Engine declarations such as `engines.node` carry the same Provenance.
+
+Each Declaration has one **Confidence basis**, assigned by a fixed rule from the parser's own facts. It is a named reason, never a number, percentage or ranking, and it says nothing about anyone's skill:
+
+| Basis       | When                                                                                                                                                                                          | Explanation shown                                                                                                                                |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| explicit    | `package.json` dependencies and devDependencies; Cargo `[dependencies]` and `[dev-dependencies]`; `project.dependencies`; `dependency-groups`; Poetry dependencies; `go.mod` require; engines | Stated directly in a supported dependency field of this manifest.                                                                                |
+| inherited   | Cargo `workspace = true`, resolved from `[workspace.dependencies]` in the same file                                                                                                           | Declared with workspace = true and resolved from [workspace.dependencies] in the same file.                                                      |
+| conditional | Optional, peer and build kinds (including `build-system.requires` and optional dependency groups), and any Cargo `target.*` table                                                             | Optional, peer, build or target-specific, so it may not be active in every build or install.                                                     |
+| ambiguous   | Every `requirements.txt` line, and npm aliases (`npm:` values)                                                                                                                                | The file cannot tell a direct entry from a generated or aliased one (requirements files may be freeze output; npm aliases name another package). |
+
+When more than one rule applies, the most uncertain wins: ambiguous, then conditional, then inherited, then explicit. A file outside the five registry names would be ambiguous.
+
+Each repository's details list **Uncertain stack results (N)**: conditional and ambiguous Declarations with their explanation, and every Manifest that was found but not read (failed, stopped or over a Discovery limit) as "Not read — unknown" with its reason. A Manifest that was not read is never reported as absent. Uncertain Declarations also stay in place in the dependency list; nothing is hidden or promoted. Failed records contribute nothing.
+
+A result is **Stale** when the currently loaded repository list reports a push (`pushed_at`) after its Observed at, or when it was observed more than 24 hours ago. Staleness is worked out each time the results are shown, from data Studio already holds: there are no timers, refetches or per-file commit requests. A Stale result shows the badge "Stale: repository pushed after this scan" or "Stale: observed more than 24 hours ago", and its summary line ends with "Stale" for screen readers. Stale is a reason to refresh, not a claim that anything changed; a push may not have touched any Manifest. To refresh, check **Fetch fresh manifests** and choose **Analyze selected manifests**. Loading the repository list again (it is cached for five minutes) updates the `pushed_at` that staleness compares against.
+
+Provenance, bases and staleness are session-only, like the rest of the results: no history, no comparison between scans and nothing in backups or portable projects.
 
 Out of scope: Bazel, Nx, Turbo and Lerna configuration, lockfile-based membership, following local `path =` dependencies, mapping across repositories and running any workspace tool.
 

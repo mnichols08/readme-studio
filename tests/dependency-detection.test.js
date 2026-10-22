@@ -169,6 +169,6 @@ alias = {workspace=true}
       default_branch: "dev",
     });
     expect(request).toHaveBeenCalledTimes(6);
-    expect(first.version).toBe(4);
+    expect(first.version).toBe(5);
   });
 });

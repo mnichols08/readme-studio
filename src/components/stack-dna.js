@@ -1,6 +1,18 @@
 import { html as h } from "../markdown/serialize.js";
 import { categories } from "../stack-intelligence/catalog.js";
 import { stackDNA } from "../stack-intelligence/dna.js";
+const observed = (time, branch) =>
+  `observed ${Number.isFinite(time) ? new Date(time).toLocaleString() : "at an unknown time"} on ${branch || "an unknown branch"}`;
+// One Provenance as escaped text: Manifest path · section · line N · basis ·
+// observed <time> on <branch>, with the blob SHA shortened to 7 characters
+// (the full SHA is in its title). Shared with stack-results.js.
+export function provenanceHTML(item) {
+  return `${h(item.manifest)} · ${h(item.section)}${item.line ? ` · line ${h(item.line)}` : ""} · <span data-basis="${h(item.basis)}">basis: ${h(item.basis || "unknown")}</span> · ${h(observed(item.observedAt, item.branch))}${item.blobSha ? ` · <span title="Blob SHA ${h(item.blobSha)}">blob ${h(String(item.blobSha).slice(0, 7))}</span>` : ""}`;
+}
+const evidenceHTML = (source) =>
+  source.manifest
+    ? provenanceHTML(source)
+    : `${h(source.source)} (metadata, not a manifest declaration) · ${h(observed(source.observedAt, source.branch))}`;
 export class StackDNA extends HTMLElement {
   set records(records) {
     this.model = stackDNA(records);
@@ -28,7 +40,7 @@ export class StackDNA extends HTMLElement {
                 .slice(0, 100)
                 .map(
                   (item) =>
-                    `<button type="button" data-dna-technology="${this.visible.indexOf(item)}">${h(item.name)}${item.category === "Unknown" ? ` (${h(item.ecosystem)})` : ""}</button>`,
+                    `<button type="button" data-dna-technology="${this.visible.indexOf(item)}">${h(item.name)}${item.category === "Unknown" ? ` (${h(item.ecosystem)})` : ""}${item.uncertainOnly ? " (only uncertain evidence)" : ""}</button>`,
                 )
                 .join(
                   '<span aria-hidden="true"> · </span>',
@@ -42,7 +54,7 @@ export class StackDNA extends HTMLElement {
           const item = this.visible[Number(button.dataset.dnaTechnology)];
           const panel = this.querySelector("[data-dna-evidence]");
           panel.hidden = false;
-          panel.innerHTML = `<h3 tabindex="-1">${h(item.name)} evidence</h3><p>Category: ${h(item.category)}. Kinds: ${h(item.kinds.join(", "))}. Associated repositories: ${item.repositories.length}.</p><ul>${item.evidence.map((source) => `<li>${h(source.repository)} — ${h(source.dependency || "Configuration / metadata")} — ${h(source.kind)} — ${h(source.source)}</li>`).join("")}</ul>${item.moreEvidence ? "<p>First 100 evidence entries shown; see repository results for the rest.</p>" : ""}<button type="button" data-dna-close>Close technology evidence</button>`;
+          panel.innerHTML = `<h3 tabindex="-1">${h(item.name)} evidence</h3><p>Category: ${h(item.category)}. Kinds: ${h(item.kinds.join(", "))}. Associated repositories: ${item.repositories.length}.</p>${item.uncertainOnly ? "<p data-dna-uncertain><strong>Only uncertain evidence:</strong> every declaration is conditional or ambiguous. It is shown, not promoted.</p>" : ""}<ul>${item.evidence.map((source) => `<li>${h(source.repository)} — ${h(source.dependency || "Configuration / metadata")} — ${h(source.kind)} — ${evidenceHTML(source)}${source.basis === "conditional" || source.basis === "ambiguous" ? `<br><span class="hint">${h(source.explanation)}</span>` : ""}</li>`).join("")}</ul>${item.moreEvidence ? "<p>First 100 evidence entries shown; see repository results for the rest.</p>" : ""}<button type="button" data-dna-close>Close technology evidence</button>`;
           panel.querySelector("h3").focus();
           panel.querySelector("[data-dna-close]").onclick = () => {
             panel.hidden = true;
