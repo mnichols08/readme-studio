@@ -11,3 +11,5 @@ Shortcuts: Ctrl/Cmd+S saves locally; Alt+1–4 selects Build, Markdown, Preview 
 Dialogs show the active draft context. **Save → Local activity** lists at most 50 recent tool openings using fixed command identifiers and timestamps. It contains no README source, search terms, account details or telemetry. Clear it at any time. Opening a tool does not mean its operation succeeded; publishing reports success separately.
 
 Source review uses read-only current/generated panes and a textual unified diff. Plus/minus markers explain additions/removals without relying on color. Full source remains authoritative; review does not alter Markdown. Every tool retains its own stale-state and explicit-apply protections.
+
+**Review → Audience review** reads the active source locally. It reports heading evidence for a selected reader and project type without a score. A section-order proposal appears only for an unambiguous H2 structure and remains inert until its exact source diff is approved. Applying creates one Undo checkpoint and does not publish.
