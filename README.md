@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.21.** The optional Writing Assistant is certified against its evidence, provider, consent, privacy, cancellation and manual-review contracts. No AI account is required, and no content is sent before exact payload review and consent. [Writing Assistant](docs/writing-assistant.md)
+**Version 1.9.22.** Accessibility and large-document behavior have repeatable automated evidence for the Epic 10 keyboard, status, reflow, contrast, cross-browser and bounded-work contracts. Physical assistive-technology checks remain an explicit manual release step rather than a claim inferred from browser automation. [Accessibility acceptance](docs/accessibility-acceptance.md) · [Performance baseline](docs/performance.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

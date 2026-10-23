@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
+import { contrastRatio } from "../../src/badges/contrast.js";
 const key = "readme-studio:v1";
 const editor = (p) =>
   p.getByRole("textbox", { name: "Markdown editor", exact: true });
@@ -416,6 +417,60 @@ test("reduced motion and preview themes do not mutate Markdown", async ({
       .evaluate((el) => getComputedStyle(el).transitionDuration),
   ).toBe("0s");
 });
+test("Epic 10 reflow, theme contrast, live status and focus remain usable", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await start(page);
+  await page.locator(".mobile-nav [data-pane=markdown]").click();
+  const source = "# Accessible source\n\nExact local text.";
+  await editor(page).focus();
+  await editor(page).fill(source);
+  await expect(page.locator(".save-announcement")).toHaveAttribute(
+    "role",
+    "status",
+  );
+  await expect(page.locator(".save-announcement")).toHaveText(
+    "Draft saved locally.",
+  );
+
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    const colors = await page.evaluate(() => {
+      const style = getComputedStyle(document.documentElement);
+      return Object.fromEntries(
+        ["--text", "--muted", "--accent", "--bg"].map((name) => [
+          name,
+          style.getPropertyValue(name).trim(),
+        ]),
+      );
+    });
+    expect(
+      contrastRatio(colors["--text"], colors["--bg"]),
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(
+      contrastRatio(colors["--muted"], colors["--bg"]),
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(
+      contrastRatio(colors["--accent"], colors["--bg"]),
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320);
+  }
+
+  const importButton = page.getByRole("button", { name: "Import" });
+  await importButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "Local file", exact: true }).click();
+  await expect(page.getByLabel("README.md or text file")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(importButton).toBeFocused();
+  await expect(editor(page)).toHaveValue(source);
+});
 for (const kb of [100, 250])
   test(`${kb} KB editing, preview, worker health, parsing and autosave complete`, async ({
     page,
@@ -444,6 +499,16 @@ for (const kb of [100, 250])
     const editMs = Date.now() - editStart;
     source += "x";
     await page.getByRole("button", { name: "Health", exact: true }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (expected) =>
+            document.querySelector("readme-health").completedSource ===
+            expected,
+          source,
+        ),
+      )
+      .toBe(true);
     await expect(page.locator("readme-health .stats")).toBeVisible({
       timeout: 20000,
     });
@@ -451,11 +516,11 @@ for (const kb of [100, 250])
     await expect
       .poll(() =>
         page.evaluate(
-          (k) => JSON.parse(localStorage.getItem(k)).drafts[0].markdown.length,
+          (k) => JSON.parse(localStorage.getItem(k)).drafts[0].markdown,
           key,
         ),
       )
-      .toBe(source.length);
+      .toBe(source);
     const metrics = await page.evaluate(
       async ({ source, key }) => {
         const { detectSections } = await import("/src/markdown/sections.js");
