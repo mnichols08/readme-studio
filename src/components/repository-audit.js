@@ -230,7 +230,6 @@ export class RepositoryAudit extends HTMLElement {
           this.state.typeOverrides.get(key),
           readmeRevision(record),
         );
-        this.decisionError = "";
         this.pendingTypeOverrides.delete(key);
       } catch (error) {
         this.pendingTypeOverrides.delete(key);
@@ -281,8 +280,8 @@ export class RepositoryAudit extends HTMLElement {
       };
       cell.querySelector("[data-reset-audit]").onclick = () => {
         try {
-          this.pendingTypeOverrides.delete(key);
           this.preferences.resetAudit(repo.full_name);
+          this.pendingTypeOverrides.delete(key);
           this.state.typeOverrides.delete(key);
           this.state.dismissed.delete(key);
           this.result(repo);

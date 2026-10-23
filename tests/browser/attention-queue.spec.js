@@ -364,13 +364,13 @@ test("damaged and unwritable attention storage stays visible and does not lose d
   await expect(queue.locator("[data-item]")).toHaveCount(1);
 });
 
-test("a failed pre-audit type save remains visible after scan completion", async ({
+test("one failed pre-audit type save remains visible after another succeeds", async ({
   page,
 }) => {
   await page.route("https://api.github.com/**", (route) =>
     route.fulfill({
       json: route.request().url().includes("/users/")
-        ? [repo("unsaved-type")]
+        ? [repo("unsaved-a"), repo("unsaved-b")]
         : file(basic),
     }),
   );
@@ -379,18 +379,21 @@ test("a failed pre-audit type save remains visible after scan completion", async
   await auditPanel
     .getByRole("button", { name: "Audit results", exact: true })
     .click();
-  const type = page.getByLabel("Project type for example/unsaved-type", {
-    exact: true,
-  });
-  await type.selectOption("web-app");
+  const types = ["unsaved-a", "unsaved-b"].map((name) =>
+    page.getByLabel(`Project type for example/${name}`, { exact: true }),
+  );
+  for (const type of types) await type.selectOption("web-app");
   await page.evaluate(() => {
     const original = Storage.prototype.setItem;
+    let failed = false;
     window.restoreAuditDecisionStorage = () => {
       Storage.prototype.setItem = original;
     };
     Storage.prototype.setItem = function (key, value) {
-      if (key === "readme-studio:audit-decisions:v1")
+      if (key === "readme-studio:audit-decisions:v1" && !failed) {
+        failed = true;
         throw new DOMException("Quota", "QuotaExceededError");
+      }
       return original.call(this, key, value);
     };
   });
@@ -404,9 +407,11 @@ test("a failed pre-audit type save remains visible after scan completion", async
   await expect(auditPanel.locator("[data-status]")).toContainText(
     "Your decision was not applied",
   );
-  await expect(type).toHaveValue("auto");
+  expect(
+    (await Promise.all(types.map((type) => type.inputValue()))).sort(),
+  ).toEqual(["auto", "web-app"]);
   await page.evaluate(() => window.restoreAuditDecisionStorage());
-  await type.selectOption("api");
+  for (const type of types) await type.selectOption("api");
   await page
     .getByRole("button", { name: "Audit selected", exact: true })
     .click();
@@ -600,6 +605,27 @@ test("reset clears a pending pre-audit type as well as the saved type", async ({
   });
   await expect(type).toHaveValue("web-app");
   await type.selectOption("api");
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    window.restoreAuditDecisionStorage = () => {
+      Storage.prototype.setItem = original;
+    };
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "readme-studio:audit-decisions:v1")
+        throw new DOMException("Quota", "QuotaExceededError");
+      return original.call(this, key, value);
+    };
+  });
+  await auditPanel
+    .getByRole("button", {
+      name: "Reset saved audit decisions for example/reset-type",
+    })
+    .click();
+  await expect(type).toHaveValue("api");
+  await expect(auditPanel.locator("[data-status]")).toContainText(
+    "Your decision was not applied",
+  );
+  await page.evaluate(() => window.restoreAuditDecisionStorage());
   await auditPanel
     .getByRole("button", {
       name: "Reset saved audit decisions for example/reset-type",
