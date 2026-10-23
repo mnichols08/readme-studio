@@ -1189,6 +1189,96 @@ describe("Downloads never carry text removed by a raw edit", () => {
       generatedRegistry(opened).filter((u) => u.ownership === "detached"),
     ).toHaveLength(1);
   });
+  it("leaves options that name removed text out of a detached source", () => {
+    const markdown = "## Falcon codename repos\n\n- demo";
+    const generated = {
+      ...createBlock("custom", { markdown }),
+      githubGenerated: {
+        version: 1,
+        repositories: ["u/demo"],
+        options: {
+          action: "summary",
+          layout: "compact",
+          title: "Falcon codename repos",
+          technologies: ["SecretTech", "Demo"],
+          workflow: "falcon-deploy.yml",
+          badges: ["stars", "license"],
+        },
+        generatedValue: markdown,
+      },
+    };
+    const store = new Store(newDraft("Doc", [generated]));
+    store.raw("## Repos\n\n- demo");
+    // This browser keeps every option for Undo and recreation.
+    expect(store.draft.metadata.detachedGenerated[0].options.title).toBe(
+      "Falcon codename repos",
+    );
+    for (const file of [
+      createProject(store.draft),
+      createBackup({ drafts: [store.draft], active: "x" }),
+      withoutDetachedCopies(store.draft),
+    ]) {
+      const text = JSON.stringify(file);
+      expect(text).not.toContain("Falcon");
+      expect(text).not.toContain("SecretTech");
+      expect(text).not.toContain("falcon-deploy");
+    }
+    const [unit] = withoutDetachedCopies(store.draft).metadata
+      .detachedGenerated;
+    expect(unit.options).toEqual({
+      action: "summary",
+      layout: "compact",
+      technologies: ["Demo"],
+      badges: ["stars", "license"],
+    });
+  });
+  it("blanks generated profile text whose section a raw edit removed", () => {
+    const about = createBlock("about", {
+      title: "About",
+      body: "Ask me about Project Falcon.",
+    });
+    about.profileAutofill = { kind: "bio", markdown: serializeBlock(about) };
+    const kept = createBlock("about", { title: "Languages", body: "- JS" });
+    kept.profileAutofill = {
+      kind: "languages",
+      markdown: serializeBlock(kept),
+    };
+    const draft = newDraft("Doc", [
+      createBlock("custom", { markdown: "# Hi" }),
+      about,
+      kept,
+      createBlock("custom", { markdown: "End." }),
+    ]);
+    draft.metadata.githubProfile = {
+      login: "ada",
+      sections: {
+        bio: serializeBlock(about),
+        languages: serializeBlock(kept),
+      },
+    };
+    const store = new Store(draft);
+    store.raw(store.draft.markdown.replace(serializeBlock(about) + "\n\n", ""));
+    expect(store.draft.markdown).not.toContain("Falcon");
+    for (const file of [
+      createProject(store.draft),
+      createBackup({ drafts: [store.draft], active: "x" }),
+      withoutDetachedCopies(store.draft),
+    ])
+      expect(JSON.stringify(file)).not.toContain("Falcon");
+    const opened = inspectProject(
+      JSON.stringify(createProject(store.draft)),
+    ).draft;
+    expect(opened.metadata.githubProfile.sections).toEqual({
+      bio: "",
+      languages: serializeBlock(kept),
+    });
+    // The removed section is still known, so Autofill does not add it back.
+    const units = generatedRegistry(opened);
+    expect(units.find((u) => u.option === "bio")?.ownership).toBe("detached");
+    expect(units.find((u) => u.option === "languages")?.ownership).toBe(
+      "generated",
+    );
+  });
   it("renames a split section after its edited heading and drops a removed one", () => {
     const store = new Store(
       split(

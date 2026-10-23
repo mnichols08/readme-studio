@@ -88,10 +88,12 @@ export function validateDraft(d, { preserveBlockIds = false } = {}) {
 // the author removed with a raw edit. They leave out each Detachment record's
 // copy of the detached Block, records whose Block is gone, and any section name
 // that no longer appears in the Markdown (a generic name takes its place). A
-// detached generated source keeps only what recreating it needs, and only
-// while its sources are still named in the Markdown. A split section whose
-// heading was edited away loses its stale name. Undo and autosave in this
-// browser keep everything.
+// detached generated source keeps only what recreating it needs (options that
+// name removed text fall back to defaults), and only while its sources are
+// still named in the Markdown. Generated profile text whose section is gone is
+// blanked. A split section whose heading was edited away loses its stale name.
+// Fetched public GitHub data (profile snapshot, repository lists) is kept as
+// fetched. Undo and autosave in this browser keep everything.
 const GENERIC_LABELS = {
   builder: "Builder section",
   component: "Component",
@@ -127,6 +129,56 @@ const named = (markdown, source) =>
   typeof source === "string" &&
   !!source.trim() &&
   markdown.toLowerCase().includes(source.split("/").pop().toLowerCase());
+// Options a section was generated with can name text removed since (its
+// heading title, chosen technologies or workflow). Choices from a fixed list
+// (action, layout, badge kinds), numbers and switches are kept; other text
+// only while the Markdown still holds it. Recreating falls back to defaults.
+const IDENTIFIER = /^[a-z][a-z-]{0,23}$/;
+const ENUM_OPTIONS = new Set(["action", "layout", "badges", "sort"]);
+function portableOptions(options, markdown) {
+  if (!plain(options)) return undefined;
+  const lower = markdown.toLowerCase();
+  const keep = (key, value) =>
+    typeof value === "string" &&
+    (ENUM_OPTIONS.has(key)
+      ? IDENTIFIER.test(value)
+      : !value || lower.includes(value.toLowerCase()));
+  const out = {};
+  for (const [key, value] of Object.entries(options)) {
+    if (typeof value === "number" || typeof value === "boolean")
+      out[key] = value;
+    else if (typeof value === "string") {
+      if (keep(key, value)) out[key] = value;
+    } else if (Array.isArray(value)) {
+      const items = value.filter((x) => keep(key, x) && x);
+      if (items.length) out[key] = items;
+    }
+  }
+  return out;
+}
+// Generated profile text whose section is gone (no Block owns it and the
+// Markdown no longer holds it) is blanked. The empty entry still tells
+// GitHub Autofill not to add that section again.
+function portableProfile(profile, blocks, markdown) {
+  if (!plain(profile) || !plain(profile.sections)) return profile;
+  const owned = new Set(
+    blocks.map((b) => b?.profileAutofill?.kind).filter(Boolean),
+  );
+  return {
+    ...profile,
+    sections: Object.fromEntries(
+      Object.entries(profile.sections).map(([kind, text]) => [
+        kind,
+        typeof text === "string" &&
+        text &&
+        !owned.has(kind) &&
+        !markdown.includes(text)
+          ? ""
+          : text,
+      ]),
+    ),
+  };
+}
 function portableGenerated(units, markdown, login) {
   return units.flatMap((u) => {
     if (!plain(u)) return [u];
@@ -140,10 +192,12 @@ function portableGenerated(units, markdown, login) {
     // The generated text, the fetched snapshot and the label (which names the
     // sources and project titles) can hold text removed since; recreating a
     // detached source fetches fresh data and needs none of them.
-    const { generatedValue, snapshot: _snapshot, label, ...rest } = u;
+    const { generatedValue, snapshot: _snapshot, label, options, ...rest } = u;
+    const kept = portableOptions(options, markdown);
     return [
       {
         ...rest,
+        ...(kept ? { options: kept } : {}),
         ...(typeof generatedValue === "string" &&
         generatedValue &&
         markdown.includes(generatedValue)
@@ -197,6 +251,12 @@ export function withoutDetachedCopies(draft) {
         metadata.detachedGenerated,
         markdown,
         metadata.githubProfile?.login,
+      );
+    if (plain(metadata.githubProfile))
+      metadata.githubProfile = portableProfile(
+        metadata.githubProfile,
+        Array.isArray(draft.blocks) ? draft.blocks : [],
+        markdown,
       );
     copy.metadata = metadata;
   }
