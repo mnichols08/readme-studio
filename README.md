@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.24.** Release candidates now produce a commit-bound acceptance artifact, recovery failures have a repeatable drill, and voluntary product feedback can be reviewed and downloaded as a redacted local file without telemetry. Human screen-reader and live-publishing gates remain explicitly pending until an operator records evidence. [Recovery drills](docs/recovery-drills.md) · [Privacy](docs/privacy.md)
+**Version 1.9.25.** Audience review uses local heading evidence to show end-user, recruiter, contributor and maintainer perspectives without scoring the author. It also offers project-specific first-visit checks and conservative section-order proposals behind an exact diff and explicit approval. [Audience review](docs/audience-review.md) · [Privacy](docs/privacy.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -22,6 +22,7 @@ Guided start asks whether you want to write a profile README, write a repository
 - Compose sections, badges and collections, project showcases, components and reusable snippets.
 - Coordinate themes, generate local light/dark SVG banners, and configure attributed external widget embeds.
 - Import public GitHub data, review refreshes, analyze compatibility and apply explicit, undoable refactors.
+- Review a README for end users, recruiters, contributors or maintainers, distinguish unknown evidence from topics not detected, and optionally apply a reviewed section order without rewriting section text.
 - Audit selected public repositories with advisory expectations for 14 project types, review an evidence-backed [Improvement plan](docs/repository-auditing.md#improvement-plans) for each, optionally compare explicit [Audit snapshots](docs/repository-auditing.md#audit-snapshot-history-1910), then choose the next README from the attention queue.
 - Analyze declared dependencies in repository manifests with explicit consent, including bounded monorepo discovery that maps Workspace members and Nested projects ([Stack Intelligence](docs/stack-intelligence.md)). Every declaration shows where and when it was observed and a named confidence basis, with uncertain and Stale results labelled ([Provenance, confidence and staleness](docs/stack-intelligence.md#provenance-confidence-and-staleness)).
 - Record read-only evidence snapshots of a repository's branch head, README, manifests and linked files, then check what changed since a pinned Baseline.

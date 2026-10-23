@@ -32,6 +32,7 @@ README Studio exports ordinary Markdown/HTML. Its preview is an approximation of
 - [README Attention Queue](readme-attention-queue.md)
 - [Refreshing generated content](refreshing.md)
 - [Analyzer](analyzer.md)
+- [Audience review](audience-review.md) — advisory reader perspectives, first-visit checks and explicitly reviewed section ordering
 - [GitHub compatibility](compatibility.md)
 - [Safe refactors](refactors.md)
 - [Optional GitHub publishing](github-publishing.md): [Preflight](github-publishing.md#preflight) and [change set review](github-publishing.md#change-set-review)

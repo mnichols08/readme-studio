@@ -492,6 +492,22 @@ export function installWorkspace(app) {
         });
       return true;
     }
+    if (action === "audience-review") {
+      app.modal(
+        '<h1>Audience review</h1><p data-audience-loading role="status">Loading local audience review…</p>',
+      );
+      const loading = app.querySelector("[data-audience-loading]");
+      import("../audience/dialog.js")
+        .then(({ openAudienceReview }) => {
+          if (loading.isConnected && app.dialog.open) openAudienceReview(app);
+        })
+        .catch(() => {
+          if (loading.isConnected)
+            loading.textContent =
+              "Audience review could not load. Your source is unchanged; reload and try again.";
+        });
+      return true;
+    }
     const event = activityEntry(action);
     if (event) {
       app.data.activity = validateActivity([

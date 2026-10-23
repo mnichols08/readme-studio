@@ -2,6 +2,8 @@
 
 README Studio's core editor is local-first. Markdown rendering, section building, analysis, refactors and local exports run in the browser. There is no application analytics service or cloud draft account in this repository.
 
+Audience review is a local, in-memory analysis of the active Markdown. It does not send source or findings, persist a persona or project type, or contact GitHub. Closing the dialog discards its results and proposed order. Applying an explicitly approved order uses normal local draft history and never publishes it.
+
 ## Voluntary local feedback
 
 **Local feedback export** is off until you open it and check its opt-in box. Opening or closing the tool creates no report and stores no preference, response or event. After opt-in, Studio builds a preview in tab memory from the app version, online/storage/reduced-motion states, coarse workspace count buckets and the answers you select. The tool accepts no free text and its strict allowlist never includes Markdown, draft names, repository names, browser identifiers, URLs, credentials or raw counts.

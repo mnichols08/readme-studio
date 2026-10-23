@@ -446,6 +446,29 @@ export class AppShell extends HTMLElement {
       this.download(e.detail.content, e.detail.name, e.detail.type),
     );
     this.addEventListener("refactor-cancel", () => this.closeDialog());
+    this.addEventListener("audience-order-apply", (e) => {
+      const { snapshot, source, markdown } = e.detail;
+      if (
+        snapshot !== JSON.stringify(this.store.draft) ||
+        source !== this.store.draft.markdown
+      ) {
+        const status = this.querySelector("[data-audience-status]");
+        if (status)
+          status.textContent =
+            "The draft changed. Close and reopen Audience review before applying.";
+        return;
+      }
+      const result = this.store.raw(markdown);
+      this.closeDialog(this.editor.input);
+      this.mobile("markdown");
+      this.focusDocument();
+      this.notify(
+        withDetachments(
+          "Reviewed section order applied. Undo restores the previous source and builder ownership. Nothing was published.",
+          result,
+        ),
+      );
+    });
     this.addEventListener("refactor-apply", (e) => {
       if (
         e.detail.snapshot !== JSON.stringify(this.store.draft) ||

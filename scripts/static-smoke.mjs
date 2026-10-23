@@ -210,6 +210,20 @@ try {
       await page.keyboard.press("Escape");
       await page
         .getByRole("navigation", { name: "Workspace tools" })
+        .getByRole("button", { name: "Audience review", exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: "Audience review", exact: true })
+        .waitFor();
+      if (
+        (await page
+          .getByRole("textbox", { name: "Markdown editor", exact: true })
+          .inputValue()) !== "# Offline source\n\n### Heading"
+      )
+        throw Error("Offline audience review changed source");
+      await page.keyboard.press("Escape");
+      await page
+        .getByRole("navigation", { name: "Workspace tools" })
         .getByRole("button", { name: "Local feedback export", exact: true })
         .click();
       await page.getByLabel("I choose to create a local diagnostic").check();

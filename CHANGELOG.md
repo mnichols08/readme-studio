@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.25
+
+- Add local audience perspectives for end users, recruiters, contributors and maintainers using evidence and caveats rather than fabricated quality scores (#192, #210, #211).
+- Add conservative, source-slice H2 ordering proposals with ambiguous-structure refusal, exact diff approval, stale-draft rejection and Undo (#193, #212, #213).
+- Add first-visit checklists for game, CLI, library and API READMEs that keep observed, not-detected and unknown results distinct (#194, #214, #215).
+- Cache the lazy Audience review for first use offline and cover source preservation, keyboard-accessible review, 320px reflow and Chromium/Firefox/WebKit behavior (#185).
+
 ## 1.9.24
 
 - Add a versioned release acceptance matrix and commit-bound CI evidence artifact covering build, dependency security, recovery and browser gates without converting unrun human checks into passes (#110, #180, #181).
