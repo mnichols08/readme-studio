@@ -5,6 +5,7 @@ README Studio exports ordinary Markdown/HTML. Its preview is an approximation of
 - [Getting started](getting-started.md)
 - [Guided start](guided-start.md) — choose a profile README, repository README or audit goal, keep every earlier Start path, and see where your work is kept
 - [Next steps](next-steps.md) — up to three suggested tools after an import, audit, template or blank start; they only open existing reviewed flows
+- [Usability scripts](usability-scripts.md) and [findings](usability-findings.md) — scripted task scenarios with step budgets, a facilitator protocol for real sessions, and the Friction tracker; no in-app analytics
 - [Editing and recovery](editing.md)
 - [Importing source](imports.md)
 - [Task tutorials](tutorials.md)
@@ -26,6 +27,7 @@ README Studio exports ordinary Markdown/HTML. Its preview is an approximation of
 - [Portable snippet packs](snippet-packs.md)
 - [GitHub data](github-aware.md)
 - [Repository README auditing and project types](repository-auditing.md)
+- [Improvement plans](repository-auditing.md#improvement-plans) — evidence-backed, advisory recommendations for each audited repository
 - [README Attention Queue](readme-attention-queue.md)
 - [Refreshing generated content](refreshing.md)
 - [Analyzer](analyzer.md)
@@ -50,6 +52,8 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 [Documentation section builders](documentation-sections.md): structured repository sections, command examples, environment-variable placeholders and ordinary Markdown output.
 
 [Project-specific documentation](project-documentation.md): CLI, API, packages, games, Rust crates and web-app recommendations and forms.
+
+- [Stack Intelligence](stack-intelligence.md) — opt-in manifest analysis, including monorepo [Nested discovery](stack-intelligence.md#nested-discovery-monorepos) and per-declaration [Provenance, confidence and staleness](stack-intelligence.md#provenance-confidence-and-staleness).
 
 - [Stack-to-README suggestions](stack-to-readme.md) — review detected stack, commands and links before inserting.
 

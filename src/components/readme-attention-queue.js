@@ -1,17 +1,25 @@
+import "./improvement-plan.js";
 import { html as h } from "../markdown/serialize.js";
 import { projectTypes } from "../repository-audit/project-types.js";
 import {
   attentionQueue,
   filterAttention,
+  readmeRevision,
 } from "../repository-audit/attention.js";
+import {
+  improvementPlanForRecord,
+  planDecision,
+} from "../repository-audit/improvement-plan.js";
+import { readmeUrl } from "../repository-audit/presentation.js";
 import {
   AttentionPreferences,
   ATTENTION_KEY,
+  rememberAttentionPreference,
 } from "../repository-audit/attention-storage.js";
 
 export class ReadmeAttentionQueue extends HTMLElement {
   connectedCallback() {
-    this.preferences = new AttentionPreferences();
+    this.preferences ||= new AttentionPreferences();
     this.page = 0;
     this.innerHTML = `<h2 tabindex="-1">README Attention Queue</h2><p>Choose the next README to improve using descriptive signals, not a quality score. Load repositories and audit selected READMEs above first. Only successful assessments enter this queue.</p><p class="hint">High: recently active with missing or thin documentation. Medium: documentation needs attention or commonly useful project-type topics were not detected. Low: archived or no push in over 180 days. Within a tier: active first, README state, public-interest signals, then recent push and repository name. Pinned status and releases are not fetched.</p><div class="attention-filters"><label>Attention priority<select name="priority" aria-label="Attention priority"><option value="all">All priorities</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label><label><input type="checkbox" name="missing"> Missing only</label><label><input type="checkbox" name="active"> Active only (pushed within 30 days)</label><label>Archived repositories<select name="archived" aria-label="Archived repositories"><option value="exclude">Exclude archived</option><option value="include">Include archived</option><option value="only">Archived only</option></select></label><label>Queue language<select name="language" aria-label="Queue language"><option value="all">All languages</option></select></label><label>Queue project type<select name="type" aria-label="Queue project type"><option value="all">All project types</option>${projectTypes.map((t) => `<option value="${t.id}">${h(t.name)}</option>`).join("")}</select></label><label>Minimum stars<input name="stars" aria-label="Minimum stars" type="number" min="0" max="1000000000" step="1" value="0"></label><label>Pushed recently<select name="pushed" aria-label="Pushed recently"><option value="">Any push date</option><option value="30">Within 30 days</option><option value="90">Within 90 days</option><option value="180">Within 180 days</option><option value="365">Within 365 days</option></select></label><label>Queue visibility<select name="deferred" aria-label="Queue visibility"><option value="">Active queue</option><option value="only">Deferred items</option><option value="all">All attention items</option></select></label><button data-reset-filters>Reset queue filters</button></div><p class="hint">Filters combine. Archived/forked repositories must have been included in an audit to have evidence. “Ignore for now” lasts seven days. “Intentionally minimal” lasts until a newly fetched README revision differs. Improve next starts a local review batch from the current filtered, non-deferred queue (up to 200). Opening or reviewing a draft does not mark its remote README complete.</p><div data-storage></div><p data-queue-status role="status" aria-live="polite"></p><p data-queue-count></p><button data-improve-next>Improve next</button><ol class="attention-items" data-items></ol><div class="audit-pagination"><button data-previous>Previous queue page</button><span data-queue-page></span><button data-next>Next queue page</button></div>`;
     this.querySelectorAll(
@@ -71,9 +79,14 @@ export class ReadmeAttentionQueue extends HTMLElement {
       if (event.key === ATTENTION_KEY || event.key === null) {
         this.preferences.read();
         this.draw();
+        this.changed();
       }
     };
     window.addEventListener("storage", this.onStorage);
+    this.addEventListener("plan-action", (event) => {
+      event.stopPropagation(); // The queue owns decisions made in its plans.
+      this.planAction(event.detail);
+    });
     this.draw();
   }
   disconnectedCallback() {
@@ -82,9 +95,10 @@ export class ReadmeAttentionQueue extends HTMLElement {
   status(message) {
     this.querySelector("[data-queue-status]").textContent = message;
   }
-  setData(state, busy) {
+  setData(state, busy, preferences) {
     this.state = state;
     this.busy = busy;
+    if (preferences) this.preferences = preferences;
     if (!this.preferences) return;
     const language = this.querySelector("[name=language]");
     const selected = language.value;
@@ -116,18 +130,32 @@ export class ReadmeAttentionQueue extends HTMLElement {
     const items = attentionQueue(records, {
       overrides: this.state?.typeOverrides,
       preferences: this.preferences.entries,
+      dismissals: this.state?.dismissed,
     });
+    const dismissed = records.reduce(
+      (sum, record) =>
+        record.result &&
+        this.state.dismissed?.get(record.repo.full_name.toLowerCase())?.size
+          ? sum + this.plan(record).hidden.dismissed.length
+          : sum,
+      0,
+    );
+    const open = new Set(
+      [...this.querySelectorAll("[data-items] improvement-plan")]
+        .filter((plan) => plan.open)
+        .map((plan) => plan.plan?.repository),
+    );
     this.filtered = filterAttention(items, this.filters());
     const pages = Math.max(1, Math.ceil(this.filtered.length / 25));
     this.page = Math.max(0, Math.min(pages - 1, this.page));
     this.visible = this.filtered.slice(this.page * 25, (this.page + 1) * 25);
     this.querySelector("[data-queue-count]").textContent =
-      `${this.filtered.length} matching · ${items.filter((item) => item.suppressed).length} deferred · ${records.filter((record) => !record.result).length} not assessed · ${records.filter((record) => record.result).length - items.length} without current attention signals`;
+      `${this.filtered.length} matching · ${items.filter((item) => item.suppressed).length} deferred · ${records.filter((record) => !record.result).length} not assessed · ${records.filter((record) => record.result).length - items.length} without current attention signals${dismissed ? ` · ${dismissed} ${dismissed === 1 ? "recommendation" : "recommendations"} dismissed` : ""}`;
     this.querySelector("[data-items]").innerHTML =
       this.visible
         .map(
           (item, index) =>
-            `<li tabindex="-1" data-item="${index}"><h3>${h(item.repo.full_name)}</h3><strong>${h(item.priority[0].toUpperCase() + item.priority.slice(1))} attention</strong><ul>${item.reasons.map((reason) => `<li>${h(reason)}</li>`).join("")}</ul><p>${h(item.repo.language || "Language unspecified")} · ${h(item.assessment.type.name)}</p>${item.suppressed ? `<p>${h(item.suppressed)}</p>` : ""}<div class="attention-actions"><button data-improve="${index}">Improve README</button><button data-open="${index}">Open in Studio</button>${item.suppressed ? `<button data-return="${index}">Return to queue</button>` : `<button data-ignore="${index}">Ignore for now</button><button data-minimal="${index}" ${!item.revision ? "disabled" : ""}>Mark intentionally minimal</button>`}</div>${!item.revision ? "<p>README revision unavailable. Refresh the audit before marking it intentionally minimal.</p>" : ""}</li>`,
+            `<li tabindex="-1" data-item="${index}"><h3>${h(item.repo.full_name)}</h3><strong>${h(item.priority[0].toUpperCase() + item.priority.slice(1))} attention</strong><ul>${item.reasons.map((reason) => `<li>${h(reason)}</li>`).join("")}</ul><p>${h(item.repo.language || "Language unspecified")} · ${h(item.assessment.type.name)}</p>${item.suppressed ? `<p>${h(item.suppressed)}</p>` : ""}<div class="attention-actions"><button data-improve="${index}">Improve README</button><button data-open="${index}">Open in Studio</button>${item.suppressed ? `<button data-return="${index}">Return to queue</button>` : `<button data-ignore="${index}">Ignore for now</button><button data-minimal="${index}" ${!item.revision ? "disabled" : ""}>Mark intentionally minimal</button>`}</div>${!item.revision ? "<p>README revision unavailable. Refresh the audit before marking it intentionally minimal.</p>" : ""}<improvement-plan data-plan="${index}"></improvement-plan></li>`,
         )
         .join("") ||
       "<li>No matching attention items. Audit repositories above, adjust filters, or review deferred items.</li>";
@@ -150,9 +178,19 @@ export class ReadmeAttentionQueue extends HTMLElement {
           (button.onclick = () =>
             this.decide(this.visible[Number(button.dataset[action])], kind)),
       );
+    this.querySelectorAll("[data-plan]").forEach((element) => {
+      const item = this.visible[Number(element.dataset.plan)];
+      element.plan = this.plan(item.record);
+      element.readmeUrl = readmeUrl(item.repo, item.record.readme);
+      if (open.has(item.repo.full_name)) element.open = true;
+    });
     this.storageNotice();
     this.querySelectorAll("button,input,select").forEach((el) => {
       el.disabled = !!this.busy;
+    });
+    this.querySelectorAll("[data-plan]").forEach((element) => {
+      element.minimalUnavailable = !!this.preferences.error;
+      element.busy = this.busy;
     });
     if (!this.busy) {
       this.querySelectorAll("[data-minimal]").forEach((button) => {
@@ -202,30 +240,87 @@ export class ReadmeAttentionQueue extends HTMLElement {
       try {
         this.preferences.reset();
         this.draw();
+        this.changed();
         this.status("Attention settings reset. Drafts are unchanged.");
       } catch (error) {
         this.status(error.message);
       }
     };
   }
+  // The plan for one queue record, with this session's decisions applied.
+  plan(record) {
+    return improvementPlanForRecord(record, {
+      session: this.state,
+      preferences: this.preferences.entries,
+      override: this.state.typeOverrides?.get(record.repo.full_name) || "auto",
+    });
+  }
+  planAction({ action, id, repository, focus }) {
+    const item = this.filtered?.find(
+      (candidate) => candidate.repo.full_name === repository,
+    );
+    if (this.busy || !item) return;
+    if (action === "improve" || action === "open") {
+      this.open(item, action === "improve");
+      return;
+    }
+    if (action === "minimal") {
+      this.decide(item, "minimal");
+      return;
+    }
+    let message;
+    try {
+      message = planDecision(this.state, {
+        repository,
+        id,
+        action,
+        revision: item.revision,
+      });
+    } catch (error) {
+      this.status(error.message);
+      return;
+    }
+    this.draw();
+    this.status(message);
+    this.changed(repository);
+    const plan = [...this.querySelectorAll("[data-plan]")].find(
+      (element) => element.plan?.repository === repository,
+    );
+    // A dismissal can remove the item's last attention reason.
+    if (plan) plan.focusAfter(focus);
+    else this.querySelector("h2").focus();
+  }
+  // Tells the audit rows that plans changed: one repository, or every row
+  // when attention settings were reread or reset.
+  changed(repository = "") {
+    this.dispatchEvent(
+      new CustomEvent("plan-decision", {
+        bubbles: true,
+        detail: { repository },
+      }),
+    );
+  }
   decide(item, kind) {
     if (this.busy || !item) return;
     try {
-      this.preferences.set(item.repo.full_name, kind, item.revision);
-      this.draw();
-      this.status(
-        kind === "minimal"
-          ? `${item.repo.name} marked intentionally minimal for this README revision.`
-          : kind === "ignore"
-            ? `${item.repo.name} ignored for seven days or until its README changes.`
-            : `${item.repo.name} returned to the queue.`,
+      const message = rememberAttentionPreference(
+        this.preferences,
+        item.repo.full_name,
+        kind,
+        item.revision,
       );
+      this.draw();
+      this.changed(item.repo.full_name);
+      this.status(message);
       const next =
         this.querySelector("[data-items] button:not(:disabled)") ||
         this.querySelector("h2");
       next.focus();
     } catch (error) {
-      if (this.preferences.error) this.draw();
+      if (this.preferences.error) {
+        this.draw();
+        this.changed();
+      }
       this.status(error.message);
     }
   }

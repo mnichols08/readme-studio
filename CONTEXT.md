@@ -1,6 +1,6 @@
 # Readme Studio
 
-A local-first workspace for authoring GitHub profile and repository READMEs. This glossary covers the language used for documentation drift detection (Epic 13) and for guided first-run and task-based UX (Epic 01).
+A local-first workspace for authoring GitHub profile and repository READMEs. This glossary covers the language used for documentation drift detection (Epic 13), guided first-run and task-based UX (Epic 01), the actionable README audit (Epic 03), and repository evidence and stack intelligence (Epic 04).
 
 ## Language: documentation drift (Epic 13)
 
@@ -89,7 +89,7 @@ The first task an author chose in Guided start: a **Profile README**, a **Reposi
 _Avoid_: Mode, persona, track, intent
 
 **Start path**:
-A way to begin that is not a Goal: start blank, import an existing README, pick a template, open a Studio project, autofill from GitHub or explore the sample. Every Start path that existed before Guided start stays reachable under its existing name.
+A way to begin that is not a Goal: start blank, import an existing README, pick a template, open a Studio project, autofill from GitHub, restore a backup or explore the sample. Every Start path that existed before Guided start stays reachable under its existing name.
 _Avoid_: Shortcut, quick start, advanced entry route
 
 **Locality statement**:
@@ -131,6 +131,158 @@ _Avoid_: Score, time on task, effort
 **Friction**:
 A recorded obstacle in one Usability scenario at a named step, with a severity from 1 (cannot complete) to 4 (cosmetic) and the kind of run that found it.
 _Avoid_: Bug, complaint, pain point
+
+## Language: actionable README audit (Epic 03)
+
+### Improvement plans
+
+**Audit finding**:
+One observation from a repository's README audit that may call for a change: a missing or thin README, a project-type topic that was not detected, leftover placeholder or starter text, an unavailable link or image, or README history that predates significant activity. Every Audit finding has a stable identity, so decisions and snapshots can refer to the same finding across audits.
+_Avoid_: Issue, problem, error, violation, Observed mismatch (a Drift check term)
+
+**Improvement plan**:
+The ordered list of Recommendations for one audited repository, derived from its latest successful audit and the author's Audit decisions. It is recalculated, never saved, and is not a score.
+_Avoid_: Score, report, checklist, to-do list
+
+**Recommendation**:
+One concrete suggested change in an Improvement plan, derived from exactly one Audit finding. It cites the evidence that was observed and its Applicability, names what to add or review, and never supplies content, commands, links or facts that the audit did not observe.
+_Avoid_: Fix, requirement, rule, Next step, Fix proposal
+
+**Applicability**:
+The statement on a Recommendation of why it fits this repository's project type, where that type came from, and when the Recommendation might not apply.
+_Avoid_: Severity, importance, confidence score
+
+**Plan band**:
+The descriptive group a Recommendation belongs to: **Start here**, **Next** or **Optional**. Bands order a plan; they are not ratings of the README or its author.
+_Avoid_: Priority score, severity, Attention priority (the queue's High/Medium/Low)
+
+**Skip** (Recommendation):
+Setting a Recommendation aside for the rest of this session without saying anything about whether it applies.
+_Avoid_: Ignore for now (the queue's seven-day decision), defer, snooze
+
+**Dismissal**:
+The author's explicit statement that a Recommendation does not apply to a repository, made against one Observed revision. A missing or thin README cannot be dismissed; Intentionally minimal covers that.
+_Avoid_: Ignore, mute, resolve, false-positive flag
+
+### Persistent audit decisions
+
+**Audit decision**:
+An explicit choice the author made about a repository in the audit and that this browser keeps: a Manual project type, Ignore for now, Intentionally minimal or a Dismissal. Only ever created by the author's own action.
+_Avoid_: Preference, setting, rule
+
+**Canonical repository**:
+The case-insensitive owner/name identity that Audit decisions and Audit snapshots are keyed by. A renamed or transferred repository is a different Canonical repository.
+_Avoid_: Repository URL, repository ID
+
+**Observed revision**:
+The README revision the audit saw when a decision was made or a snapshot was saved: a Git blob revision, or confirmed absence of a root README.
+_Avoid_: Version, commit, README SHA
+
+**Stale decision**:
+A revision-bound Audit decision whose Observed revision differs from the one the latest audit saw. It is kept and shown, but no longer applied until the author confirms it again or forgets it.
+_Avoid_: Expired, invalid, orphaned
+
+**Manual project type**:
+The project type the author chose for a repository instead of the automatic suggestion. It belongs to the repository, not to a README revision.
+_Avoid_: Override (in user-facing text), forced type
+
+### Audit change tracking
+
+**Audit snapshot**:
+A saved, explicitly requested record of the audit results already on screen for one account at one moment: per repository its Observed revision, README state, project type and Audit findings. It holds no README content, does not contact GitHub and is never saved as a side effect.
+_Avoid_: Evidence Snapshot (per document), audit history, scan, report
+
+**Partial audit snapshot**:
+An Audit snapshot in which at least one included repository was not assessed. Still saved; the unassessed repositories are unknown, never clean.
+_Avoid_: Incomplete, failed snapshot
+
+**Audit comparison**:
+A read-only comparison of two Audit snapshots of the same account that reports each Audit finding as added, resolved, unchanged or unknown. It describes only what the two captures observed and never implies monitoring in between.
+_Avoid_: Trend, monitoring, live diff, Change check (a per-document term)
+
+**Resolved** (Audit comparison):
+An Audit finding observed in the earlier snapshot and not in the later one, with the repository re-assessed in the later snapshot under the same project type and audit rules. It means no longer observed, not fixed.
+_Avoid_: Fixed, closed, done
+
+**Unknown** (Audit comparison):
+An Audit finding whose change cannot be decided: the repository was not assessed or not captured in one snapshot, was not re-audited between them, its links were checked in only one, or its project type or the audit rules changed. Unknown is never reported as added or resolved.
+_Avoid_: Skipped, unchanged, passed
+
+## Language: repository evidence and stack intelligence (Epic 04)
+
+### Discovery
+
+**Manifest**:
+A recognised file in a repository that declares dependencies for one ecosystem (`package.json`, `Cargo.toml`, `pyproject.toml`, `requirements.txt` or `go.mod`). A manifest is read as data and never executed.
+_Avoid_: Config, build file, lockfile
+
+**Declaration**:
+One dependency or engine statement in a Manifest, with its ecosystem and kind (runtime, development, peer, build, optional). A Declaration says what a repository asks for, never what a developer knows or what runs in production.
+_Avoid_: Skill, usage, technology, dependency graph
+
+**Project boundary**:
+A directory in a repository that holds at least one Manifest and is treated as its own project: the repository root, a Workspace member or a Nested project. Every Declaration belongs to exactly one Project boundary.
+_Avoid_: Package, module, app, sub-repo
+
+**Workspace declaration**:
+A root-level statement that names member directories: `workspaces` in `package.json`, `packages` in `pnpm-workspace.yaml`, `[workspace] members` in `Cargo.toml`, `use` in `go.work` or `[tool.uv.workspace] members` in `pyproject.toml`. Read as data; patterns it cannot interpret are reported, not guessed.
+_Avoid_: Monorepo config, workspace file
+
+**Workspace member**:
+A Project boundary whose directory is named by a Workspace declaration.
+_Avoid_: Child package, sub-project
+
+**Nested project**:
+A Project boundary below the root that holds a Manifest but is not named by any Workspace declaration, for example `docs/site/package.json`. Shown separately from Workspace members because it may be an example or tool rather than part of the product.
+_Avoid_: Orphan, member
+
+**Nested discovery**:
+The separately consented, bounded search of one repository tree listing for Manifests below the root. Off unless the author turns it on for the session; root-only analysis is unchanged without it.
+_Avoid_: Crawl, recursive scan, deep scan
+
+**Discovery limit**:
+A fixed bound on Nested discovery (directory depth, excluded directories, Manifests read per repository, repositories per run). A Manifest beyond a limit is reported as found but not read, never as absent.
+_Avoid_: Quota, cutoff
+
+### Freshness and confidence
+
+**Provenance**:
+Where and when one Declaration was observed: repository, branch, Project boundary, Manifest path, file revision, section, line when known, and Observed at.
+_Avoid_: Source (that word means the author's Markdown), citation, origin
+
+**Observed at**:
+The time Studio read the Manifest from GitHub. Not the time the Manifest was last changed and not the commit date.
+_Avoid_: Updated at, last modified, timestamp
+
+**Stale** (stack result):
+A stack result that may no longer match the repository: the loaded repository list reports a newer push than the one the scan started from, or it was Observed at more than 24 hours ago. Stale is a reason to refresh, never a claim that anything changed. Not the same as a Different target or an Observed mismatch.
+_Avoid_: Outdated, expired, invalid
+
+**Confidence basis**:
+The named reason a Declaration is believed, one of **explicit** (stated directly in a supported field), **inherited** (resolved from a workspace table in the same file), **conditional** (optional, peer, build or target-specific, so it may not be active) or **ambiguous** (the file cannot distinguish direct from generated or aliased entries). A basis comes with a one-line explanation and is never a percentage or ranking.
+_Avoid_: Confidence score, certainty, accuracy
+
+**Uncertain stack result**:
+A Declaration whose Confidence basis is conditional or ambiguous, or a Manifest that was found but not read. Shown beside explicit results with its reason, never hidden and never promoted.
+_Avoid_: Uncertain finding (that is a Drift check result), warning, low confidence
+
+### Evidence to documentation
+
+**Evidence suggestion**:
+Editable README text derived only from Declarations and Manifest facts of one stack result, carrying the Provenance it came from. Starts unselected.
+_Avoid_: Recommendation, generated section, auto-fill
+
+**Command suggestion**:
+An Evidence suggestion that contains a shell command, built only from a fixed set of conventional commands for the evidence present. It is documentation text that Studio never runs.
+_Avoid_: Script, action, run step
+
+**Technology claim**:
+An Evidence suggestion that states the repository uses a technology, package manager or published package, such as a Detected stack section, a badge or a registry link.
+_Avoid_: Skill, proficiency, stack badge
+
+**Confirmation**:
+The author's explicit per-item acknowledgement that a selected Command suggestion or Technology claim is true for their repository. Required before the exact diff can be reviewed, separate from diff approval, and cleared when the item's text changes.
+_Avoid_: Approval (that is for the whole diff), consent (that is for reading manifests), verification
 
 ## Language: safe GitHub publishing (Epic 08)
 

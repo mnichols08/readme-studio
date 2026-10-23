@@ -100,3 +100,18 @@ export class AttentionPreferences {
     this.raw = null;
   }
 }
+
+export function rememberAttentionPreference(
+  preferences,
+  repository,
+  kind,
+  revision,
+) {
+  preferences.set(repository, kind, revision);
+  const name = repository.split("/").at(-1);
+  return kind === "minimal"
+    ? `${name} marked intentionally minimal for this README revision.`
+    : kind === "ignore"
+      ? `${name} ignored for seven days or until its README changes.`
+      : `${name} returned to the queue.`;
+}

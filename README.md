@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.8.0.** Before publishing, a read-only Preflight checks the exact repository, branch and path: publishing service, GitHub session, App installation and Contents permission, your push access, archive state and branch. Publishing stays in Read-only mode until every blocking check passes; branch protection and default-branch commits are advisory warnings. [GitHub publishing](docs/github-publishing.md) · [Next steps](docs/next-steps.md) · [Guided start](docs/guided-start.md)
+**Version 1.9.3.** Repository audits now turn observed findings into bounded, evidence-backed Improvement plans with project-type applicability, descriptive ordering, and explicit session-only Skip or Dismiss choices. [Improvement plans](docs/repository-auditing.md#improvement-plans) · [README Attention Queue](docs/readme-attention-queue.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -15,14 +15,15 @@ npm ci
 npm run dev
 ```
 
-Guided start asks whether you want to write a profile README, write a repository README or audit your repository READMEs, and says where your work is kept; templates, Markdown import, Studio projects and blank drafts remain one click away. After you start, [Next steps](docs/next-steps.md) suggests what usually comes next without changing anything. Use the Create, Design, Review, GitHub and Save groups; `Ctrl/Cmd+K` searches tools and content. [Getting started](docs/getting-started.md) · [Task tutorials](docs/tutorials.md) · [All documentation](docs/index.md)
+Guided start asks whether you want to write a profile README, write a repository README or audit your repository READMEs, and says where your work is kept; templates, Markdown import, Studio projects and blank drafts remain one click away. After you start, [Next steps](docs/next-steps.md) suggests what usually comes next without changing anything. Use the Create, Design, Review, GitHub and Save groups; `Ctrl/Cmd+K` searches tools and content. [Getting started](docs/getting-started.md) · [Task tutorials](docs/tutorials.md) · [Usability scripts](docs/usability-scripts.md) · [All documentation](docs/index.md)
 
 ## What you can do
 
 - Compose sections, badges and collections, project showcases, components and reusable snippets.
 - Coordinate themes, generate local light/dark SVG banners, and configure attributed external widget embeds.
 - Import public GitHub data, review refreshes, analyze compatibility and apply explicit, undoable refactors.
-- Audit selected public repositories with advisory expectations for 14 project types, then choose the next README from the attention queue.
+- Audit selected public repositories with advisory expectations for 14 project types, review an evidence-backed [Improvement plan](docs/repository-auditing.md#improvement-plans) for each, then choose the next README from the attention queue.
+- Analyze declared dependencies in repository manifests with explicit consent, including bounded monorepo discovery that maps Workspace members and Nested projects ([Stack Intelligence](docs/stack-intelligence.md)). Every declaration shows where and when it was observed and a named confidence basis, with uncertain and Stale results labelled ([Provenance, confidence and staleness](docs/stack-intelligence.md#provenance-confidence-and-staleness)).
 - Record read-only evidence snapshots of a repository's branch head, README, manifests and linked files, then check what changed since a pinned Baseline.
 - Check for stale scripts, missing files, broken links and anchors, and outdated config keys without running repository code or changing your Markdown.
 - Save portable `.readme-studio.json` projects or export Markdown, packs and full workspace backups.
@@ -32,7 +33,7 @@ Manual Markdown remains available. Raw edits detach structured ownership when sy
 
 ## Your data
 
-Drafts autosave to this browser. **Download a backup before clearing browser storage.** Storage failures remain visible, and damaged data opens a temporary workspace with recovery downloads rather than silently replacing originals. Portable projects retain source and supported editing metadata; Markdown exports retain source only. [Editing and recovery](docs/editing.md) · [Project files](docs/studio-projects.md)
+Drafts autosave to this browser. **Download a backup before clearing browser storage**; **Restore a backup** in Guided start brings it back and opens your restored draft. Export README, Copy Markdown, Save Studio project and the backup downloads ask before leaving out section edits you have not saved. Storage failures remain visible, and damaged data opens a temporary workspace with recovery downloads rather than silently replacing originals. Portable projects retain source and supported editing metadata; Markdown exports retain source only. [Editing and recovery](docs/editing.md) · [Project files](docs/studio-projects.md)
 
 Core editing, analysis and export work offline after the production app has successfully cached. Public GitHub fetches, publishing and remote images need a connection. Remote previews contact their providers directly. [Offline behavior](docs/offline.md) · [Privacy](docs/privacy.md) · [Security](docs/security.md)
 

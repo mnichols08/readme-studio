@@ -7,6 +7,7 @@ import {
   auditRepositories,
 } from "../src/repository-audit/github.js";
 import { invalidateHealth } from "../src/github/health-cache.js";
+import { sourceHash } from "../src/state/source-hash.js";
 const now = Date.parse("2026-09-28T00:00:00Z");
 const repo = { full_name: "example/demo", default_branch: "main" };
 const response = (data, status = 200, headers = {}) =>
@@ -19,13 +20,16 @@ beforeEach(() => invalidateHealth());
 
 it("finds prose placeholders but excludes inline, fenced, HTML code and comments", () => {
   expect(
-    classifyReadme("# your-project-name\n\nTODO: write usage").findings,
-  ).toHaveLength(2);
+    classifyReadme("# your-project-name\n\nTODO: write usage").findings.map(
+      (finding) => finding.id,
+    ),
+  ).toEqual(["placeholder:todo", "placeholder:project-name"]);
   const examples =
     "# `TODO` examples\n\n`your-project-name`\n\n```md\nTODO your-project-name\n```\n\n<pre>TODO your-project-name</pre>\n\n<!-- TODO -->\n\n<code>TODO</code>";
   expect(classifyReadme(examples).findings).toEqual([]);
   expect(
-    classifyReadme("A TODO list manager with useful controls.").findings[0],
+    classifyReadme("A TODO list manager with useful controls.").findings[0]
+      .message,
   ).toContain("whether it is intentional");
 });
 it("requires combined framework markers and never asserts an untouched template", () => {
@@ -37,7 +41,10 @@ it("requires combined framework markers and never asserts an untouched template"
     classifyReadme(
       "# Available Scripts\n\nThis project was bootstrapped with Create React App.",
     ).findings[0],
-  ).toContain("starter text remains");
+  ).toMatchObject({
+    id: "starter:create-react-app",
+    message: expect.stringContaining("starter text remains"),
+  });
   expect(
     classifyReadme(
       "```md\n# Available Scripts\nThis project was bootstrapped with Create React App.\n```",
@@ -45,9 +52,12 @@ it("requires combined framework markers and never asserts an untouched template"
   ).toEqual([]);
 });
 it("requires an old observed README and sustained distinct recent activity", () => {
-  expect(historyFindings("2026-01-01", commits, now)[0]).toContain(
-    "may need review",
-  );
+  expect(historyFindings("2026-01-01", commits, now)[0]).toMatchObject({
+    id: "history:activity-after-readme",
+    message: expect.stringContaining("may need review"),
+    updated: "2026-01-01",
+    commits: 10,
+  });
   for (const date of ["", "invalid", "2027-01-01", "2026-09-01"])
     expect(historyFindings(date, commits, now)).toEqual([]);
   expect(historyFindings("2026-01-01", commits.slice(0, 9), now)).toEqual([]);
@@ -203,7 +213,11 @@ it("reuses link health, resolves relative images, and treats CORS failures as un
     "/repos/example/demo/contents/missing.png?ref=main",
   );
   expect(result.findings).toHaveLength(1);
-  expect(result.findings[0]).toContain("Image unavailable");
+  expect(result.findings[0]).toMatchObject({
+    id: `image:unavailable:${sourceHash(result.findings[0].url)}`,
+    message: expect.stringContaining("Image unavailable"),
+  });
+  expect(result.findings[0].url).toContain("missing.png");
   expect(result.notes.join(" ")).toContain("1 unverifiable");
   await reviewReadme(repo, readme, { client });
   expect(urls).toHaveLength(2);
