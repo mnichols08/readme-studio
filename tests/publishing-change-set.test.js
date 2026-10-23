@@ -348,6 +348,21 @@ describe("executeChangeSet", () => {
       ["README.md", "not attempted"],
     ]);
   });
+  it("pins each selected-PR write to the preceding exact branch head", async () => {
+    const { files, cs } = await plan(),
+      observed = [],
+      heads = ["d".repeat(40), "e".repeat(40), "f".repeat(40)];
+    await executeChangeSet(
+      cs,
+      changeSetContents(files),
+      async (_, data) => {
+        observed.push(data.expectedBranchSha);
+        return { commitSha: heads[observed.length - 1] };
+      },
+      { expectedBranchSha: "c".repeat(40) },
+    );
+    expect(observed).toEqual(["c".repeat(40), "d".repeat(40), "e".repeat(40)]);
+  });
   it("marks a lost write response unknown and exposes lifecycle events", async () => {
     const { files, cs } = await plan(),
       events = [];

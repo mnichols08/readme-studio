@@ -14,6 +14,7 @@ import {
   writeInput,
   MAX_SOURCE_BYTES,
 } from "../src/publishing/validation.js";
+import { pullRequestInput } from "../src/publishing/pull-request.js";
 const random = () => randomBytes(32).toString("hex");
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const cookieName = "__Host-readme-studio";
@@ -91,7 +92,8 @@ export function createPublishingService({
   async function pages(s, path, field) {
     const out = [];
     for (let page = 1; page <= 20; page++) {
-      const data = await github(s, `${path}?per_page=100&page=${page}`),
+      const separator = path.includes("?") ? "&" : "?",
+        data = await github(s, `${path}${separator}per_page=100&page=${page}`),
         rows = field ? data[field] : data;
       if (!Array.isArray(rows))
         throw fail(502, "GitHub returned an unreadable repository list.");
@@ -124,6 +126,7 @@ export function createPublishingService({
             permissions: {
               contents: installation.permissions?.contents,
               workflows: installation.permissions?.workflows,
+              pullRequests: installation.permissions?.pull_requests,
             },
           },
           repository: {
@@ -147,6 +150,8 @@ export function createPublishingService({
             "workflow-permission",
           ]),
           writable: passes(judged(), ACCESS_CHECKS),
+          pullRequestsWritable:
+            installation.permissions?.pull_requests === "write",
         });
       }
     }
@@ -274,6 +279,78 @@ export function createPublishingService({
       if (e.status !== 404) throw e;
       return { ...t, sha: null, content: "", commitSha: branch.commit.sha };
     }
+  }
+  function requirePullRequests(s, repository) {
+    const fact = s.repositoryFacts?.get(repository);
+    if (!fact)
+      throw fail(
+        403,
+        "This repository is not shared with the GitHub App. Download remains available.",
+      );
+    if (fact.installation.permissions.pullRequests !== "write")
+      throw fail(
+        403,
+        "Draft pull requests require Pull requests: read and write permission for this GitHub App.",
+      );
+  }
+  function pullRequestRow(pull, repository) {
+    const number = pull?.number,
+      title = pull?.title,
+      head = pull?.head?.ref,
+      base = pull?.base?.ref,
+      url = `https://github.com/${repository}/pull/${number}`;
+    try {
+      target({ repository, branch: head, path: "README.md" });
+      target({ repository, branch: base, path: "README.md" });
+    } catch {
+      return null;
+    }
+    if (
+      !Number.isSafeInteger(number) ||
+      number < 1 ||
+      typeof title !== "string" ||
+      !title.trim() ||
+      title.length > 256 ||
+      /[\x00-\x1f\x7f]/.test(title) ||
+      pull.html_url !== url ||
+      pull.head?.repo?.full_name !== repository ||
+      pull.base?.repo?.full_name !== repository ||
+      !/^[a-f0-9]{40,64}$/.test(pull.head?.sha || "") ||
+      !/^[a-f0-9]{40,64}$/.test(pull.base?.sha || "")
+    )
+      return null;
+    return {
+      number,
+      title,
+      url,
+      draft: pull.draft === true,
+      head,
+      headSha: pull.head.sha,
+      base,
+      baseSha: pull.base.sha,
+      createdAt:
+        typeof pull.created_at === "string"
+          ? Date.parse(pull.created_at)
+          : null,
+      mergeable: typeof pull.mergeable === "boolean" ? pull.mergeable : null,
+    };
+  }
+  async function compatiblePullRequests(s, value, state = "open") {
+    const t = target({ ...value, path: "README.md" });
+    await authorizeTarget(s, t);
+    const pulls = await pages(s, `/repos/${t.repository}/pulls?state=${state}`);
+    return pulls
+      .filter(
+        (pull) =>
+          pull.head?.repo?.full_name === t.repository &&
+          pull.base?.repo?.full_name === t.repository &&
+          typeof pull.head?.ref === "string" &&
+          typeof pull.base?.ref === "string" &&
+          /^[a-f0-9]{40,64}$/.test(pull.head?.sha || "") &&
+          /^[a-f0-9]{40,64}$/.test(pull.base?.sha || ""),
+      )
+      .map((pull) => pullRequestRow(pull, t.repository))
+      .filter(Boolean);
   }
   return async function handle(request) {
     const headers = {
@@ -435,6 +512,170 @@ export function createPublishingService({
         if (!s.token) throw fail(401, "Connect GitHub first.");
         if (operation === "repositories")
           return reply({ repositories: await repositories(s) });
+        if (operation === "pull-requests")
+          return reply({ pullRequests: await compatiblePullRequests(s, data) });
+        if (operation === "pull-request-check") {
+          const t = target({ ...data, branch: data?.head, path: "README.md" });
+          await authorizeTarget(s, t);
+          if (!Number.isSafeInteger(data?.number) || data.number < 1)
+            throw fail(400, "Choose a compatible open pull request.");
+          const pull = await github(
+            s,
+            `/repos/${t.repository}/pulls/${data.number}`,
+          );
+          if (
+            pull.state !== "open" ||
+            pull.head?.repo?.full_name !== t.repository ||
+            pull.base?.repo?.full_name !== t.repository ||
+            pull.head?.ref !== data.head ||
+            pull.base?.ref !== data.base
+          )
+            throw fail(
+              409,
+              "The selected pull request is no longer a compatible open PR. Select it again.",
+            );
+          if (pull.head?.sha !== data.headSha)
+            throw fail(
+              409,
+              "The selected pull request head changed. Reload it before publishing.",
+            );
+          if (pull.mergeable === false)
+            throw fail(
+              409,
+              "The selected pull request conflicts with its base branch. Resolve conflicts on GitHub first.",
+            );
+          if (pull.mergeable !== true)
+            throw fail(
+              409,
+              "GitHub has not confirmed whether the selected pull request can merge. Re-check it before publishing.",
+            );
+          const row = pullRequestRow(pull, t.repository);
+          if (!row)
+            throw fail(502, "GitHub returned an unreadable pull request.");
+          return reply(row);
+        }
+        if (operation === "pull-request-status") {
+          const t = target({ ...data, branch: data?.head, path: "README.md" });
+          await authorizeTarget(s, t);
+          const earliest = Math.floor(data.createdAt / 1000) * 1000 - 300_000,
+            latest = Math.ceil(data.createdAt / 1000) * 1000 + 600_000,
+            matches = (await compatiblePullRequests(s, t, "all")).filter(
+              (pull) =>
+                pull.head === data.head &&
+                pull.base === data.base &&
+                pull.headSha === data.headSha &&
+                pull.baseSha === data.baseSha &&
+                pull.title === data.title &&
+                Number.isFinite(pull.createdAt) &&
+                pull.createdAt >= earliest &&
+                pull.createdAt <= latest,
+            );
+          if (matches.length > 1)
+            throw fail(
+              409,
+              "GitHub returned multiple pull requests matching this recovery operation. Nothing was retried; inspect them on GitHub.",
+            );
+          return reply({ found: matches[0] || null });
+        }
+        if (operation === "pull-request") {
+          let input;
+          try {
+            input = pullRequestInput(data);
+          } catch (error) {
+            throw fail(400, error.message);
+          }
+          await repositories(s);
+          requirePullRequests(s, input.repository);
+          const [head, base] = await Promise.all([
+            github(
+              s,
+              `/repos/${input.repository}/branches/${encodeURIComponent(input.head)}`,
+            ),
+            github(
+              s,
+              `/repos/${input.repository}/branches/${encodeURIComponent(input.base)}`,
+            ),
+          ]);
+          if (
+            head.commit?.sha !== input.headSha ||
+            base.commit?.sha !== input.baseSha
+          )
+            throw fail(
+              409,
+              "The pull request head or base changed. Reload both exact SHAs and review again.",
+            );
+          const duplicate = (
+            await compatiblePullRequests(s, {
+              repository: input.repository,
+              branch: input.head,
+            })
+          ).find(
+            (pull) => pull.head === input.head && pull.base === input.base,
+          );
+          if (duplicate)
+            throw Object.assign(
+              fail(
+                409,
+                `An open pull request already exists for ${input.head} into ${input.base}. No duplicate was created.`,
+              ),
+              { pullRequest: duplicate },
+            );
+          const [latestHead, latestBase] = await Promise.all([
+            github(
+              s,
+              `/repos/${input.repository}/branches/${encodeURIComponent(input.head)}`,
+            ),
+            github(
+              s,
+              `/repos/${input.repository}/branches/${encodeURIComponent(input.base)}`,
+            ),
+          ]);
+          if (
+            latestHead.commit?.sha !== input.headSha ||
+            latestBase.commit?.sha !== input.baseSha
+          )
+            throw fail(
+              409,
+              "The pull request head or base changed during review. Nothing was created; reload and approve again.",
+            );
+          let created;
+          try {
+            created = await github(
+              s,
+              `/repos/${input.repository}/pulls`,
+              "POST",
+              {
+                title: input.title,
+                body: input.body,
+                head: input.head,
+                base: input.base,
+                draft: true,
+              },
+            );
+          } catch (error) {
+            if (error.status >= 500) error.ambiguous = true;
+            throw error;
+          }
+          const createdRow = pullRequestRow(created, input.repository);
+          if (
+            !createdRow ||
+            created.state !== "open" ||
+            !createdRow.draft ||
+            createdRow.title !== input.title ||
+            createdRow.head !== input.head ||
+            createdRow.base !== input.base ||
+            createdRow.headSha !== input.headSha ||
+            createdRow.baseSha !== input.baseSha
+          )
+            throw Object.assign(
+              fail(
+                502,
+                "GitHub returned an unreadable PR response. Reconcile the pull request journal before retrying.",
+              ),
+              { ambiguous: true },
+            );
+          return reply(createdRow);
+        }
         if (operation === "read")
           return reply(await read(s, await authorizeTarget(s, data)));
         if (operation === "branch") {
@@ -494,6 +735,15 @@ export function createPublishingService({
             );
           const t = await authorizeTarget(s, input, "write");
           const current = await read(s, t);
+          if (data.expectedBranchSha != null) {
+            if (!/^[a-f0-9]{40,64}$/.test(data.expectedBranchSha || ""))
+              throw fail(400, "Reload the selected pull request head.");
+            if (current.commitSha !== data.expectedBranchSha)
+              throw fail(
+                409,
+                "The selected pull request head changed before this write. Nothing was written; reload and review it again.",
+              );
+          }
           // A retry whose Result SHA is already remote must never create a
           // second commit. The client reconciles this as written.
           if (current.sha === input.resultSha && current.sha !== input.sha)
@@ -564,6 +814,7 @@ export function createPublishingService({
           ...(e.preflight ? { preflight: e.preflight } : {}),
           ...(e.ambiguous ? { ambiguous: true } : {}),
           ...(e.alreadyApplied ? { alreadyApplied: true } : {}),
+          ...(e.pullRequest ? { pullRequest: e.pullRequest } : {}),
         },
         Number.isInteger(e.status) && e.status >= 400 && e.status < 600
           ? e.status

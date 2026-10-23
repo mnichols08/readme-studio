@@ -181,7 +181,7 @@ export async function executeChangeSet(
   changeSet,
   contents,
   request,
-  { beforeWrite, afterWrite, onlyPaths } = {},
+  { beforeWrite, afterWrite, onlyPaths, expectedBranchSha = null } = {},
 ) {
   for (const entry of fileWrites(changeSet)) {
     const file = contents.get(entry.path);
@@ -193,6 +193,7 @@ export async function executeChangeSet(
         `Prepared content for ${entry.path} no longer matches the reviewed change set. Nothing was written; review it again.`,
       );
   }
+  let nextExpectedBranchSha = expectedBranchSha;
   const results = [],
     row = (entry, status, extra = {}) => ({
       path: entry.path,
@@ -225,6 +226,9 @@ export async function executeChangeSet(
         content: file.content,
         message: changeSet.message,
         confirmed: true,
+        ...(nextExpectedBranchSha
+          ? { expectedBranchSha: nextExpectedBranchSha }
+          : {}),
       });
     } catch (error) {
       if (started)
@@ -242,6 +246,8 @@ export async function executeChangeSet(
         );
       return { complete: false, results, failure: { entry, error } };
     }
+    if (nextExpectedBranchSha && result?.commitSha)
+      nextExpectedBranchSha = result.commitSha;
     try {
       await afterWrite?.(entry, "written", result);
     } catch (error) {

@@ -30,6 +30,13 @@ function harness({
   remoteSha = sha,
   commitThrows = false,
   commitBody = null,
+  pullRequestsPermission = true,
+  pulls = [],
+  pullRequest = null,
+  pullRequestThrows = false,
+  pullRequestCreateBody = null,
+  branchShas = {},
+  branchShaSequences = {},
 } = {}) {
   let clock = 1000,
     cookie,
@@ -58,6 +65,7 @@ function harness({
             permissions: {
               contents: permission ? "write" : "read",
               workflows: workflows ? "write" : "read",
+              pull_requests: pullRequestsPermission ? "write" : "read",
             },
           },
         ],
@@ -79,13 +87,50 @@ function harness({
       return Response.json(rulesStatus === 200 ? rules : { message: "no" }, {
         status: rulesStatus,
       });
-    if (url.includes("/branches/"))
+    if (url.includes("/branches/")) {
+      const branch = decodeURIComponent(url.split("/branches/")[1]),
+        sequence = branchShaSequences[branch],
+        branchSha = sequence?.length
+          ? sequence.shift()
+          : branchShas[branch] || sha;
       return Response.json(
         branchStatus === 200
-          ? { commit: { sha }, protected: protectedBranch }
+          ? {
+              commit: { sha: branchSha },
+              protected: protectedBranch,
+            }
           : { message: "Branch not found" },
         { status: branchStatus },
       );
+    }
+    if (url.includes("/pulls?")) return Response.json(pulls);
+    if (/\/pulls\/\d+$/.test(url))
+      return Response.json(pullRequest || { message: "Not found" }, {
+        status: pullRequest ? 200 : 404,
+      });
+    if (url.endsWith("/pulls") && options.method === "POST") {
+      if (pullRequestThrows) throw new Error("response lost after POST");
+      const value = JSON.parse(options.body);
+      return Response.json(
+        pullRequestCreateBody || {
+          number: 42,
+          html_url: "https://github.com/octocat/octocat/pull/42",
+          state: "open",
+          draft: value.draft,
+          title: value.title,
+          head: {
+            ref: value.head,
+            sha: branchShas[value.head] || sha,
+            repo: { full_name: "octocat/octocat" },
+          },
+          base: {
+            ref: value.base,
+            sha: branchShas[value.base] || sha,
+            repo: { full_name: "octocat/octocat" },
+          },
+        },
+      );
+    }
     if (url.endsWith("/git/refs"))
       return Response.json({ ref: "refs/heads/readme-studio/update" });
     if (options.method === "PUT") {
@@ -195,6 +240,313 @@ it("rejects cross-origin, CSRF, arbitrary proxy and unconfirmed writes", async (
     ).response.status,
   ).toBe(400);
   expect(h.upstream.mock.calls.some(([, o]) => o.method === "PUT")).toBe(false);
+});
+
+it("refuses a selected PR commit when its exact branch head moved", async () => {
+  const h = harness({ branchShas: { main: newSha } });
+  await h.connect();
+  const result = await h.request(
+    "commit",
+    await reviewed({
+      repository: "octocat/octocat",
+      branch: "main",
+      path: "README.md",
+      sha,
+      content: "# New",
+      message: "Update README",
+      confirmed: true,
+      expectedBranchSha: sha,
+    }),
+  );
+  expect(result.response.status).toBe(409);
+  expect(result.value.error).toContain("head changed before this write");
+  expect(
+    h.upstream.mock.calls.some(([, options]) => options.method === "PUT"),
+  ).toBe(false);
+});
+
+const pr = ({
+  number = 7,
+  head = "docs/readme",
+  base = "main",
+  headSha = sha,
+  baseSha = newSha,
+  mergeable = true,
+  title = "Improve docs",
+  createdAt = "1970-01-01T00:00:02.000Z",
+} = {}) => ({
+  number,
+  title,
+  html_url: `https://github.com/octocat/octocat/pull/${number}`,
+  state: "open",
+  draft: true,
+  mergeable,
+  created_at: createdAt,
+  head: {
+    ref: head,
+    sha: headSha,
+    repo: { full_name: "octocat/octocat" },
+  },
+  base: {
+    ref: base,
+    sha: baseSha,
+    repo: { full_name: "octocat/octocat" },
+  },
+});
+
+it("lists only compatible same-repository pull requests", async () => {
+  const compatible = pr(),
+    fork = pr({ number: 8 }),
+    malformed = pr({ number: 9 });
+  fork.head.repo.full_name = "someone/fork";
+  malformed.html_url = 'https://github.com/octocat/octocat/pull/9\"><img>';
+  const h = harness({ pulls: [compatible, fork, malformed] });
+  await h.connect();
+  const result = await h.request("pull-requests", {
+    repository: "octocat/octocat",
+    branch: "main",
+  });
+  expect(result.value.pullRequests).toEqual([
+    expect.objectContaining({ number: 7, head: "docs/readme", base: "main" }),
+  ]);
+  expect(
+    h.upstream.mock.calls.some(([url]) => url.includes("state=open")),
+  ).toBe(true);
+});
+
+it("checks an existing PR head and rejects stale or conflicting selection", async () => {
+  const value = pr(),
+    h = harness({ pullRequest: value });
+  await h.connect();
+  const input = {
+    repository: "octocat/octocat",
+    number: 7,
+    head: "docs/readme",
+    base: "main",
+    headSha: sha,
+  };
+  expect((await h.request("pull-request-check", input)).response.status).toBe(
+    200,
+  );
+  value.head.sha = newSha;
+  expect((await h.request("pull-request-check", input)).value.error).toContain(
+    "head changed",
+  );
+  value.head.sha = sha;
+  value.mergeable = false;
+  expect((await h.request("pull-request-check", input)).value.error).toContain(
+    "conflicts",
+  );
+});
+
+it("creates a draft PR only with permission, exact branch heads, and no duplicate", async () => {
+  const input = {
+      repository: "octocat/octocat",
+      head: "docs/readme",
+      base: "main",
+      headSha: sha,
+      baseSha: newSha,
+      title: "Improve README",
+      body: "Reviewed locally.",
+      confirmed: true,
+    },
+    branchShas = { "docs/readme": sha, main: newSha },
+    denied = harness({ pullRequestsPermission: false, branchShas });
+  await denied.connect();
+  expect((await denied.request("pull-request", input)).response.status).toBe(
+    403,
+  );
+  expect(
+    denied.upstream.mock.calls.some(
+      ([url, options]) => url.endsWith("/pulls") && options.method === "POST",
+    ),
+  ).toBe(false);
+
+  const duplicate = harness({ pulls: [pr()], branchShas });
+  await duplicate.connect();
+  const duplicateResult = await duplicate.request("pull-request", input);
+  expect(duplicateResult.response.status).toBe(409);
+  expect(duplicateResult.value.pullRequest.number).toBe(7);
+
+  const allowed = harness({ branchShas });
+  await allowed.connect();
+  const created = await allowed.request("pull-request", input);
+  expect(created.value).toMatchObject({ number: 42, draft: true });
+  const post = allowed.upstream.mock.calls.find(
+    ([url, options]) => url.endsWith("/pulls") && options.method === "POST",
+  );
+  expect(JSON.parse(post[1].body)).toEqual({
+    title: "Improve README",
+    body: "Reviewed locally.",
+    head: "docs/readme",
+    base: "main",
+    draft: true,
+  });
+});
+
+it.each([
+  ["non-draft", { draft: false }],
+  [
+    "changed head",
+    {
+      head: {
+        ref: "docs/readme",
+        sha: newSha,
+        repo: { full_name: "octocat/octocat" },
+      },
+    },
+  ],
+])(
+  "keeps recovery ambiguous for an unreadable %s create response",
+  async (_, change) => {
+    const branchShas = { "docs/readme": sha, main: newSha },
+      valid = {
+        number: 42,
+        html_url: "https://github.com/octocat/octocat/pull/42",
+        state: "open",
+        draft: true,
+        title: "Improve README",
+        head: {
+          ref: "docs/readme",
+          sha,
+          repo: { full_name: "octocat/octocat" },
+        },
+        base: {
+          ref: "main",
+          sha: newSha,
+          repo: { full_name: "octocat/octocat" },
+        },
+      },
+      h = harness({
+        branchShas,
+        pullRequestCreateBody: { ...valid, ...change },
+      });
+    await h.connect();
+    const result = await h.request("pull-request", {
+      repository: "octocat/octocat",
+      head: "docs/readme",
+      base: "main",
+      headSha: sha,
+      baseSha: newSha,
+      title: "Improve README",
+      body: "",
+      confirmed: true,
+    });
+    expect(result.response.status).toBe(502);
+    expect(result.value.ambiguous).toBe(true);
+  },
+);
+
+it("rechecks exact branch heads after duplicate discovery and before PR creation", async () => {
+  const h = harness({
+    branchShaSequences: {
+      "docs/readme": [sha, newSha],
+      main: [newSha, newSha],
+    },
+  });
+  await h.connect();
+  const result = await h.request("pull-request", {
+    repository: "octocat/octocat",
+    head: "docs/readme",
+    base: "main",
+    headSha: sha,
+    baseSha: newSha,
+    title: "Improve README",
+    body: "",
+    confirmed: true,
+  });
+  expect(result.response.status).toBe(409);
+  expect(result.value.error).toContain("changed during review");
+  expect(
+    h.upstream.mock.calls.some(
+      ([url, options]) => url.endsWith("/pulls") && options.method === "POST",
+    ),
+  ).toBe(false);
+});
+
+it("marks a lost draft-PR response ambiguous and supports exact reconciliation", async () => {
+  const input = {
+      repository: "octocat/octocat",
+      head: "docs/readme",
+      base: "main",
+      headSha: sha,
+      baseSha: newSha,
+      title: "Improve README",
+      body: "",
+      confirmed: true,
+    },
+    branchShas = { "docs/readme": sha, main: newSha },
+    h = harness({ pullRequestThrows: true, branchShas });
+  await h.connect();
+  const lost = await h.request("pull-request", input);
+  expect(lost.response.status).toBe(502);
+  expect(lost.value.ambiguous).toBe(true);
+
+  const found = pr({
+    headSha: sha,
+    baseSha: newSha,
+    title: input.title,
+    createdAt: "1970-01-01T00:00:01.000Z",
+  });
+  const reconciliation = harness({ pulls: [found] });
+  await reconciliation.connect();
+  expect(
+    (
+      await reconciliation.request("pull-request-status", {
+        repository: input.repository,
+        head: input.head,
+        base: input.base,
+        headSha: input.headSha,
+        baseSha: input.baseSha,
+        title: input.title,
+        createdAt: 1999,
+      })
+    ).value.found.number,
+  ).toBe(7);
+});
+
+it("does not reconcile an older PR that lacks the exact reviewed evidence", async () => {
+  const h = harness({
+    pulls: [
+      pr({
+        title: "Older title",
+        createdAt: "1970-01-01T00:00:00.500Z",
+      }),
+    ],
+  });
+  await h.connect();
+  const result = await h.request("pull-request-status", {
+    repository: "octocat/octocat",
+    head: "docs/readme",
+    base: "main",
+    headSha: sha,
+    baseSha: newSha,
+    title: "Improve README",
+    createdAt: 1000,
+  });
+  expect(result.value.found).toBeNull();
+});
+
+it("does not attribute an otherwise matching PR outside the recovery window", async () => {
+  const h = harness({
+    pulls: [
+      pr({
+        title: "Improve README",
+        createdAt: "1970-01-01T00:20:00.000Z",
+      }),
+    ],
+  });
+  await h.connect();
+  const result = await h.request("pull-request-status", {
+    repository: "octocat/octocat",
+    head: "docs/readme",
+    base: "main",
+    headSha: sha,
+    baseSha: newSha,
+    title: "Improve README",
+    createdAt: 1000,
+  });
+  expect(result.value.found).toBeNull();
 });
 it("reads a BOM-prefixed README as the exact bytes its Base SHA names", async () => {
   const raw = "\uFEFF# Hi\n",
