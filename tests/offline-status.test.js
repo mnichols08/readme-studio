@@ -47,3 +47,23 @@ it("offers an update when a waiting worker can replace an active worker", async 
     "A new README Studio version is ready.",
   );
 });
+
+it("refuses update activation when the current workspace cannot be saved", async () => {
+  const postMessage = vi.fn();
+  installWithRegistration({
+    active: {},
+    waiting: { postMessage },
+    addEventListener: vi.fn(),
+  });
+  document.querySelector("app-shell").save = vi.fn(() => false);
+  await vi.waitFor(() =>
+    expect(document.querySelector(".update-status button")).not.toBeNull(),
+  );
+
+  document.querySelector(".update-status button").click();
+
+  expect(postMessage).not.toHaveBeenCalled();
+  expect(document.querySelector(".update-status")?.textContent).toContain(
+    "Save failed. Download your work before reloading.",
+  );
+});

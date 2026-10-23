@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.24
+
+- Add a versioned release acceptance matrix and commit-bound CI evidence artifact covering build, dependency security, recovery and browser gates without converting unrun human checks into passes (#110, #180, #181).
+- Document and certify quota, unreadable-storage, crash/reload, offline export and failed update-save recovery behavior (#109, #178, #179).
+- Add an explicitly opted-in local feedback export with allowlisted aggregate fields, bounded redaction, review-before-download, no network request and no persistent telemetry (#111, #182, #183).
+
 ## 1.9.23
 
 - Advance portable snippet packs to version 2 while migrating version-1 fixtures without changing reusable source and rejecting unknown future versions (#106, #172, #173).

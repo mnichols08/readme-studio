@@ -24,6 +24,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
       - name: Round-trip gate
         run: npm run test:round-trip
       - run: npm test
@@ -110,3 +112,25 @@ jobs:
       - run: npm run build:wasm
       - run: npm run test:wasm
       - run: npm run build
+  evidence:
+    if: always()
+    needs: [verify, browser, chrome, rust]
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERIFY_RESULT: ${{ needs.verify.result }}
+      RELEASE_BROWSER_RESULT: ${{ needs.browser.result }}
+      RELEASE_CHROME_RESULT: ${{ needs.chrome.result }}
+      RELEASE_RUST_RESULT: ${{ needs.rust.result }}
+      RELEASE_FULL_BROWSER_MATRIX: ${{ startsWith(github.head_ref || github.ref_name, 'release/') || github.ref_type == 'tag' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Create final release evidence
+        run: npm run release:evidence
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-${{ github.sha }}
+          path: release-evidence/
+          retention-days: 30

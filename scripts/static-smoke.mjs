@@ -207,6 +207,21 @@ try {
       );
       if (project.document.markdown !== "# Offline source\n\n### Heading")
         throw Error("Offline project export lost source");
+      await page.keyboard.press("Escape");
+      await page
+        .getByRole("navigation", { name: "Workspace tools" })
+        .getByRole("button", { name: "Local feedback export", exact: true })
+        .click();
+      await page.getByLabel("I choose to create a local diagnostic").check();
+      await page
+        .getByRole("button", { name: "Review local diagnostic", exact: true })
+        .click();
+      const feedback = JSON.parse(
+        await page.locator("[data-feedback-preview]").textContent(),
+      );
+      if (JSON.stringify(feedback).includes("Offline source"))
+        throw Error("Local feedback export included README source");
+      await page.keyboard.press("Escape");
       const cached = await page.evaluate(async () => {
         const urls = [];
         for (const name of await caches.keys())
