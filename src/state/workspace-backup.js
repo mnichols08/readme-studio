@@ -28,6 +28,11 @@ import {
 import { validateDraft, withoutDetachedCopies } from "./drafts.js";
 import { validateActivity } from "../workspace/commands.js";
 import { validateGuide, recoverGuide } from "../workspace/guide.js";
+import {
+  validateWorksets,
+  mergeWorksets,
+  recoverWorksets,
+} from "../workspace/repository-worksets.js";
 export const BACKUP_LIMIT = 50_000_000;
 export const workspaceSettings = (s = {}) => ({
   pane: ["build", "markdown", "preview", "health"].includes(s?.pane)
@@ -101,6 +106,7 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     settings: workspaceSettings(data.settings),
     activity: validateActivity(data.activity),
     guide: validateGuide(data.guide),
+    repositoryWorksets: validateWorksets(data.repositoryWorksets),
     badgeCollections: validateCollections(data.badgeCollections),
     visualLibrary: validateVisualLibrary(data.visualLibrary),
     componentLibrary: validateComponents(data.componentLibrary),
@@ -163,6 +169,10 @@ export function restoreWorkspace(current, backup, mode) {
     drafts,
     active: incoming.active,
     sharedComponents,
+    repositoryWorksets: mergeWorksets(
+      current.repositoryWorksets,
+      incoming.repositoryWorksets,
+    ),
     evidenceSnapshots: mergeSnapshots(
       current.evidenceSnapshots,
       incoming.evidenceSnapshots,
@@ -212,6 +222,7 @@ export function recoverWorkspace(raw) {
           sharedComponents: recoverShared(data.sharedComponents),
           reviewBatch: recoverBatch(data.reviewBatch),
           guide: recoverGuide(data.guide),
+          repositoryWorksets: recoverWorksets(data.repositoryWorksets),
           evidenceSnapshots: recoverSnapshots(
             data.evidenceSnapshots,
             new Map(drafts.map((d) => [d.id, d.id])),

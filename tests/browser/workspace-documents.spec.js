@@ -79,6 +79,130 @@ test("documents retain independent targets, undo and source through switching an
   );
 });
 
+test("repository worksets save, export, restore and expose missing repositories without network writes", async ({
+  page,
+}) => {
+  const remoteRequests = [];
+  page.on("request", (request) => {
+    if (/api\.github\.com|githubusercontent\.com/.test(request.url()))
+      remoteRequests.push(request.url());
+  });
+  await page.setViewportSize({ width: 320, height: 700 });
+  await start(page);
+  await page.getByRole("button", { name: "Documents", exact: true }).click();
+  let documents = page.locator("workspace-documents");
+  await documents.getByLabel("Document group").selectOption("repository");
+  await documents.getByLabel("Document repository").fill("Ada/Tools");
+  await documents.getByLabel("Document branch").fill("main");
+  await documents
+    .getByRole("button", { name: "Save document settings" })
+    .click();
+
+  await page
+    .getByRole("button", { name: "Repository worksets", exact: true })
+    .click();
+  let worksets = page.locator("repository-worksets");
+  await worksets.getByLabel("Workset name").fill("Release sweep");
+  await worksets.getByRole("checkbox", { name: "ada/tools" }).check();
+  await worksets.getByLabel("Additional repositories").fill("ada/missing");
+  await worksets.getByRole("button", { name: "Save workset" }).click();
+  await expect(worksets.getByLabel("Selected workset")).toBeFocused();
+  await expect(worksets).toContainText("ada/tools");
+  await expect(worksets).toContainText("ada/missing");
+  await expect(worksets).toContainText("Missing locally");
+
+  await worksets.getByText("Portable backup", { exact: true }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await worksets
+    .getByRole("button", { name: "Download selected workset" })
+    .click();
+  const download = await downloadPromise;
+  const stream = await download.createReadStream();
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  const pack = JSON.parse(Buffer.concat(chunks).toString());
+  expect(pack).toMatchObject({
+    kind: "readme-studio-repository-worksets",
+    version: 1,
+    worksets: [
+      {
+        name: "Release sweep",
+        repositories: ["ada/tools", "ada/missing"],
+      },
+    ],
+  });
+  expect(JSON.stringify(pack)).not.toMatch(/token|authorization|password/i);
+
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Repository worksets", exact: true })
+    .click();
+  worksets = page.locator("repository-worksets");
+  await expect(worksets.getByLabel("Selected workset")).toHaveValue(
+    await worksets.getByLabel("Selected workset").inputValue(),
+  );
+  await worksets
+    .getByRole("button", { name: "Delete selected workset" })
+    .click();
+  await expect(
+    worksets.getByRole("button", { name: "Keep workset" }),
+  ).toBeFocused();
+  await worksets.getByRole("button", { name: "Keep workset" }).click();
+  await expect(
+    worksets.getByRole("button", { name: "Delete selected workset" }),
+  ).toBeFocused();
+  await expect(worksets).toContainText("Release sweep");
+  await worksets
+    .getByRole("button", { name: "Delete selected workset" })
+    .click();
+  await worksets.getByRole("button", { name: "Delete Release sweep" }).click();
+  await expect(worksets.getByLabel("Workset name")).toBeFocused();
+  await expect(worksets).toContainText("No saved worksets");
+  expect(
+    await page.evaluate(
+      () => document.querySelector("app-shell").data.drafts.length,
+    ),
+  ).toBe(1);
+
+  await worksets.getByText("Portable backup", { exact: true }).click();
+  await worksets.getByLabel("Workset JSON").fill(JSON.stringify(pack));
+  await worksets.getByRole("button", { name: "Review import" }).click();
+  await expect(
+    worksets.getByRole("heading", { name: "Import review" }),
+  ).toBeFocused();
+  await worksets.getByLabel("I reviewed these repository identifiers").check();
+  await worksets
+    .getByRole("button", { name: "Import reviewed worksets" })
+    .click();
+  await expect(worksets.getByLabel("Selected workset")).toBeFocused();
+  await expect(worksets).toContainText("Release sweep");
+  await expect(worksets).toContainText("Missing locally");
+  await page.evaluate(() => {
+    Storage.prototype.setItem = function () {
+      throw new DOMException("Full", "QuotaExceededError");
+    };
+  });
+  await worksets.getByLabel("Workset name").fill("Must not appear");
+  await worksets.getByLabel("Additional repositories").fill("ada/no-space");
+  await worksets.getByRole("button", { name: "Save workset" }).click();
+  await expect(worksets.locator("[data-status]")).toContainText(
+    "Could not save workset",
+  );
+  expect(
+    await page.evaluate(
+      () =>
+        document.querySelector("app-shell").data.repositoryWorksets.items
+          .length,
+    ),
+  ).toBe(1);
+  expect(remoteRequests).toEqual([]);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
 test("audit opening reuses local work and Health analyzes only the selected document", async ({
   page,
 }) => {

@@ -64,6 +64,8 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 
 - [Workspace documents](workspace-documents.md) — multiple README sources, independent targets, switching and recovery.
 
+- [Repository worksets](repository-worksets.md) — bounded local repository sets, missing-document visibility, and reviewed portable backup/restore.
+
 - [Documentation suites](documentation-suites.md) — explicitly choose, edit and exact-review a project-appropriate set of local documentation files.
 
 - [Cross-document link checks](document-link-checks.md) — locally resolve relative paths and anchors among workspace documents before export.

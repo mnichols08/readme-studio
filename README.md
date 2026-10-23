@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.14.** Structured commands and code examples carry explicit Verified, User-confirmed or Placeholder provenance. Placeholder or unclassified examples receive an unchanged-Source review before document, section or block copy/export; Studio never runs imported or authored examples. [Example provenance](docs/example-provenance.md) · [Safety decision](docs/adr/epic66-03-example-provenance-is-explicit-source-metadata.md)
+**Version 1.9.15.** Save bounded, named repository worksets for focused maintenance, see which matching documents are available locally, and review portable workset imports before saving them. Worksets contain repository identifiers only and never contact GitHub or retain credentials. [Repository worksets](docs/repository-worksets.md) · [Safety decision](docs/adr/epic67-01-worksets-store-repository-identities-not-credentials.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

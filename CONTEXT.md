@@ -2,6 +2,20 @@
 
 A local-first workspace for authoring GitHub profile and repository READMEs. This glossary covers the language used for documentation drift detection (Epic 13), guided first-run and task-based UX (Epic 01), reliable round-trip Markdown editing (Epic 02), the actionable README audit (Epic 03), repository evidence and stack intelligence (Epic 04), documentation suites (Epic 05), and safe GitHub publishing (Epic 08).
 
+## Language: repository worksets (Epic 06)
+
+**Repository workset**:
+A named, opt-in list of canonical `owner/repository` identities used to focus maintenance. It is local metadata, not a GitHub list, query, credential scope or publishing selection.
+_Avoid_: Repository group, organization, fleet
+
+**Available locally**:
+A workset repository that currently matches one or more workspace document targets. Opening one selects that existing local document and performs no fetch.
+_Avoid_: Connected, synced
+
+**Missing locally**:
+A workset repository with no matching document target in the current workspace. The identity remains in the workset so portable recovery is lossless; its absence does not trigger a fetch or create a document.
+_Avoid_: Deleted, unavailable, broken
+
 ## Language: documentation drift (Epic 13)
 
 **Source**:
