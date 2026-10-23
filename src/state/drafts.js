@@ -88,12 +88,15 @@ export function validateDraft(d, { preserveBlockIds = false } = {}) {
 // the author removed with a raw edit. They leave out each Detachment record's
 // copy of the detached Block, records whose Block is gone, and any section name
 // that no longer appears in the Markdown (a generic name takes its place). A
-// detached generated source keeps only what recreating it needs (options that
+// Records and generated sources use explicit field allowlists. A detached
+// generated source keeps only what recreating it needs (options that
 // name removed text fall back to defaults), and only while its sources are
 // still named in the Markdown. Generated profile text whose section is gone is
-// blanked. A split section whose heading was edited away loses its stale name.
-// Fetched public GitHub data (profile snapshot, repository lists) is kept as
-// fetched. Undo and autosave in this browser keep everything.
+// blanked. Detaching a banner drops its settings from the current draft, while
+// Undo retains the previous draft. A split section whose heading was edited
+// away loses its stale name. Fetched public GitHub data (profile snapshot,
+// repository lists) is kept as fetched. Undo and autosave in this browser keep
+// everything.
 const GENERIC_LABELS = {
   builder: "Builder section",
   component: "Component",
@@ -105,21 +108,37 @@ const GENERIC_LABELS = {
 const plain = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 function portableRecords(records, ids, markdown) {
   return records.flatMap((r) => {
-    if (!plain(r)) return [r];
+    if (!plain(r)) return [];
     if (typeof r.blockId === "string" && !ids.has(r.blockId)) return [];
+    const kinds = Array.isArray(r.kinds)
+      ? r.kinds.map((kind) =>
+          Object.hasOwn(GENERIC_LABELS, kind) ? kind : "custom",
+        )
+      : [];
     return [
       {
-        ...r,
-        ...("previous" in r ? { previous: null } : {}),
+        ...(r.version === 1 ? { version: 1 } : {}),
+        ...(typeof r.id === "string" ? { id: r.id } : {}),
+        ...(typeof r.blockId === "string" ? { blockId: r.blockId } : {}),
+        ...(Array.isArray(r.previousBlockIds)
+          ? {
+              previousBlockIds: r.previousBlockIds.filter(
+                (id) => typeof id === "string",
+              ),
+            }
+          : {}),
         ...(Array.isArray(r.labels)
           ? {
               labels: r.labels.map((label, i) =>
                 typeof label === "string" && label && markdown.includes(label)
                   ? label
-                  : GENERIC_LABELS[r.kinds?.[i]] || "Section",
+                  : GENERIC_LABELS[kinds[i]] || "Section",
               ),
             }
           : {}),
+        ...(kinds.length ? { kinds } : {}),
+        ...(typeof r.at === "string" ? { at: r.at } : {}),
+        ...("previous" in r ? { previous: null } : {}),
       },
     ];
   });
@@ -135,6 +154,15 @@ const named = (markdown, source) =>
 // only while the Markdown still holds it. Recreating falls back to defaults.
 const IDENTIFIER = /^[a-z][a-z-]{0,23}$/;
 const ENUM_OPTIONS = new Set(["action", "layout", "badges", "sort"]);
+const PROFILE_OPTIONS = new Set([
+  "identity",
+  "bio",
+  "links",
+  "stats",
+  "projects",
+  "languages",
+  "avatar",
+]);
 function portableOptions(options, markdown) {
   if (!plain(options)) return undefined;
   const lower = markdown.toLowerCase();
@@ -181,7 +209,12 @@ function portableProfile(profile, blocks, markdown) {
 }
 function portableGenerated(units, markdown, login) {
   return units.flatMap((u) => {
-    if (!plain(u)) return [u];
+    if (!plain(u)) return [];
+    if (
+      typeof u.id !== "string" ||
+      !["profile", "repository", "project"].includes(u.kind)
+    )
+      return [];
     const sources = Array.isArray(u.source) ? u.source : [u.source];
     const present =
       u.kind === "profile"
@@ -192,19 +225,27 @@ function portableGenerated(units, markdown, login) {
     // The generated text, the fetched snapshot and the label (which names the
     // sources and project titles) can hold text removed since; recreating a
     // detached source fetches fresh data and needs none of them.
-    const { generatedValue, snapshot: _snapshot, label, options, ...rest } = u;
-    const kept = portableOptions(options, markdown);
+    const kept = portableOptions(u.options, markdown);
     return [
       {
-        ...rest,
-        ...(kept ? { options: kept } : {}),
-        ...(typeof generatedValue === "string" &&
-        generatedValue &&
-        markdown.includes(generatedValue)
-          ? { generatedValue }
+        id: u.id,
+        kind: u.kind,
+        source: structuredClone(u.source),
+        ownership: "detached",
+        ...(u.kind === "profile" && PROFILE_OPTIONS.has(u.option)
+          ? { option: u.option }
           : {}),
-        ...(typeof label === "string" && label && markdown.includes(label)
-          ? { label }
+        ...(typeof u.lastFetched === "string"
+          ? { lastFetched: u.lastFetched }
+          : {}),
+        ...(kept ? { options: kept } : {}),
+        ...(typeof u.generatedValue === "string" &&
+        u.generatedValue &&
+        markdown.includes(u.generatedValue)
+          ? { generatedValue: u.generatedValue }
+          : {}),
+        ...(typeof u.label === "string" && u.label && markdown.includes(u.label)
+          ? { label: u.label }
           : {}),
       },
     ];

@@ -146,7 +146,8 @@ export function detachmentRecord(
     ["builder", "component"].includes(kinds[0])
   ) {
     const json = JSON.stringify(previous[0]);
-    if (json.length <= RESTORABLE_BYTES) copy = JSON.parse(json);
+    if (new TextEncoder().encode(json).byteLength <= RESTORABLE_BYTES)
+      copy = JSON.parse(json);
   }
   return {
     version: 1,
@@ -234,7 +235,10 @@ export function wholeDraftPatch(draft, markdown, now = new Date()) {
           sourceContext,
         },
   );
-  delete metadata.bannerReference;
+  if (metadata.bannerReference) {
+    delete metadata.bannerReference;
+    delete metadata.bannerSettings;
+  }
   const detachments = owned.length
     ? [
         {
@@ -398,8 +402,10 @@ function mergeRun(draft, result, segments, i, j, now, original) {
     { ...metadata },
     scopedGenerated(draft, new Set(owned.map((b) => b.id))),
   );
-  if (ids.has(nextMetadata.bannerReference?.blockId))
+  if (ids.has(nextMetadata.bannerReference?.blockId)) {
     delete nextMetadata.bannerReference;
+    delete nextMetadata.bannerSettings;
+  }
   if (Array.isArray(nextMetadata.detachments))
     nextMetadata.detachments = nextMetadata.detachments.map(
       (r) => retarget.get(r?.id) || r,
@@ -841,6 +847,7 @@ function replaceRun(ctx, start, i, last, kept) {
   if (touched.has(metadata.bannerReference?.blockId)) {
     nextMetadata = { ...nextMetadata };
     delete nextMetadata.bannerReference;
+    delete nextMetadata.bannerSettings;
   }
   const detachments =
     owned.length && !drop

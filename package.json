@@ -1,6 +1,6 @@
 {
   "name": "readme-studio",
-  "version": "1.9.4",
+  "version": "1.9.5",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:round-trip": "vitest run tests/round-trip.test.js tests/source-patch.test.js -t \"round-trip gate|golden fixtures|seeded single-range edits\"",
     "test:browser": "playwright test --project=chromium",
     "format": "prettier --write src scripts tests/*.test.js tests/browser docs/*.md README.md CHANGELOG.md package.json *.js .github/workflows/*.yml",
     "format:check": "prettier --check src scripts tests/*.test.js tests/browser docs/*.md README.md CHANGELOG.md package.json *.js .github/workflows/*.yml",

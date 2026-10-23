@@ -24,6 +24,7 @@ import { generatedRegistry } from "../src/generated/registry.js";
 import { createProject, inspectProject } from "../src/studio-projects/model.js";
 import { createBackup } from "../src/state/workspace-backup.js";
 import { withoutDetachedCopies } from "../src/state/drafts.js";
+import { newBanner } from "../src/banners/banner-model.js";
 
 const fixture = (name) =>
   readFileSync(`tests/fixtures/round-trip/${name}`, "utf8");
@@ -275,6 +276,24 @@ describe("Owned blocks and Detachment records", () => {
     );
     expect(result.blocks.map(serializeBlock).join("")).not.toContain("version");
   });
+  it("bounds Restorable copies by UTF-8 bytes", () => {
+    const block = createBlock("about", {
+      title: "About",
+      body: "界".repeat(12_000),
+    });
+    const draft = newDraft("Large", [block]);
+    const start = draft.markdown.indexOf("界");
+
+    const { result } = golden(draft, { start, end: start + 1, text: "文" }, [
+      block.id,
+    ]);
+
+    expect(
+      new TextEncoder().encode(JSON.stringify(block)).length,
+    ).toBeGreaterThan(32 * 1024);
+    expect(result.detachments[0].previous).toBe(null);
+    expect(isRestorable(result.detachments[0])).toBe(false);
+  });
   it("typing at the end of a builder block's text edits that block", () => {
     const draft = typed();
     const seg = at(draft, 1);
@@ -438,6 +457,21 @@ describe("Owned blocks and Detachment records", () => {
     expect(result.fallback).toBe(true);
     expect(store.draft.markdown).toBe("Replaced");
     expect(serializeBlocks(store.draft.blocks)).toBe("Replaced");
+  });
+  it("keeps standalone banner settings during an unrelated fallback edit", () => {
+    const draft = typed();
+    draft.blocks[0] = createBlock("doc-overview", { version: 99 });
+    draft.metadata.bannerSettings = {
+      ...newBanner(),
+      name: "Saved banner draft",
+    };
+    const expected = structuredClone(draft.metadata.bannerSettings);
+    const store = new Store(draft);
+
+    const result = store.raw("Replaced");
+
+    expect(result.fallback).toBe(true);
+    expect(store.draft.metadata.bannerSettings).toEqual(expected);
   });
   it("falls back to one Custom Markdown block with a non-Restorable record", () => {
     const draft = typed();
@@ -1129,6 +1163,75 @@ describe("Moving and editing an Owned block in one change", () => {
 });
 
 describe("Downloads never carry text removed by a raw edit", () => {
+  it("leaves detached banner settings and assets out of portable files", () => {
+    const source =
+      '<picture><img src="assets/falcon-banner-light.svg" alt="Project Falcon — Secret launch"></picture>';
+    const block = createBlock("custom", { markdown: source });
+    const draft = newDraft("Doc", [block]);
+    draft.metadata.bannerSettings = {
+      ...newBanner(),
+      name: "Project Falcon",
+      title: "Secret launch",
+      alt: "Project Falcon — Secret launch",
+      filename: "falcon-banner",
+    };
+    draft.metadata.bannerReference = { blockId: block.id, source };
+    const store = new Store(draft);
+
+    store.raw("# Public README");
+
+    expect(store.draft.markdown).not.toContain("Falcon");
+    for (const file of [
+      createProject(store.draft),
+      createBackup({ drafts: [store.draft], active: "x" }),
+      withoutDetachedCopies(store.draft),
+    ]) {
+      const text = JSON.stringify(file);
+      expect(text).not.toContain("Falcon");
+      expect(text).not.toContain("Secret launch");
+      expect(text).not.toContain("falcon-banner");
+    }
+    expect(createProject(store.draft).assets).toEqual([]);
+  });
+
+  it("drops unknown imported fields from portable detachment metadata", () => {
+    const draft = custom("# Public README\n\n- demo");
+    draft.metadata.detachments = [
+      {
+        version: 1,
+        id: "detachment-1",
+        blockId: draft.blocks[0].id,
+        previousBlockIds: ["old-block"],
+        labels: ["Custom Markdown"],
+        kinds: ["builder"],
+        at: "2026-10-22T00:00:00.000Z",
+        previous: null,
+        importedUnknown: "DETACHMENT-SECRET",
+      },
+    ];
+    draft.metadata.detachedGenerated = [
+      {
+        id: "repository:old-block",
+        kind: "repository",
+        source: ["u/demo"],
+        ownership: "detached",
+        options: { action: "summary" },
+        importedUnknown: "GENERATED-SECRET",
+      },
+    ];
+
+    for (const file of [
+      createProject(draft),
+      createBackup({ drafts: [draft], active: draft.id }),
+      withoutDetachedCopies(draft),
+    ]) {
+      const text = JSON.stringify(file);
+      expect(text).not.toContain("DETACHMENT-SECRET");
+      expect(text).not.toContain("GENERATED-SECRET");
+      expect(text).not.toContain("importedUnknown");
+    }
+  });
+
   it("leaves removed repositories and generated text out of detachedGenerated", () => {
     const generated = {
       ...createBlock("custom", {
