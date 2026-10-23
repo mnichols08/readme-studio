@@ -666,7 +666,11 @@ export class AppShell extends HTMLElement {
       this.insertComponent(e.detail),
     );
     this.addEventListener("visual-library-save", (e) =>
-      this.saveVisualLibrary(e.detail.library, e.detail.message),
+      this.saveVisualLibrary(
+        e.detail.library,
+        e.detail.message,
+        e.detail.expectedLibrary,
+      ),
     );
     this.addEventListener("save-reusable-visual", (e) => {
       try {
@@ -2236,8 +2240,15 @@ export class AppShell extends HTMLElement {
       this.querySelector("widget-hub")?.status(e.message);
     }
   }
-  saveVisualLibrary(value, message) {
+  saveVisualLibrary(value, message, expectedLibrary) {
     try {
+      if (
+        expectedLibrary !== undefined &&
+        expectedLibrary !== JSON.stringify(this.data.visualLibrary)
+      )
+        throw Error(
+          "The visual library changed. Reopen Visual presets before saving.",
+        );
       if (this.storageBlocked)
         throw Error(
           "Storage recovery is active. Download recovery data or restore workspace storage before saving visual presets.",
@@ -3084,7 +3095,7 @@ export class AppShell extends HTMLElement {
         if (ticket !== generation || !input.isConnected) return;
         const snapshot = JSON.stringify(this.data);
         this.querySelector("#restore-status").textContent =
-          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.repositoryWorksets.items.length} repository worksets · ${backup.badgeCollections.items.length} badge collections · ${backup.visualLibrary.themes.length} themes · ${backup.visualLibrary.banners.length} banner presets · ${backup.visualLibrary.bundles.length} visual bundles · ${backup.componentLibrary.snippets.length} reusable snippets · ${backup.sharedComponents.items.length} shared components · ${backup.evidenceSnapshots.items.length} evidence snapshots`;
+          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.repositoryWorksets.items.length} repository worksets · ${backup.badgeCollections.items.length} badge collections · ${backup.visualLibrary.themes.length} themes · ${backup.visualLibrary.banners.length} banner presets · ${backup.visualLibrary.bundles.length} brand kits · ${backup.componentLibrary.snippets.length} reusable snippets · ${backup.sharedComponents.items.length} shared components · ${backup.evidenceSnapshots.items.length} evidence snapshots`;
         this.querySelector("#restore-review").innerHTML =
           '<label>Restore mode<select id="restore-mode" aria-label="Restore mode"><option value="merge">Merge with local drafts</option><option value="replace">Replace local drafts</option></select></label><label class="check"><input id="restore-confirm" type="checkbox"> I confirm replacing local drafts, collections, or original recovery data</label><button id="apply-restore" class="primary">Restore backup</button>';
         this.querySelector("#restore-mode").focus();

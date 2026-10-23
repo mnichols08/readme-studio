@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.18
+
+- Deliver editable local themes, banner presets and combined brand kits for Story #94 and tasks #148/#149, with reviewed application, versioned JSON portability, backup/recovery and no silent README or remote writes.
+- Name combined palette, badge, heading/divider, deterministic banner-visual and optional safe logo-reference tokens as portable version-2 `readme-studio-brand-kit` files. Version-2 visual packs prevent older readers from silently dropping logos; version-1 packs and legacy `readme-studio-visual-preset` files migrate explicitly without logo data.
+- Add a full before/after brand-kit token review with post-review edit invalidation and stale-state protection. Reject empty, unsafe or oversized logo references; failed saves leave the prior library intact.
+- Let creators review and copy ordinary light/dark logo picture markup from a saved kit without changing README Source.
+- Keep identity text, README prose, generated assets, CSS, SVG, HTML, scripts and event handlers outside brand-kit files. Existing 2 MB/100-entry limits, collision handling and explicit reset confirmation remain in force.
+
 ## 1.9.17
 
 - Add a migration-safe version-2 batch progress journal with a 500-event limit and allowlisted opened/reviewed/skipped/pending records (#91, #146). Journal entries contain document identity, target identity and exact local source fingerprints where needed, never README content or credentials.

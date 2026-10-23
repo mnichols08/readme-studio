@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.17.** Resume interrupted README batches from a bounded local progress journal. Recovery classifies each saved document against its last-opened exact source and target without fetching, editing, publishing, or replaying remote work. [Batch review](docs/batch-review.md) · [Cross-README updates](docs/cross-readme-updates.md)
+**Version 1.9.18.** Save, edit, review and port reusable brand-kit tokens for palettes, component styles, deterministic banner visuals and safe logo references. Brand kits remain local configuration, preserve README Source, and migrate legacy visual-preset files. [Visual themes](docs/themes.md) · [Banner Builder](docs/banners.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

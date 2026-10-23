@@ -348,7 +348,7 @@ test("saved visual themes can be managed, imported and backed up without touchin
   const exported = await readFile(await file.path(), "utf8");
   expect(JSON.parse(exported).type).toBe("readme-studio-theme");
   await page
-    .getByText("Import themes and visual presets", { exact: true })
+    .getByText("Import themes, brand kits and visual presets", { exact: true })
     .click();
   await page.getByLabel("Visual preset JSON", { exact: true }).fill(exported);
   await page
@@ -417,7 +417,7 @@ test("visual gallery is keyboard usable at mobile width and applies reviewed pre
     .getByRole("button", { name: "Visual presets", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Save visual bundle", exact: true })
+    .getByRole("button", { name: "Save brand kit", exact: true })
     .click();
   await expect(
     page.getByLabel("Saved preset", { exact: true }).locator("option"),
@@ -449,4 +449,134 @@ test("visual library save failure is visible and leaves the saved library intact
   await expect(
     page.getByLabel("Saved preset", { exact: true }).locator("option"),
   ).toHaveCount(1);
+});
+
+test("brand-kit tokens and safe logo references can be reviewed, edited, exported and restored", async ({
+  page,
+}) => {
+  await start(page);
+  const editor = page.getByRole("textbox", {
+    name: "Markdown editor",
+    exact: true,
+  });
+  const source = await editor.inputValue();
+  await page
+    .getByRole("button", { name: "Visual presets", exact: true })
+    .click();
+  await page.getByLabel("Preset name", { exact: true }).fill("Acme kit");
+  await page.getByRole("button", { name: "Save brand kit" }).click();
+  await page
+    .getByLabel("Saved preset", { exact: true })
+    .selectOption({ label: "brand kits: Acme kit" });
+  await page.getByRole("button", { name: "Edit brand kit tokens" }).click();
+  await page.getByLabel("Accent color", { exact: true }).fill("123abc");
+  await page.locator("[data-kit-pattern]").selectOption("grid");
+  await page
+    .getByLabel("Light logo URL or path", { exact: true })
+    .fill("assets/acme-light.svg");
+  await page
+    .getByLabel("Dark logo URL or path", { exact: true })
+    .fill("https://example.com/acme-dark.svg");
+  await page.getByLabel("Logo alt text", { exact: true }).fill("Acme logo");
+  await page.getByRole("button", { name: "Review brand kit edits" }).click();
+  await expect(page.getByText(/Accent #123abc/)).toBeVisible();
+  await expect(
+    page.getByText("assets/acme-light.svg", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("https://example.com/acme-dark.svg", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Save reviewed brand kit" }).click();
+  await page
+    .getByLabel("Saved preset", { exact: true })
+    .selectOption({ label: "brand kits: Acme kit" });
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export preset" }).click();
+  const exported = JSON.parse(
+    await readFile(await (await download).path(), "utf8"),
+  );
+  expect(exported.type).toBe("readme-studio-brand-kit");
+  expect(exported.version).toBe(2);
+  expect(exported.theme.palette.accent).toBe("123abc");
+  expect(exported.banner.pattern).toBe("grid");
+  expect(exported.logo).toEqual({
+    light: "assets/acme-light.svg",
+    dark: "https://example.com/acme-dark.svg",
+    alt: "Acme logo",
+  });
+  await page.getByRole("button", { name: "Review preset" }).click();
+  await expect(
+    page.getByLabel("README logo markup", { exact: true }),
+  ).toHaveValue(/<picture>/);
+  await expect(
+    page.getByRole("button", { name: "Copy reviewed logo markup" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Save current theme" }).click();
+  expect(
+    await page
+      .locator("app-shell")
+      .evaluate((el) => el.data.visualLibrary.bundles[0].logo),
+  ).toEqual(exported.logo);
+  await expect(editor).toHaveValue(source);
+  await page.reload();
+  const saved = await page
+    .locator("app-shell")
+    .evaluate((el) => el.data.visualLibrary.bundles[0]);
+  expect(saved.logo.alt).toBe("Acme logo");
+  expect(saved.theme.palette.accent).toBe("123abc");
+});
+
+test("brand-kit edits reject stale libraries and failed storage without overwriting", async ({
+  page,
+}) => {
+  await start(page);
+  await page
+    .getByRole("button", { name: "Visual presets", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Save brand kit" }).click();
+  const selected = page.getByLabel("Saved preset", { exact: true });
+  await selected.selectOption({ index: 1 });
+  await page.getByRole("button", { name: "Edit brand kit tokens" }).click();
+  await page.getByLabel("Accent color", { exact: true }).fill("123abc");
+  await page.getByRole("button", { name: "Review brand kit edits" }).click();
+  await page.locator("[data-kit-alignment]").selectOption("right");
+  await expect(
+    page.getByRole("button", { name: "Save reviewed brand kit" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Review brand kit edits" }).click();
+  await page.locator("app-shell").evaluate((el) => {
+    el.data.visualLibrary.bundles[0].name = "Changed elsewhere";
+  });
+  await page.getByRole("button", { name: "Save reviewed brand kit" }).click();
+  await expect(page.locator(".visual-library-status")).toContainText(
+    /changed.*reopen/i,
+  );
+  expect(
+    await page
+      .locator("app-shell")
+      .evaluate((el) => el.data.visualLibrary.bundles[0].theme.palette.accent),
+  ).not.toBe("123abc");
+
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Visual presets", exact: true })
+    .click();
+  await selected.selectOption({ index: 1 });
+  await page.getByRole("button", { name: "Edit brand kit tokens" }).click();
+  await page.getByLabel("Accent color", { exact: true }).fill("654321");
+  await page.getByRole("button", { name: "Review brand kit edits" }).click();
+  await page.evaluate(() => {
+    Storage.prototype.setItem = () => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    };
+  });
+  await page.getByRole("button", { name: "Save reviewed brand kit" }).click();
+  await expect(page.locator(".visual-library-status")).toContainText(
+    /save|storage|quota/i,
+  );
+  expect(
+    await page
+      .locator("app-shell")
+      .evaluate((el) => el.data.visualLibrary.bundles[0].theme.palette.accent),
+  ).not.toBe("654321");
 });

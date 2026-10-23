@@ -12,6 +12,7 @@ import {
   exportVisualEntry,
   readVisualFile,
   applyVisualPreset,
+  updateBrandKit,
 } from "../src/themes/visual-library.js";
 import { newDraft, readDrafts } from "../src/state/drafts.js";
 import {
@@ -35,6 +36,11 @@ const library = () => ({
       name: "Bundle",
       theme: baseTheme,
       banner: bannerVisual(newBanner()),
+      logo: {
+        light: "assets/logo-light.svg",
+        dark: "assets/logo-dark.svg",
+        alt: "Acme logo",
+      },
     },
   ],
 });
@@ -87,14 +93,92 @@ describe("portable visual configuration", () => {
         ),
       ).size,
     ).toBe(6);
+    expect(merged.version).toBe(2);
+    expect(merged.bundles.map((entry) => entry.logo)).toEqual([
+      library().bundles[0].logo,
+      library().bundles[0].logo,
+    ]);
     expect(
       readVisualFile({
-        version: 1,
+        version: 2,
         type: "readme-studio-visual-pack",
         library: merged,
       }),
     ).toEqual(merged);
   });
+  it("exports portable brand kits and migrates legacy visual-preset files", () => {
+    const exported = exportVisualEntry(library().bundles[0], "bundles");
+    expect(exported.type).toBe("readme-studio-brand-kit");
+    expect(exported).toEqual({
+      version: 2,
+      type: "readme-studio-brand-kit",
+      name: "Bundle",
+      theme: library().bundles[0].theme,
+      banner: library().bundles[0].banner,
+      logo: library().bundles[0].logo,
+    });
+    expect(readVisualFile(exported).bundles[0]).toEqual({
+      ...library().bundles[0],
+      id: expect.any(String),
+    });
+    const legacy = readVisualFile({
+      ...exported,
+      version: 1,
+      type: "readme-studio-visual-preset",
+    });
+    expect(legacy.bundles[0]).toEqual({
+      ...library().bundles[0],
+      logo: undefined,
+      id: expect.any(String),
+    });
+    const migratedPack = readVisualFile({
+      version: 1,
+      type: "readme-studio-visual-pack",
+      library: {
+        ...library(),
+        version: 1,
+      },
+    });
+    expect(migratedPack.version).toBe(2);
+    expect(migratedPack.bundles[0]).not.toHaveProperty("logo");
+  });
+  it("edits reviewed brand-kit tokens without mutating the stored library", () => {
+    const original = library();
+    const updated = updateBrandKit(original, "bundle", {
+      theme: {
+        ...original.bundles[0].theme,
+        palette: { ...original.bundles[0].theme.palette, accent: "123abc" },
+      },
+      banner: { ...original.bundles[0].banner, pattern: "grid" },
+      logo: {
+        light: "https://example.com/logo-light.svg",
+        dark: "./logo-dark.svg",
+        alt: "Edited logo",
+      },
+    });
+    expect(updated.bundles[0].theme.palette.accent).toBe("123abc");
+    expect(updated.bundles[0].banner.pattern).toBe("grid");
+    expect(updated.bundles[0].logo.alt).toBe("Edited logo");
+    expect(original.bundles[0].theme.palette.accent).not.toBe("123abc");
+    expect(() => updateBrandKit(original, "missing", {})).toThrow(
+      /no longer exists/i,
+    );
+  });
+  it.each([
+    { light: "javascript:alert(1)", dark: "", alt: "Logo" },
+    { light: "https://user:pass@example.com/logo.svg", dark: "", alt: "Logo" },
+    { light: "data:image/svg+xml,<svg/>", dark: "", alt: "Logo" },
+    { light: "x".repeat(2049), dark: "", alt: "Logo" },
+    { light: "logo.svg", dark: "", alt: "" },
+    { light: "", dark: "", alt: "Logo" },
+  ])("rejects unsafe or unbounded brand-kit logos", (logo) =>
+    expect(() =>
+      validateVisualLibrary({
+        ...library(),
+        bundles: [{ ...library().bundles[0], logo }],
+      }),
+    ).toThrow(),
+  );
   it.each([
     { version: 2, type: "readme-studio-theme", ...themeEntry() },
     {
@@ -208,6 +292,10 @@ describe("visual inheritance and workspace recovery", () => {
     expect(validateWorkspace(backup).visualLibrary).toEqual(w.visualLibrary);
     const merged = restoreWorkspace(w, backup, "merge");
     expect(merged.visualLibrary.themes).toHaveLength(2);
+    expect(merged.visualLibrary.bundles.map((entry) => entry.logo)).toEqual([
+      w.visualLibrary.bundles[0].logo,
+      w.visualLibrary.bundles[0].logo,
+    ]);
     expect(merged.drafts).toHaveLength(2);
     expect(restoreWorkspace(w, backup, "replace").visualLibrary).toEqual(
       w.visualLibrary,
