@@ -22,7 +22,7 @@ export class WorkspaceDocuments extends HTMLElement {
       <label>Document branch<input data-branch placeholder="main"></label>
       <label>Document README path<input data-path value="README.md"></label>
       <p>Target settings are local suggestions. They do not fetch or publish anything; publishing still requires review. Local documents have no GitHub target.</p>
-      <button data-save>Save document settings</button><button data-evidence>Evidence snapshots</button><button data-new>New document</button><button data-suite>Create documentation suite</button><p data-status role="status"></p>`;
+      <button data-save>Save document settings</button><button data-evidence>Evidence snapshots</button><button data-links>Check document links</button><button data-new>New document</button><button data-suite>Create documentation suite</button><p data-status role="status"></p>`;
     this.querySelector("[data-kind]").value = documentGroup(current);
     for (const field of ["repository", "branch", "path"])
       this.querySelector(`[data-${field}]`).value =
@@ -38,6 +38,8 @@ export class WorkspaceDocuments extends HTMLElement {
     this.querySelector("[data-new]").onclick = () => this.send("document-new");
     this.querySelector("[data-suite]").onclick = () =>
       this.send("document-suite");
+    this.querySelector("[data-links]").onclick = () =>
+      this.send("document-links");
     this.querySelector("[data-evidence]").onclick = () =>
       this.send("document-evidence");
     this.querySelector("[data-save]").onclick = () => {

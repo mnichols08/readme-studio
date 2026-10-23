@@ -66,6 +66,8 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 
 - [Documentation suites](documentation-suites.md) — explicitly choose, edit and exact-review a project-appropriate set of local documentation files.
 
+- [Cross-document link checks](document-link-checks.md) — locally resolve relative paths and anchors among workspace documents before export.
+
 - [Shared components](shared-components.md) — reusable Markdown definitions and explicit multi-document update previews.
 
 - [Cross-README updates](cross-readme-updates.md) — affected counts and recipient selection beside document diffs.

@@ -306,3 +306,104 @@ test("a stale review or failed batch write creates no suite document", async ({
     ),
   ).toBe(1);
 });
+
+test("checks workspace navigation before export without changing source", async ({
+  page,
+}) => {
+  const requests = [];
+  page.on("request", (request) => {
+    if (/github\.com|githubusercontent\.com/.test(request.url()))
+      requests.push(request.url());
+  });
+  await page.setViewportSize({ width: 320, height: 700 });
+  await start(page);
+  const ids = await page.evaluate(() => {
+    const app = document.querySelector("app-shell");
+    const first = app.store.draft;
+    first.metadata.documentationSuite = {
+      version: 1,
+      projectType: "api",
+      id: "readme",
+      path: "README.md",
+    };
+    app.store.raw("# Home\n\n[API](docs/API.md#tokens)");
+    const api = app.addDraft("docs/API.md", []);
+    app.store.draft.metadata.documentationSuite = {
+      version: 1,
+      projectType: "api",
+      id: "api",
+      path: "docs/API.md",
+    };
+    app.store.raw("# API\n\n## Authentication");
+    return [first.id, api.id];
+  });
+  await page.getByLabel("Current draft").selectOption(ids[0]);
+  const source = "# Home\n\n[API](docs/API.md#tokens)";
+  expect(await current(page)).toBe(source);
+
+  await page.getByRole("button", { name: "Export README" }).click();
+  const check = page.locator("document-link-check");
+  await expect(
+    check.getByRole("heading", { name: "Document link check" }),
+  ).toBeFocused();
+  await expect(check).toContainText("Missing anchor");
+  expect(await current(page)).toBe(source);
+
+  await page.evaluate((id) => {
+    const target = document
+      .querySelector("app-shell")
+      .data.drafts.find((draft) => draft.id === id);
+    target.metadata.documentationSuite.path = "docs/REFERENCE.md";
+  }, ids[1]);
+  await check
+    .getByRole("button", { name: "Export current source anyway" })
+    .click();
+  await expect(check.locator("[data-status]")).toContainText(
+    "workspace changed",
+  );
+
+  await page.evaluate((id) => {
+    const target = document
+      .querySelector("app-shell")
+      .data.drafts.find((draft) => draft.id === id);
+    target.metadata.documentationSuite.path = "docs/API.md";
+    target.markdown = "# API\n\n## Authentication\n\n## Tokens";
+  }, ids[1]);
+
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export README" }).click();
+  await download;
+  await expect(check).not.toBeVisible();
+
+  await page.getByRole("button", { name: "Documents", exact: true }).click();
+  await page
+    .locator("workspace-documents")
+    .getByRole("button", { name: "Check document links" })
+    .click();
+  await expect(page.locator("document-link-check")).toContainText(
+    "No unresolved workspace document links",
+  );
+  expect(requests).toEqual([]);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.evaluate((id) => {
+    const draft = document
+      .querySelector("app-shell")
+      .data.drafts.find((item) => item.id === id);
+    draft.metadata.documentationSuite.path = "docs/REFERENCE.md";
+  }, ids[1]);
+  await page.getByRole("button", { name: "Documents", exact: true }).click();
+  await page
+    .locator("workspace-documents")
+    .getByRole("button", { name: "Check document links" })
+    .click();
+  await expect(page.locator("document-link-check")).toContainText(
+    "Missing document",
+  );
+});

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.13
+
+- Add a bounded, local multi-document resolver for relative Markdown/HTML links and GitHub-style heading or explicit HTML anchors (#87, #138). Suite paths and validated repository-document targets form the case-sensitive workspace index; pathless local documents are named as not checked.
+- Report missing and ambiguous documents, missing anchors, invalid encoding and paths above the workspace root. Moved filenames are re-evaluated from current metadata, while external URLs, images and fenced examples stay out of scope (#139).
+- Run the current document's check before export. Unresolved or truncated navigation opens a read-only report and requires an explicit export-unchanged choice guarded by fresh snapshots of the checked workspace; no link is fetched, edited or persisted.
+- Add source-preservation, stale-review, moved-path, failure, bounds, mobile, offline and Chromium/Firefox/WebKit coverage.
+
 ## 1.9.12
 
 - Add typed Documentation suite templates for generic projects, CLIs, APIs, libraries/packages, games and web apps (#86, #136). Every option has a fixed path, a relevance reason and generic editable guidance; no file starts selected and no command, contact address or project fact is invented.

@@ -2610,6 +2610,19 @@ documentation-suite pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+document-link-check [data-issues] {
+  display: grid;
+  gap: 10px;
+  padding-left: 24px;
+}
+document-link-check [data-issues] li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+document-link-check code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 
 shared-components fieldset {
   max-height: 35vh;

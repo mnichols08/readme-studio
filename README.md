@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.12.** Documentation suites let an owner explicitly choose, edit and exact-review a project-appropriate set of files before creating the complete batch as local documents. Nothing is preselected, invented, fetched or published. [Documentation suites](docs/documentation-suites.md) · [Safety decision](docs/adr/epic66-01-documentation-suites-are-explicit-atomic-local-batches.md)
+**Version 1.9.13.** Cross-document link checks resolve relative paths and anchors against current workspace documents before export. Missing, moved or ambiguous targets stay advisory; nothing is fetched or rewritten, and exporting anyway preserves exact Source. [Cross-document link checks](docs/document-link-checks.md) · [Safety decision](docs/adr/epic66-02-cross-document-navigation-is-a-local-path-index.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
