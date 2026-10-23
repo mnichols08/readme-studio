@@ -9,6 +9,7 @@ import { bannerFiles, bannerMarkup } from "../banners/export.js";
 import { baseTheme } from "../themes/theme-model.js";
 import { derive, explicitOverride } from "../themes/theme-resolver.js";
 import { html } from "../markdown/serialize.js";
+import { bannerAccessibility } from "../banners/accessibility.js";
 export class BannerBuilder extends HTMLElement {
   connectedCallback() {
     this.value ||= newBanner();
@@ -78,7 +79,7 @@ export class BannerBuilder extends HTMLElement {
       )
       .join(
         "",
-      )}</fieldset><aside><h2>Local banner preview</h2><label>Preview mode<select data-banner-preview-mode aria-label="Banner preview mode"><option>light</option><option>dark</option></select></label><label>Preview width<select data-banner-preview-width aria-label="Banner preview width"><option value="100%">desktop</option><option value="320px">mobile</option></select></label><div class="banner-preview"></div><label>README picture markup<textarea data-banner-markup readonly rows="6"></textarea></label><label>SVG source<textarea data-banner-svg readonly rows="6"></textarea></label><div class="row-actions"><button data-banner-copy="markup">Copy README picture markup</button><button data-banner-copy="svg">Copy SVG source</button><button data-banner-download>Download SVG assets</button></div><div class="banner-files"></div><label>Banner preset name<input data-banner-preset-name value="My banner preset"></label><button data-save-banner-preset>Save reusable banner preset</button><button data-banner-save>Save banner settings</button><button data-banner-insert class="primary">Insert banner markup</button><p class="banner-status" role="status"></p></aside></div>`;
+      )}</fieldset><aside><h2>Local banner preview</h2><section class="banner-accessibility" aria-label="Banner accessibility review"></section><p class="banner-accessibility-status sr-only" role="status" aria-live="polite" aria-atomic="true"></p><label>Preview mode<select data-banner-preview-mode aria-label="Banner preview mode"><option>light</option><option>dark</option></select></label><label>Preview width<select data-banner-preview-width aria-label="Banner preview width"><option value="100%">desktop</option><option value="320px">mobile</option></select></label><div class="banner-preview"></div><label>README picture markup<textarea data-banner-markup readonly rows="6"></textarea></label><label>SVG source<textarea data-banner-svg readonly rows="6"></textarea></label><div class="row-actions"><button data-banner-copy="markup">Copy README picture markup</button><button data-banner-copy="svg">Copy SVG source</button><button data-banner-download>Download SVG assets</button></div><div class="banner-files"></div><label>Banner preset name<input data-banner-preset-name value="My banner preset"></label><button data-save-banner-preset>Save reusable banner preset</button><button data-banner-save>Save banner settings</button><button data-banner-insert class="primary">Insert banner markup</button><p class="banner-status" role="status"></p></aside></div>`;
     for (const input of this.querySelectorAll("[data-banner]"))
       input.oninput = () => {
         this.value[input.dataset.banner] =
@@ -127,9 +128,9 @@ export class BannerBuilder extends HTMLElement {
       this.querySelector("[data-banner-theme]").focus();
     };
     this.querySelector("[data-banner-alt]").onclick = () => {
-      this.value.alt =
-        [this.value.name, this.value.title].filter(Boolean).join(" — ") ||
-        "Profile banner";
+      this.value.alt = [this.value.name, this.value.title]
+        .filter(Boolean)
+        .join(" — ");
       this.querySelector('[data-banner="alt"]').value = this.value.alt;
       this.update();
     };
@@ -189,6 +190,7 @@ export class BannerBuilder extends HTMLElement {
     this.querySelector(".banner-status").textContent = message;
   }
   update() {
+    this.updateAccessibility();
     try {
       const value = normalizeBanner(this.value),
         key = JSON.stringify(value);
@@ -237,6 +239,56 @@ export class BannerBuilder extends HTMLElement {
       this.status(e.message);
       return false;
     }
+  }
+  updateAccessibility() {
+    const result = bannerAccessibility(this.value),
+      previous = this.accessibilityResult,
+      area = this.querySelector(".banner-accessibility"),
+      status = this.querySelector(".banner-accessibility-status");
+    area.innerHTML = `<h3>Accessibility review</h3><p><strong>Alt text:</strong> ${html(result.alt.message)}</p><ul>${result.contrast
+      .map(
+        (item) =>
+          `<li><strong>${html(`${item.mode[0].toUpperCase()}${item.mode.slice(1)} ${item.role}`)}</strong>: ${item.ratio === null ? "Not available" : `${item.ratio.toFixed(1)}:1`} · ${item.level === "pass" ? "Pass" : item.level === "warning" ? "Review" : "Check colors"}. ${html(item.message)}</li>`,
+      )
+      .join(
+        "",
+      )}</ul><p>${html(result.motion)}</p><p>Contrast is an estimate for generated text, not a WCAG certification. Inspect both variants.</p>`;
+    if (!previous) status.textContent = "Accessibility review ready.";
+    else {
+      const changes = [];
+      if (
+        previous.alt.level !== result.alt.level ||
+        previous.alt.message !== result.alt.message
+      )
+        changes.push(`Alt text: ${result.alt.message}`);
+      const before = new Map(
+          previous.contrast.map((item) => [`${item.mode}:${item.role}`, item]),
+        ),
+        after = new Set(
+          result.contrast.map((item) => `${item.mode}:${item.role}`),
+        );
+      for (const item of result.contrast) {
+        const prior = before.get(`${item.mode}:${item.role}`);
+        if (
+          prior &&
+          prior.level === item.level &&
+          prior.ratio === item.ratio &&
+          prior.message === item.message
+        )
+          continue;
+        changes.push(
+          `${item.mode[0].toUpperCase()}${item.mode.slice(1)} ${item.role}: ${item.ratio === null ? "contrast unavailable" : `${item.ratio.toFixed(1)} to 1, ${item.level === "pass" ? "pass" : "review"}`}.`,
+        );
+      }
+      for (const item of previous.contrast) {
+        if (after.has(`${item.mode}:${item.role}`)) continue;
+        changes.push(
+          `${item.mode[0].toUpperCase()}${item.mode.slice(1)} ${item.role}: no longer applies to the current banner settings.`,
+        );
+      }
+      if (changes.length) status.textContent = changes.join(" ");
+    }
+    this.accessibilityResult = result;
   }
   controls(disabled) {
     this.querySelectorAll(

@@ -6,6 +6,7 @@ import {
 } from "../src/banners/banner-model.js";
 import { renderBanner } from "../src/banners/render-svg.js";
 import { bannerFiles, bannerMarkup } from "../src/banners/export.js";
+import { bannerAccessibility } from "../src/banners/accessibility.js";
 import { builtInThemes } from "../src/themes/built-ins.js";
 describe("Local SVG banners", () => {
   it.each(bannerStyles)(
@@ -58,6 +59,76 @@ describe("Local SVG banners", () => {
     const b = { ...newBanner(), filename: "../bad:name.svg" };
     expect(bannerFiles(b)[0].name).not.toMatch(/[/:]/);
     expect(bannerMarkup(b)).toContain(bannerFiles(b)[0].name);
+  });
+  it("reports meaningful alt guidance and light/dark text contrast", () => {
+    const good = bannerAccessibility(newBanner());
+    expect(good.alt).toMatchObject({ level: "pass" });
+    expect(good.contrast).toHaveLength(4);
+    expect(good.contrast.some((item) => item.role === "Muted metadata")).toBe(
+      false,
+    );
+    expect(
+      good.contrast
+        .filter((item) => item.role === "Primary text")
+        .every((item) => item.level === "pass"),
+    ).toBe(true);
+    expect(good.contrast).toContainEqual(
+      expect.objectContaining({
+        mode: "dark",
+        role: "Accent/title text",
+        level: "warning",
+      }),
+    );
+    expect(good.motion).toMatch(/static.*no animation/i);
+
+    for (const alt of ["Profile banner", "banner image", "image of"])
+      expect(bannerAccessibility({ ...newBanner(), alt }).alt).toMatchObject({
+        level: "warning",
+      });
+
+    expect(
+      bannerAccessibility({
+        ...newBanner(),
+        name: "",
+        title: "",
+        subtitle: "",
+        website: "",
+        metadataLine: "",
+      }).contrast,
+    ).toEqual([]);
+
+    const weak = bannerAccessibility({
+      ...newBanner(),
+      alt: "banner",
+      website: "example.test",
+      palette: {
+        ...newBanner().palette,
+        foreground: "ffffff",
+        accent: "ffffff",
+        muted: "ffffff",
+        light: "ffffff",
+        dark: "ffffff",
+      },
+    });
+    expect(weak.alt).toMatchObject({ level: "warning" });
+    expect(weak.contrast.filter((item) => item.level === "warning")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ mode: "light", role: "Primary text" }),
+        expect.objectContaining({ mode: "dark", role: "Primary text" }),
+        expect.objectContaining({ mode: "light", role: "Muted metadata" }),
+      ]),
+    );
+    expect(weak.contrast).toHaveLength(6);
+  });
+  it("keeps incomplete accessibility input advisory and bounded", () => {
+    const result = bannerAccessibility({
+      ...newBanner(),
+      alt: "",
+      palette: { ...newBanner().palette, accent: "not-a-color" },
+    });
+    expect(result.alt).toMatchObject({ level: "error" });
+    expect(result.contrast.some((item) => item.level === "unknown")).toBe(true);
+    expect(JSON.stringify(result).length).toBeLessThan(3000);
   });
   it.each([
     { width: 99999 },

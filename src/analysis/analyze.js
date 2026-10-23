@@ -2,6 +2,7 @@ import { parseSource, attributes } from "./source.js";
 import { safeUrl } from "../markdown/url-safety.js";
 import { badgeIdentity } from "../badges/duplicates.js";
 import { widgetIdentity } from "../widgets/health.js";
+import { altTextQuality } from "../accessibility/media.js";
 import {
   documentStats,
   wordCount,
@@ -326,6 +327,16 @@ export function analyzeDocument(markdown, { core = jsCore } = {}) {
         image.decorative
           ? "An empty alt may be appropriate for purely decorative images. Confirm intent."
           : "Describe informative images; intentionally decorative images may have empty alt text.",
+        sourceRange,
+        "warning",
+        "alt",
+      );
+    else if (!image.decorative && altTextQuality(image.alt) === "generic")
+      issue(
+        "image-alt-quality",
+        "Accessibility",
+        "Image alt text is generic",
+        "Describe the image's identity or purpose instead of naming only the media type.",
         sourceRange,
         "warning",
         "alt",
