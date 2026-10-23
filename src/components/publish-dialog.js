@@ -4,8 +4,17 @@ import {
   generatedAssets,
   rewriteOwnedBanner,
   prepareAssetPlan,
-  executeAssetPlan,
 } from "../publishing/assets.js";
+import {
+  buildChangeSet,
+  changeSetContents,
+  changeSetsSupported,
+  executeChangeSet,
+  fileWrites,
+  shortChangeSetId,
+  verifyChangeSet,
+  CHANGE_SET_UNSUPPORTED,
+} from "../publishing/change-set.js";
 import { mergeThreeWay, resolveMerge } from "../publishing/conflicts.js";
 import {
   readPublishingHistory,
@@ -14,7 +23,7 @@ import {
 } from "../publishing/history.js";
 import { PublishingClient } from "../github/publishing-client.js";
 import { html } from "../markdown/serialize.js";
-import { target, writeInput } from "../publishing/validation.js";
+import { target } from "../publishing/validation.js";
 import { publishDiff } from "../publishing/diff.js";
 import {
   evaluatePreflight,
@@ -24,6 +33,23 @@ import {
   CHECK_LABELS,
   READ_CHECKS,
 } from "../publishing/preflight.js";
+const ENTRY_KIND = {
+  readme: "README",
+  asset: "Generated asset",
+  workflow: "Workflow",
+};
+const ENTRY_ACTION = {
+  create: "create (new file)",
+  update: "update",
+  unchanged: "unchanged: no write",
+};
+// A BOM is invisible in the diff panes, so the row names the change.
+const BOM_CHANGE = {
+  removed:
+    "Removed: the remote file starts with a UTF-8 byte order mark (BOM) and the prepared content does not. Publishing removes it.",
+  added:
+    "Added: the prepared content starts with a UTF-8 byte order mark (BOM) that the remote file does not have.",
+};
 const CHECK_STATUS = {
   pass: "Pass",
   warn: "Warning",
@@ -137,7 +163,7 @@ export class PublishDialog extends HTMLElement {
       this.run(async () => {
         await this.client.request("disconnect", {});
         this.baseline = null;
-        this.plan = null;
+        this.clearChangeSet();
         this.preflight = null;
         this.querySelector("[data-target]").replaceChildren();
         this.querySelector("[data-review]").replaceChildren();
@@ -205,14 +231,13 @@ export class PublishDialog extends HTMLElement {
             this.rewriteApplied = rewrite.rewritten;
           }
         }
-        this.plan = null;
-        this.review();
+        await this.review();
         this.status(
           report.verdict === "writable"
             ? "Remote baseline loaded separately from your local draft. Review all source changes."
             : `Remote baseline loaded in Read-only mode. ${blockingFailure(report).message} Download remains available.`,
         );
-        this.querySelector("[data-message]").focus();
+        this.querySelector("[data-message]")?.focus();
       });
     this.status(
       repositories.length
@@ -295,7 +320,7 @@ export class PublishDialog extends HTMLElement {
     area.querySelector("[data-recheck]")?.addEventListener("click", () =>
       this.run(async () => {
         const report = await this.checkAccess();
-        if (this.baseline) this.review({ keepMessage: true });
+        if (this.baseline) await this.review({ keepMessage: true });
         this.status(
           report.verdict === "writable"
             ? "Access re-checked: every blocking check passed. Confirm the review again."
@@ -308,134 +333,328 @@ export class PublishDialog extends HTMLElement {
   invalidate() {
     this.baseline = null;
     this.assetRows = [];
-    this.plan = null;
+    this.clearChangeSet();
+    this.staleRemote = false;
     this.preflight = null;
     this.preflightView();
     this.querySelector("[data-review]").replaceChildren();
     this.status("Target changed. Load the remote README again.");
   }
-  review({ keepMessage = false } = {}) {
+  // Drops the Change set and its Publish approval; an in-flight build that
+  // finishes later is discarded.
+  clearChangeSet() {
+    this.changeSet = null;
+    this.changeFiles = [];
+    this.changeSetError = "";
+    this.approvedChangeSetId = null;
+    this.changeSetGeneration = (this.changeSetGeneration || 0) + 1;
+  }
+  // The prepared files of this review. Content stays here in memory; the
+  // Change set manifest holds only paths, actions and SHAs.
+  prepareFiles() {
+    const b = this.baseline;
+    return [
+      ...(this.assetRows || []).map((r) => ({
+        path: r.path,
+        kind: "asset",
+        baseSha: r.baseline.sha,
+        baseContent: r.baseline.content,
+        content: r.content,
+        fields: { banner: r.banner },
+        warning: r.warning,
+      })),
+      {
+        path: b.path,
+        kind: this.kind || "readme",
+        baseSha: b.sha,
+        baseContent: b.content,
+        content: this.source,
+        fields: this.kind === "workflow" ? { workflow: this.workflow } : {},
+      },
+    ];
+  }
+  defaultMessage() {
+    return this.kind === "workflow"
+      ? "Update README workflow"
+      : "Update README with README Studio";
+  }
+  // Builds the Change set for the current review. Every rebuild withdraws
+  // Publish approval. Returns false when a newer build or target change
+  // superseded this one.
+  async rebuildChangeSet(message) {
+    this.clearChangeSet();
+    if (!this.baseline) return false;
+    const generation = this.changeSetGeneration,
+      files = this.prepareFiles();
+    let built = null,
+      error = "";
+    try {
+      built = await buildChangeSet({
+        target: this.baseline,
+        baseCommitSha: this.baseline.commitSha ?? null,
+        message,
+        files,
+      });
+    } catch (e) {
+      error = e.message;
+    }
+    if (generation !== this.changeSetGeneration) return false;
+    this.changeFiles = files;
+    this.changeSet = built;
+    this.changeSetError = error;
+    return true;
+  }
+  async review({ keepMessage = false } = {}) {
+    const message = keepMessage
+      ? (this.querySelector("[data-message]")?.value ?? this.defaultMessage())
+      : this.defaultMessage();
+    if (!(await this.rebuildChangeSet(message))) return;
+    this.staleRemote = false;
     const b = this.baseline,
       diff = publishDiff(b.content, this.source),
-      message = keepMessage
-        ? this.querySelector("[data-message]")?.value
-        : undefined,
-      writable = this.writableTarget(),
+      supported = changeSetsSupported(),
+      writable = this.writableTarget() && supported,
       // Enforcement equals display: offer the route only when the server's
       // branch operation would accept it.
-      branchable = passes(this.preflight, branchChecks(this.kind));
+      branchable = passes(this.preflight, branchChecks(this.kind)),
+      noun = this.kind === "workflow" ? "workflow" : "README",
+      language = this.kind === "workflow" ? "YAML" : "Markdown";
     this.querySelector("[data-review]").innerHTML =
-      `<h2>Review ${b.sha ? "updated file" : "New file"}</h2><p>${html(b.repository)} · branch ${html(b.branch)} · ${html(b.path)}</p><p>SHA baseline: <code>${html(b.sha || "New file (does not exist)")}</code></p><p>${diff.added} added / ${diff.removed} removed lines in changed region. Sections: ${html(diff.sections.join(", ") || "body content")}.</p>${sourceDiffMarkup({ beforeLabel: `Remote ${this.kind === "workflow" ? "YAML" : "Markdown"}`, afterLabel: `Prepared ${this.kind === "workflow" ? "YAML" : "Markdown"}`, label: "Publishing diff" })}<label>Commit message<input data-message value="Update README with README Studio" maxlength="500"></label>${writable ? `<label class="check"><input type="checkbox" data-confirm> I reviewed this diff and confirm ${b.sha ? "updating" : "creating"} this exact repository, branch, path and every listed asset write.</label><button data-commit ${b.content === this.source && !this.assetRows?.some((r) => r.status !== "unchanged") ? "disabled" : ""}>Confirm and publish README</button>` : `<p data-read-only>Read-only mode: no publish control is available until a Preflight for this exact target passes. Re-check access after fixing the failing check. Download remains available.</p>`}<div data-result></div><section data-stale></section>${branchable ? `<details data-new-branch-route><summary>Publish on a new branch instead</summary><p>Create a branch from ${html(b.branch)} at commit ${html(b.commitSha || "unknown")}. This creates only a branch; committing still needs a fresh review.</p><label>New branch name<input data-new-branch value="readme-studio/update-${new Date().toISOString().slice(0, 10)}"></label><label class="check"><input type="checkbox" data-confirm-branch> I confirm creating this branch in ${html(b.repository)}.</label><button data-create-branch>Create branch for review</button></details>` : ""}`;
-    if (this.assetRows?.length) {
-      const area = document.createElement("section");
-      area.innerHTML = `<h2>Asset publish plan</h2><p>Separate commits, not an atomic transaction. README is written last. ${this.rewriteApplied ? "Owned banner paths updated in prepared source." : "No banner source rewrite applied."}</p>${this.assetRows.map((r, i) => `<details><summary>${html(r.path)} — ${r.status} — ${r.bytes} bytes</summary><p>Baseline SHA: ${html(r.baseline.sha || "New file")}. ${html(r.warning)} ${this.source.includes(r.path.split("/").at(-1)) ? "" : "Warning: asset appears unreferenced by this README."}</p><div data-asset-diff="${i}"></div></details>`).join("")}<div data-asset-results role="status"></div>`;
-      this.querySelector("[data-review]").prepend(area);
-      this.assetRows.forEach((r, i) => {
-        const panel = area.querySelector(`[data-asset-diff="${i}"]`);
-        panel.innerHTML = sourceDiffMarkup({
-          beforeLabel: `Current ${r.path}`,
-          afterLabel: `Generated ${r.path}`,
-          label: `Asset diff ${r.path}`,
-        });
-        fillSourceDiff(panel, r.baseline.content, r.content);
-      });
-    }
-    fillSourceDiff(
-      this.querySelector("[data-review] > .source-diff"),
-      b.content,
-      this.source,
-      diff.text,
+      `<h2>Review ${b.sha ? "updated file" : "New file"}</h2><section data-change-set aria-labelledby="publish-change-set-heading"><h3 id="publish-change-set-heading">Change set</h3><p data-change-set-target>${html(b.repository)} · branch ${html(b.branch)} · base commit <code>${html(b.commitSha || "unknown")}</code></p><p>Not atomic: each file is a separate commit, generated assets first and the ${noun} last. Nothing is deleted, and every update names its Base SHA, so a file that changed on GitHub is never overwritten.${this.assetRows?.length ? ` ${this.rewriteApplied ? "Owned banner paths updated in prepared source." : "No banner source rewrite applied."}` : ""}</p><ol class="change-set-entries">${this.changeFiles
+        .map(
+          (f, i) =>
+            `<li data-entry="${html(f.path)}"><dl class="change-set-facts" data-entry-facts></dl><details data-entry-diff="${i}" ${f.kind === "asset" ? "" : "open data-primary-diff"}><summary>Diff for ${html(f.path)}</summary>${f.kind === "asset" ? `<p>${html(f.warning || "")} ${this.source.includes(f.path.split("/").at(-1)) ? "" : "Warning: asset appears unreferenced by this README."}</p>` : `<p>${diff.added} added / ${diff.removed} removed lines in changed region. Sections: ${html(diff.sections.join(", ") || "body content")}.</p>`}${sourceDiffMarkup(
+              f.kind === "asset"
+                ? {
+                    beforeLabel: `Current ${f.path}`,
+                    afterLabel: `Generated ${f.path}`,
+                    label: `Asset diff ${f.path}`,
+                  }
+                : {
+                    beforeLabel: `Remote ${language}`,
+                    afterLabel: `Prepared ${language}`,
+                    label: "Publishing diff",
+                  },
+            )}</details></li>`,
+        )
+        .join(
+          "",
+        )}</ol><p data-change-set-id></p></section><label>Commit message<input data-message maxlength="500"></label>${writable ? `<label class="check"><input type="checkbox" data-confirm> <span data-approval-label></span></label><button data-commit disabled>Confirm and publish ${noun}</button>` : `<p data-read-only>${supported ? "Read-only mode: no publish control is available until a Preflight for this exact target passes. Re-check access after fixing the failing check. Download remains available." : html(CHANGE_SET_UNSUPPORTED)}</p>`}<div data-result></div><div data-change-set-results role="status"></div><section data-stale></section>${branchable ? `<details data-new-branch-route><summary>Publish on a new branch instead</summary><p>Create a branch from ${html(b.branch)} at commit ${html(b.commitSha || "unknown")}. This creates only a branch; committing still needs a fresh review.</p><label>New branch name<input data-new-branch value="readme-studio/update-${new Date().toISOString().slice(0, 10)}"></label><label class="check"><input type="checkbox" data-confirm-branch> I confirm creating this branch in ${html(b.repository)}.</label><button data-create-branch>Create branch for review</button></details>` : ""}`;
+    this.changeFiles.forEach((f, i) =>
+      fillSourceDiff(
+        this.querySelector(`[data-entry-diff="${i}"] .source-diff`),
+        f.baseContent,
+        f.content,
+        f.kind === "asset" ? undefined : diff.text,
+      ),
     );
-    if (this.kind === "workflow") {
-      const button = this.querySelector("[data-commit]");
-      if (button) button.textContent = "Confirm and publish workflow";
-      this.querySelector("[data-message]").value = "Update README workflow";
-    }
-    if (message !== undefined)
-      this.querySelector("[data-message]").value = message;
+    const input = this.querySelector("[data-message]");
+    input.value = message;
+    input.addEventListener("input", () => this.messageChanged(input.value));
+    this.querySelector("[data-confirm]")?.addEventListener("change", (e) => {
+      this.approvedChangeSetId =
+        e.target.checked && this.changeSet ? this.changeSet.id : null;
+      this.changeSetView();
+    });
     this.querySelector("[data-commit]")?.addEventListener("click", () =>
       this.run(() => this.commit()),
     );
     this.querySelector("[data-create-branch]")?.addEventListener("click", () =>
       this.run(() => this.createBranch()),
     );
+    this.changeSetView();
+  }
+  // Renders the File change rows, the Change set id and the Publish approval
+  // for the current Change set. Publish is enabled only for an approval of
+  // exactly this Change set.
+  changeSetView() {
+    const area = this.querySelector("[data-change-set]");
+    if (!area) return;
+    const cs = this.changeSet,
+      entries = new Map((cs?.entries || []).map((e) => [e.path, e])),
+      files = new Map(this.changeFiles.map((f) => [f.path, f])),
+      pending = this.changeSetError
+        ? "not computed"
+        : "computing the change set…";
+    for (const item of area.querySelectorAll("[data-entry]")) {
+      const f = files.get(item.dataset.entry),
+        e = entries.get(item.dataset.entry);
+      if (!f) continue;
+      item.dataset.action = e?.action || "pending";
+      item.querySelector("[data-entry-facts]").innerHTML =
+        `<dt>Path</dt><dd><strong>${html(f.path)}</strong></dd><dt>Kind</dt><dd>${ENTRY_KIND[f.kind]}</dd><dt>Action</dt><dd data-entry-action>${html(ENTRY_ACTION[e?.action] || pending)}</dd><dt>Base SHA</dt><dd><code data-base-sha>${html(f.baseSha || "none: new file")}</code></dd><dt>Result SHA</dt><dd><code data-result-sha>${html(e?.resultSha || pending)}</code></dd><dt>Size</dt><dd>${new TextEncoder().encode(f.content).length} bytes</dd><dt>Lines</dt><dd>${e && e.added !== null ? `+${e.added} / −${e.removed}` : "not counted"}</dd>${e?.bom ? `<dt>Byte order mark</dt><dd data-entry-bom>${BOM_CHANGE[e.bom]}</dd>` : ""}`;
+    }
+    const writes = cs ? fileWrites(cs).length : 0,
+      where = cs ? `${cs.target.repository} on ${cs.target.branch}` : "";
+    area.querySelector("[data-change-set-id]").innerHTML = cs
+      ? `Change set <code>${html(shortChangeSetId(cs.id))}</code>: ${writes} file ${writes === 1 ? "write" : "writes"}, ${cs.entries.length - writes} unchanged. Full id <code>${html(cs.id)}</code>.`
+      : html(
+          this.changeSetError
+            ? `No change set: ${this.changeSetError}`
+            : "Building the change set…",
+        );
+    const confirm = this.querySelector("[data-confirm]");
+    if (!confirm) return;
+    // A Stale change set cannot be approved until a merge or reload builds a
+    // new one from the latest remote file. Neither can one built on a
+    // baseline a Publish attempt already used: Studio's own writes would read
+    // back as remote changes.
+    const spent = this.spentBaseline(),
+      approvable = !!cs && writes > 0 && !this.staleRemote && !spent,
+      approved = approvable && this.approvedChangeSetId === cs.id;
+    confirm.checked = approved;
+    confirm.disabled = !approvable;
+    this.querySelector("[data-approval-label]").textContent = this.staleRemote
+      ? "Stale change set: GitHub has a newer version. Merge, reload or cancel below before approving."
+      : spent
+        ? `A publish attempt already ran on this remote baseline. Load the remote ${this.kind === "workflow" ? "workflow" : "README"} again to review a new change set.`
+        : !cs
+          ? this.changeSetError
+            ? "Nothing to approve: fix the problem shown under the change set first."
+            : "Building the change set…"
+          : writes
+            ? `I reviewed ${writes} file ${writes === 1 ? "write" : "writes"} to ${where} (change set ${shortChangeSetId(cs.id)}).`
+            : `Nothing to approve: every file already matches ${where} (change set ${shortChangeSetId(cs.id)}).`;
+    this.querySelector("[data-commit]").disabled = !approved;
+  }
+  // True once a Publish attempt ran on the loaded baseline. Only loading,
+  // reloading or merging a remote file (a new baseline) allows another one.
+  spentBaseline() {
+    return !!this.baseline && this.baseline === this.executedBaseline;
+  }
+  // The commit message is part of the Change set: editing it builds a new
+  // one and withdraws approval.
+  async messageChanged(value) {
+    const wasApproved =
+      !!this.changeSet && this.approvedChangeSetId === this.changeSet.id;
+    this.changeSet = null;
+    this.approvedChangeSetId = null;
+    this.changeSetView();
+    if (wasApproved)
+      this.status(
+        "Commit message changed, so the change set changed. Approve the new change set before publishing.",
+      );
+    if (await this.rebuildChangeSet(value)) this.changeSetView();
   }
   async commit() {
     if (!this.writableTarget())
       throw new Error(
         "Read-only mode. Re-check access for this exact target before publishing.",
       );
-    const input = writeInput({
-      ...this.baseline,
-      content: this.source,
-      message: this.querySelector("[data-message]").value,
-      confirmed: this.querySelector("[data-confirm]").checked,
-    });
+    const cs = this.changeSet;
+    if (this.spentBaseline())
+      throw new Error(
+        "A publish attempt already ran on this remote baseline. Load the remote file again before publishing. Nothing was written.",
+      );
+    if (
+      !cs ||
+      this.approvedChangeSetId !== cs.id ||
+      !this.querySelector("[data-confirm]")?.checked
+    )
+      throw new Error(
+        "Review and approve this exact change set first. Nothing was written.",
+      );
     if (JSON.stringify(this.target()) !== JSON.stringify(target(this.baseline)))
       throw new Error("Target changed. Reload and review.");
-    if (this.kind === "workflow") input.workflow = this.workflow;
-    const latest = await this.client.request("read", this.target());
-    if (latest.sha !== this.baseline.sha) {
-      this.stale(latest);
+    // Every file must still have its Base SHA before the first write.
+    const { stale, remotes } = await verifyChangeSet(cs, (t) =>
+      this.client.request("read", t),
+    );
+    if (stale.length) {
+      await this.staleChangeSet(stale, remotes);
       return;
     }
+    if (this.changeSet !== cs || this.approvedChangeSetId !== cs.id)
+      throw new Error(
+        "The change set changed while it was being verified. Nothing was written; approve it again.",
+      );
     savePublishCheckpoint(this.draftId, this.originalSource);
     this.historyView();
-    this.status("Publishing reviewed README…");
-    if (this.assetRows?.length) {
-      const result = await executeAssetPlan(
-        this.assetRows,
-        this.target(),
-        input.message,
-        (op, data) => this.client.request(op, data),
-      );
-      this.querySelector("[data-asset-results]").textContent = result.results
+    this.status("Publishing the reviewed change set…");
+    const outcome = await executeChangeSet(
+      cs,
+      changeSetContents(this.changeFiles),
+      (op, data) => this.client.request(op, data),
+    );
+    // Approval covers one attempt; a retry needs a fresh baseline and review.
+    this.executedBaseline = this.baseline;
+    this.approvedChangeSetId = null;
+    this.changeSetView();
+    this.querySelector("[data-commit]").disabled = true;
+    this.querySelector("[data-change-set-results]").textContent =
+      outcome.results
         .map(
           (r) =>
             `${r.path}: ${r.status}${r.commitSha ? " (" + r.commitSha + ")" : ""}${r.error ? " — " + r.error : ""}`,
         )
         .join(" · ");
-      this.querySelector("[data-confirm]").checked = false;
-      this.querySelector("[data-commit]").disabled = true;
-      if (!result.complete) {
+    const assetWrites = fileWrites(cs).some((e) => e.kind === "asset");
+    if (!outcome.complete) {
+      const { entry, error } = outcome.failure;
+      if (entry.kind === "asset") {
         this.status(
-          "Partial asset publish. README was not attempted. Review the reported files and reload the plan before retrying.",
+          `Partial asset publish: ${entry.path} was not written (${error.message}). The ${this.kind === "workflow" ? "workflow" : "README"} was not attempted. Review the reported files and reload before retrying.`,
         );
         return;
       }
-      if (input.content === this.baseline.content) {
-        this.status(
-          "All reviewed assets published or unchanged. README needed no write. Local draft is unchanged.",
-        );
-        return;
-      }
-    }
-    let result;
-    try {
-      result = await this.client.request("commit", input);
-    } catch (e) {
       // GitHub's own refusal is definitive; route to the new-branch review.
       // A refusal by the server's own Preflight would refuse the branch too.
       const route =
-        [403, 422].includes(e.status) && !e.preflight
+        [403, 422].includes(error.status) && !error.preflight
           ? this.querySelector("[data-new-branch-route]")
           : null;
       if (route) {
         route.open = true;
-        e.message += " You can use “Publish on a new branch instead” below.";
+        error.message +=
+          " You can use “Publish on a new branch instead” below.";
       }
-      if (this.assetRows?.length)
-        throw new Error(
-          `Assets completed, but README failed: ${e.message} Reload and review before retrying.`,
+      if (assetWrites)
+        throw Object.assign(
+          new Error(
+            `Assets completed, but README failed: ${error.message} Reload and review before retrying.`,
+          ),
+          { remote: error.remote },
         );
-      throw e;
+      throw error;
     }
+    const primary = outcome.results.at(-1);
+    if (primary.status !== "written") {
+      this.status(
+        "All reviewed assets published or unchanged. README needed no write. Local draft is unchanged.",
+      );
+      return;
+    }
+    this.published(primary.result);
+  }
+  // A Stale change set writes nothing. A stale README or workflow goes to the
+  // existing remote-change review; stale assets take their latest remote
+  // baseline into a new Change set that needs a fresh approval.
+  async staleChangeSet(stale, remotes) {
+    for (const row of this.assetRows || [])
+      if (stale.includes(row.path)) row.baseline = remotes[row.path];
+    const others = stale.filter((path) => path !== this.baseline.path);
+    if (stale.includes(this.baseline.path)) {
+      this.stale(remotes[this.baseline.path]);
+      if (others.length)
+        this.querySelector("[data-stale] h2").insertAdjacentHTML(
+          "afterend",
+          `<p>Also changed since review: ${html(others.join(", "))}.</p>`,
+        );
+      return;
+    }
+    await this.review({ keepMessage: true });
+    const area = this.querySelector("[data-stale]");
+    area.innerHTML = `<h2 tabindex="-1">Stale change set</h2><p>${html(others.join(", "))} changed on GitHub since you reviewed ${others.length === 1 ? "it" : "them"}. Nothing was written. The change set above now uses the latest remote ${others.length === 1 ? "file" : "files"}; review it and approve it again.</p>`;
+    area.querySelector("h2").focus();
+    this.status(
+      `Stale change set: ${others.join(", ")} changed on GitHub. Nothing was written. Review the new change set and approve it again.`,
+    );
+  }
+  published(result) {
     const repo = `https://github.com/${result.repository}`,
       file = `${repo}/blob/${encodeURIComponent(result.branch)}/${result.path.split("/").map(encodeURIComponent).join("/")}`;
     this.querySelector("[data-result]").innerHTML =
       `<p>Published commit <a href="${repo}/commit/${html(result.commitSha)}" target="_blank" rel="noopener noreferrer">${html(result.commitSha)}</a>. <a href="${repo}" target="_blank" rel="noopener noreferrer">Repository</a> · <a href="${html(file)}" target="_blank" rel="noopener noreferrer">README</a></p>`;
-    this.querySelector("[data-commit]").disabled = true;
-    this.querySelector("[data-confirm]").checked = false;
     const previous = result.previousCommitSha || this.baseline.commitSha;
     if (previous) {
       const link = document.createElement("a");
@@ -493,10 +712,12 @@ export class PublishDialog extends HTMLElement {
   }
   stale(remote) {
     this.latest = remote;
-    const commit = this.querySelector("[data-commit]"),
-      confirm = this.querySelector("[data-confirm]");
+    // A Stale change set loses its approval; reload or merge builds a new one.
+    this.approvedChangeSetId = null;
+    this.staleRemote = true;
+    this.changeSetView();
+    const commit = this.querySelector("[data-commit]");
     if (commit) commit.disabled = true;
-    if (confirm) confirm.checked = false;
     const area = this.querySelector("[data-stale]");
     area.innerHTML = `<h2 tabindex="-1">Remote README changed since you loaded it</h2><details open><summary>View remote changes</summary><pre data-remote-diff></pre><label>Latest remote Markdown<textarea data-latest readonly rows="6"></textarea></label></details><button data-merge>Merge local and remote</button><button data-reload>Reload remote baseline and review local replacement</button><button data-cancel>Cancel publishing review</button><section data-conflicts></section>`;
     area.querySelector("[data-latest]").value = remote.content;
@@ -510,13 +731,14 @@ export class PublishDialog extends HTMLElement {
       area.querySelector("[data-reload]").textContent =
         "Reload workflow baseline and review generated replacement";
     }
-    area.querySelector("[data-reload]").onclick = () => {
-      this.baseline = remote;
-      this.review();
-      this.status(
-        "Remote baseline reloaded. Review the replacement and confirm again.",
-      );
-    };
+    area.querySelector("[data-reload]").onclick = () =>
+      this.run(async () => {
+        this.baseline = remote;
+        await this.review();
+        this.status(
+          "Remote baseline reloaded. Review the replacement and confirm again.",
+        );
+      });
     area.querySelector("[data-cancel]").onclick = () => this.invalidate();
     area.querySelector("h2").focus();
     this.status(
@@ -549,11 +771,11 @@ export class PublishDialog extends HTMLElement {
           };
         this.source = resolveMerge(parts, decisions);
         this.baseline = this.latest;
-        this.review();
+        await this.review();
         this.status(
           "Merged source prepared. Review and confirm again. Local draft is unchanged.",
         );
-        this.querySelector("[data-after]").focus();
+        this.querySelector("[data-primary-diff] [data-after]")?.focus();
       });
   }
   async createBranch() {

@@ -2165,6 +2165,27 @@ publish-dialog .preflight-checks {
   gap: 0.35rem;
   padding-left: 1.25rem;
 }
+publish-dialog .change-set-entries {
+  display: grid;
+  gap: 0.75rem;
+  padding-left: 1.25rem;
+}
+publish-dialog .change-set-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.15rem 0.75rem;
+  margin: 0 0 0.35rem;
+}
+publish-dialog .change-set-facts dt {
+  font-weight: 600;
+}
+publish-dialog .change-set-facts dd {
+  margin: 0;
+  min-width: 0;
+}
+publish-dialog code {
+  overflow-wrap: anywhere;
+}
 publish-dialog [data-check-status="fail"] strong,
 publish-dialog [data-check-status="unknown"] strong {
   text-decoration: underline;
@@ -2331,6 +2352,55 @@ readme-attention-queue {
   display: block;
   min-width: 0;
 }
+/* Improvement plans: native details, wrapping actions, no horizontal scroll. */
+improvement-plan {
+  display: block;
+  min-width: 0;
+  margin-block: 12px;
+  overflow-wrap: anywhere;
+}
+improvement-plan[hidden] {
+  display: none;
+}
+improvement-plan summary {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 24px;
+}
+improvement-plan h4 {
+  margin: 16px 0 4px;
+}
+improvement-plan .plan-items,
+improvement-plan .plan-hidden,
+improvement-plan .plan-caveats {
+  padding-left: 20px;
+}
+improvement-plan .plan-items > li {
+  padding-block: 8px;
+  border-bottom: 1px solid var(--border);
+}
+improvement-plan .plan-title {
+  margin-bottom: 4px;
+}
+improvement-plan .plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.audit-table improvement-plan .plan-actions a,
+.audit-table improvement-plan .plan-actions button {
+  display: inline-block;
+  margin-bottom: 0;
+}
+@media (max-width: 600px) {
+  improvement-plan button,
+  improvement-plan a,
+  improvement-plan summary {
+    min-height: 44px;
+    max-width: 100%;
+  }
+}
 @media (max-width: 600px) {
   readme-attention-queue button,
   readme-attention-queue select,
@@ -2420,6 +2490,19 @@ stack-results ul {
 }
 stack-results li {
   margin-block: 6px;
+}
+stack-results .stack-stale {
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent-bg);
+  padding: 4px 10px;
+}
+stack-results dl {
+  margin-block: 4px;
+}
+stack-results dd {
+  margin-inline-start: 16px;
+  margin-block-end: 4px;
 }
 
 stack-dna {

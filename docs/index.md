@@ -27,12 +27,13 @@ README Studio exports ordinary Markdown/HTML. Its preview is an approximation of
 - [Portable snippet packs](snippet-packs.md)
 - [GitHub data](github-aware.md)
 - [Repository README auditing and project types](repository-auditing.md)
+- [Improvement plans](repository-auditing.md#improvement-plans) — evidence-backed, advisory recommendations for each audited repository
 - [README Attention Queue](readme-attention-queue.md)
 - [Refreshing generated content](refreshing.md)
 - [Analyzer](analyzer.md)
 - [GitHub compatibility](compatibility.md)
 - [Safe refactors](refactors.md)
-- [Optional GitHub publishing](github-publishing.md)
+- [Optional GitHub publishing](github-publishing.md): [Preflight](github-publishing.md#preflight) and [change set review](github-publishing.md#change-set-review)
 - [Asset publishing](assets.md)
 - [Workflow generation](workflows.md)
 - [Accessibility, recovery and performance checks](hardening.md)
@@ -52,7 +53,7 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 
 [Project-specific documentation](project-documentation.md): CLI, API, packages, games, Rust crates and web-app recommendations and forms.
 
-- [Stack Intelligence](stack-intelligence.md) — opt-in manifest analysis, including monorepo [Nested discovery](stack-intelligence.md#nested-discovery-monorepos).
+- [Stack Intelligence](stack-intelligence.md) — opt-in manifest analysis, including monorepo [Nested discovery](stack-intelligence.md#nested-discovery-monorepos) and per-declaration [Provenance, confidence and staleness](stack-intelligence.md#provenance-confidence-and-staleness).
 
 - [Stack-to-README suggestions](stack-to-readme.md) — review detected stack, commands and links before inserting.
 

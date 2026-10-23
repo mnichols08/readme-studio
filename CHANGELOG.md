@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.9.4
+
+- Add a reviewed change-set manifest before every GitHub publish (#98, #156). The review identifies the exact owner, repository, branch and checked head commit, then lists every README, asset and workflow write with its action, path, Base SHA, Result SHA and unified diff.
+- Require explicit approval of the exact manifest before publishing (#157). Changing Markdown, generated files, the target or any reviewed input withdraws approval; closing and reopening the dialog also starts unapproved.
+- Have the client reject tampered, duplicated or incomplete manifests, then re-read every existing file immediately before writing and refuse stale, missing or unexpectedly present files. For each submitted write, the publishing server independently validates its expected Base SHA and recomputes its Result SHA.
+- Keep writes non-destructive: no force updates, deletes or ref rewrites, and no automatic retry after partial failure. A partial result identifies which files were written and requires a fresh review against GitHub's new state.
+- Add unit and browser coverage for exact manifests, changed targets, stale reviews, tampering, offline and partial-failure cases, plus updated publishing, architecture and security documentation.
+
+## 1.9.3
+
+- Add an evidence-backed Improvement plan to every assessed repository in the audit and README Attention Queue (#80, #124). Each Recommendation comes from one observed finding, cites the README revision and observation/check time, explains project-type applicability and never invents replacement content, commands, links or facts.
+- Group Recommendations into descriptive **Start here**, **Next** and **Optional** bands instead of scores. Missing/thin READMEs, starter text and placeholders lead; key type-specific gaps and unavailable links/images follow; other topics and README-history review remain optional. Plans are deterministic and capped at 30 items.
+- Fold a missing or stub README into one Recommendation with relevant sections to consider, instead of flooding the plan with one item per topic. Weak project-type inference, likely non-English headings, public APIs, documentation links and Experiments receive explicit conservative caveats.
+- Add reviewed actions for every Recommendation: Improve README, Open in Studio, Open README on GitHub, session-only Skip and revision-bound session-only Dismiss (#125). Missing/thin README findings use the existing Mark intentionally minimal decision instead of Dismiss.
+- Keep audit decisions local and non-destructive. Skip and Dismiss make no request, change no Markdown and publish nothing; stale dismissals return when the observed README revision changes or becomes unknown, with explicit re-dismiss/forget controls.
+- Add keyboard, mobile, offline, focus-management, empty/failure-state and type-specific false-positive coverage, plus user documentation and a synthetic Improvement plan screenshot.
+
+## 1.9.2
+
+- Stack Intelligence shows the Provenance of every detected declaration (#84, #132): Manifest path, section, line, branch, shortened blob SHA and when it was observed. The full blob SHA is available to screen readers. A cached result keeps its original Observed at.
+- Each declaration has a named Confidence basis (explicit, inherited, conditional or ambiguous) with one fixed explanation. Bases are never a number or ranking and never describe skill. Poetry dependencies declared `optional = true` are conditional, like Cargo and PEP 621 optional dependencies.
+- Each repository result has an "Uncertain stack results (N)" list (#133). It holds conditional and ambiguous declarations with their reason, and manifests that were found but not read, listed as "Not read — unknown". The count includes unread manifests beyond the listed paths, so it matches the discovery summary. Uncertain results still appear in place in the dependency list.
+- Results are marked Stale when the loaded repository list shows a newer push than the one the scan started from, or when they were observed more than 24 hours ago. Both push times come from GitHub, so a wrong local clock does not change the result. The text badge points to Fetch fresh manifests, and the summary line includes "Stale". This is worked out when results are shown, with no timers or extra requests.
+- Stack DNA evidence shows the same provenance and basis, and labels technologies with only conditional or ambiguous evidence as "only uncertain evidence".
+- In Stack-to-README review, each evidence line names its Confidence basis. Technologies with only uncertain evidence are left out of the Detected stack section and get no badge suggestion. They are offered separately, unselected, as "Technologies with only uncertain evidence", with a caveat.
+- Stack scan records are now version 5 and session-only. `observedAt` replaces `checkedAt`, which remains as an alias for one release. Records gain `pushedAt`, and dependency evidence items carry full Provenance with a named Confidence basis. The basis explanation is looked up when shown and is not stored with each item.
+- The "Found, not read" heading in Project boundaries is now "Not read — unknown".
+
 ## 1.9.1
 
 - Add the usability scripts ([docs/usability-scripts.md](docs/usability-scripts.md)) (#76, #116): seven Usability scenarios (N1–N4 novice, E1–E3 experienced). Each has a start state, a success criterion and a step budget. The doc also has a facilitator protocol, consent and privacy statements, and a severity scale. There are no in-app analytics, telemetry or new storage (ADR 0006).

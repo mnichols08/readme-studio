@@ -82,6 +82,42 @@ describe("reviewable stack documentation", () => {
     expect(result.every((s) => s.evidence.length && s.caveat)).toBe(true);
     expect(readmeSuggestions(r)).toEqual(result);
   });
+  it("keeps technologies with only uncertain evidence out of the Detected stack and badges", () => {
+    const r = node({
+      dependencies: { react: "19" },
+      peerDependencies: { vue: "3" },
+    });
+    const result = readmeSuggestions(r);
+    const stack = result.find((s) => s.id === "stack");
+    expect(stack.markdown).toBe("## Detected stack\n\n- Core: React");
+    expect(stack.evidence).toEqual([
+      "React: package.json · dependencies · basis: explicit",
+    ]);
+    expect(result.find((s) => s.id === "badge:react").evidence).toEqual([
+      "package.json · dependencies · basis: explicit",
+    ]);
+    expect(result.some((s) => s.id === "badge:vue")).toBe(false);
+    // Shown, never hidden: offered separately with its basis and a caveat.
+    const uncertain = result.find((s) => s.id === "stack:uncertain");
+    expect(uncertain.title).toBe("Technologies with only uncertain evidence");
+    expect(uncertain.markdown).toBe("## Possibly in the stack\n\n- Core: Vue");
+    expect(uncertain.evidence).toEqual([
+      "Vue: package.json · peerDependencies · basis: conditional",
+    ]);
+    expect(uncertain.caveat).toContain(
+      "every declaration of Vue is conditional or ambiguous",
+    );
+    // No basis or scan metadata goes into the Markdown (ADR epic65-03).
+    expect(result.map((s) => s.markdown).join()).not.toMatch(
+      /basis|conditional|ambiguous|uncertain/i,
+    );
+    const peerOnly = readmeSuggestions(record(["requirements.txt", "flask\n"]));
+    expect(peerOnly.some((s) => s.id === "stack")).toBe(false);
+    expect(peerOnly.some((s) => s.id.startsWith("badge:"))).toBe(false);
+    expect(peerOnly.find((s) => s.id === "stack:uncertain").evidence).toEqual([
+      "Flask: requirements.txt · requirements.txt (line 1) · basis: ambiguous",
+    ]);
+  });
   it("offers Rust conventions and declared crate links, suppressing private registries", () => {
     const r = record(["Cargo.toml", '[package]\nname="my-crate"\nversion="1"']);
     const result = readmeSuggestions(r);

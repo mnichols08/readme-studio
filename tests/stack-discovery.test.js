@@ -476,7 +476,7 @@ describe("Nested discovery through StackClient", () => {
     "svc/go.mod": "module x\nrequire github.com/gin-gonic/gin v1.0.0\n",
     "docs/site/requirements.txt": "mkdocs\n",
   };
-  it("reads one tree, root and nested manifests, and records project boundaries (record version 4)", async () => {
+  it("reads one tree, root and nested manifests, and records project boundaries (record version 5)", async () => {
     const { client, calls } = mockClient(files);
     const record = await new StackClient({ client, now: () => 5 }).repository(
       repo,
@@ -499,7 +499,7 @@ describe("Nested discovery through StackClient", () => {
       "packages/web/package.json",
       "docs/site/requirements.txt",
     ]);
-    expect(record.version).toBe(4);
+    expect(record.version).toBe(5);
     expect(record.status).toBe("read");
     expect(record.headSha).toBe(HEAD);
     expect(record.discovery).toEqual({

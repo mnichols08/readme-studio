@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.1.** Usability scripts define seven novice and experienced scenarios with step budgets that scripted runs enforce, Guided start can restore a backup, and exports and backups now ask before leaving out unsaved section edits. No sessions with real participants have been run yet. [Usability scripts](docs/usability-scripts.md) · [Usability findings](docs/usability-findings.md) · [Guided start](docs/guided-start.md)
+**Version 1.9.4.** GitHub publishing now presents an immutable, reviewable change-set manifest with the exact target commit, per-file Base and Result SHAs, diffs, and explicit approval before any write. [Change-set review](docs/github-publishing.md#change-set-review) · [Publishing security](docs/security.md#optional-github-publishing-service)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -22,12 +22,12 @@ Guided start asks whether you want to write a profile README, write a repository
 - Compose sections, badges and collections, project showcases, components and reusable snippets.
 - Coordinate themes, generate local light/dark SVG banners, and configure attributed external widget embeds.
 - Import public GitHub data, review refreshes, analyze compatibility and apply explicit, undoable refactors.
-- Audit selected public repositories with advisory expectations for 14 project types, then choose the next README from the attention queue.
-- Analyze declared dependencies in repository manifests with explicit consent, including bounded monorepo discovery that maps Workspace members and Nested projects ([Stack Intelligence](docs/stack-intelligence.md)).
+- Audit selected public repositories with advisory expectations for 14 project types, review an evidence-backed [Improvement plan](docs/repository-auditing.md#improvement-plans) for each, then choose the next README from the attention queue.
+- Analyze declared dependencies in repository manifests with explicit consent, including bounded monorepo discovery that maps Workspace members and Nested projects ([Stack Intelligence](docs/stack-intelligence.md)). Every declaration shows where and when it was observed and a named confidence basis, with uncertain and Stale results labelled ([Provenance, confidence and staleness](docs/stack-intelligence.md#provenance-confidence-and-staleness)).
 - Record read-only evidence snapshots of a repository's branch head, README, manifests and linked files, then check what changed since a pinned Baseline.
 - Check for stale scripts, missing files, broken links and anchors, and outdated config keys without running repository code or changing your Markdown.
 - Save portable `.readme-studio.json` projects or export Markdown, packs and full workspace backups.
-- Optionally publish reviewed README, asset and workflow changes through a separately configured GitHub App service. Publishing starts read-only and unlocks only after a [Preflight](docs/github-publishing.md#preflight) of app, permission and branch access passes.
+- Optionally publish reviewed README, asset and workflow changes through a separately configured GitHub App service. Publishing starts read-only and unlocks only after a [Preflight](docs/github-publishing.md#preflight) of app, permission and branch access passes. A [change set review](docs/github-publishing.md#change-set-review) lists every file write with its Base and Result SHA, and publishing needs an explicit approval of that exact set.
 
 Manual Markdown remains available. Raw edits change only the sections they touch: untouched builder sections keep their visual ownership, and any section that is detached is named in a status message and in the Sections list. Themes guide generated content; they cannot style GitHub itself. The app light/dark switch updates preview too, with a separate preview override.
 

@@ -2,9 +2,17 @@ import { generateWorkflow } from "../src/workflows/model.js";
 // @vitest-environment node
 import { it, expect, vi } from "vitest";
 import { createPublishingService } from "../server/publishing.js";
+import { buildChangeSet, gitBlobSha } from "../src/publishing/change-set.js";
 const origin = "https://studio.example",
   sha = "a".repeat(40),
-  newSha = "b".repeat(40);
+  newSha = "b".repeat(40),
+  changeSetId = "c".repeat(64);
+// A write as the reviewed Change set executor sends it.
+const reviewed = async (input) => ({
+  ...input,
+  resultSha: await gitBlobSha(input.content),
+  changeSetId,
+});
 function harness({
   permission = true,
   exists = true,
@@ -18,6 +26,7 @@ function harness({
   protectedBranch = false,
   rules = [],
   rulesStatus = 200,
+  remoteContent = "# Old",
 } = {}) {
   let clock = 1000,
     cookie,
@@ -91,7 +100,7 @@ function harness({
               encoding: "base64",
               size: 6,
               sha,
-              content: Buffer.from("# Old").toString("base64"),
+              content: Buffer.from(remoteContent).toString("base64"),
             }
           : {},
         { status: exists ? 200 : 404 },
@@ -174,6 +183,39 @@ it("rejects cross-origin, CSRF, arbitrary proxy and unconfirmed writes", async (
   ).toBe(400);
   expect(h.upstream.mock.calls.some(([, o]) => o.method === "PUT")).toBe(false);
 });
+it("reads a BOM-prefixed README as the exact bytes its Base SHA names", async () => {
+  const raw = "\uFEFF# Hi\n",
+    h = harness({ remoteContent: raw });
+  await h.connect();
+  const t = {
+      repository: "octocat/octocat",
+      branch: "main",
+      path: "README.md",
+    },
+    baseline = (await h.request("read", t)).value,
+    baseSha = await gitBlobSha(raw);
+  // A dropped BOM would make an identical draft look like an update.
+  expect(baseline.content).toBe(raw);
+  const build = (content) =>
+    buildChangeSet({
+      target: t,
+      message: "Update",
+      files: [
+        {
+          path: "README.md",
+          kind: "readme",
+          baseSha,
+          baseContent: baseline.content,
+          content,
+        },
+      ],
+    });
+  expect((await build(baseline.content)).entries[0].action).toBe("unchanged");
+  expect((await build("# Hi\n")).entries[0]).toMatchObject({
+    action: "update",
+    bom: "removed",
+  });
+});
 it.each([true, false])(
   "loads and commits an existing=%s README without changing UTF-8 source",
   async (exists) => {
@@ -186,13 +228,16 @@ it.each([true, false])(
     };
     const baseline = (await h.request("read", t)).value;
     expect(baseline.sha).toBe(exists ? sha : null);
-    const result = await h.request("commit", {
-      ...t,
-      sha: baseline.sha,
-      content: "# 🦀\r\n",
-      message: "My commit",
-      confirmed: true,
-    });
+    const result = await h.request(
+      "commit",
+      await reviewed({
+        ...t,
+        sha: baseline.sha,
+        content: "# 🦀\r\n",
+        message: "My commit",
+        confirmed: true,
+      }),
+    );
     expect(result.value.commitSha).toBe(newSha);
     const body = JSON.parse(
       h.upstream.mock.calls.find(([, o]) => o.method === "PUT")[1].body,
@@ -204,7 +249,7 @@ it.each([true, false])(
   },
 );
 it("rejects read-only repositories and redacts GitHub error bodies", async () => {
-  const t = {
+  const t = await reviewed({
     repository: "octocat/octocat",
     branch: "main",
     path: "README.md",
@@ -212,7 +257,7 @@ it("rejects read-only repositories and redacts GitHub error bodies", async () =>
     content: "New",
     message: "update",
     confirmed: true,
-  };
+  });
   const h = harness({ permission: false });
   await h.connect();
   expect((await h.request("commit", t)).response.status).toBe(403);
@@ -257,15 +302,18 @@ it("does not accept arbitrary SVG content or hidden asset paths", async () => {
 it("stops stale writes on the server before PUT and returns a reviewable remote baseline", async () => {
   const h = harness();
   await h.connect();
-  const result = await h.request("commit", {
-    repository: "octocat/octocat",
-    branch: "main",
-    path: "README.md",
-    sha: newSha,
-    content: "New",
-    message: "update",
-    confirmed: true,
-  });
+  const result = await h.request(
+    "commit",
+    await reviewed({
+      repository: "octocat/octocat",
+      branch: "main",
+      path: "README.md",
+      sha: newSha,
+      content: "New",
+      message: "update",
+      confirmed: true,
+    }),
+  );
   expect(result.response.status).toBe(409);
   expect(result.value.remote.content).toBe("# Old");
   expect(h.upstream.mock.calls.some(([, o]) => o.method === "PUT")).toBe(false);
@@ -320,7 +368,7 @@ it("workflow write requires opt-in, app permission and exact generated YAML", as
       repository: "octocat/octocat",
     },
     r = generateWorkflow(config);
-  const input = {
+  const input = await reviewed({
     repository: "octocat/octocat",
     branch: "main",
     path: r.path,
@@ -330,7 +378,7 @@ it("workflow write requires opt-in, app permission and exact generated YAML", as
     workflow: config,
     message: "Add workflow",
     confirmed: true,
-  };
+  });
   const denied = harness();
   await denied.connect();
   expect((await denied.request("commit", input)).response.status).toBe(403);
@@ -338,10 +386,10 @@ it("workflow write requires opt-in, app permission and exact generated YAML", as
   await allowed.connect();
   expect(
     (
-      await allowed.request("commit", {
-        ...input,
-        content: r.yaml + "injected: true",
-      })
+      await allowed.request(
+        "commit",
+        await reviewed({ ...input, content: r.yaml + "injected: true" }),
+      )
     ).response.status,
   ).toBe(400);
   expect((await allowed.request("commit", input)).value.commitSha).toBe(newSha);
@@ -359,13 +407,16 @@ async function preflightThenCommit(options, value = readmeTarget) {
   const h = harness(options);
   await h.connect();
   const report = (await h.request("preflight", value)).value;
-  const commit = await h.request("commit", {
-    ...value,
-    sha,
-    content: "# New",
-    message: "update",
-    confirmed: true,
-  });
+  const commit = await h.request(
+    "commit",
+    await reviewed({
+      ...value,
+      sha,
+      content: "# New",
+      message: "update",
+      confirmed: true,
+    }),
+  );
   return { h, report, commit };
 }
 it("preflight is read-only and reports a writable target with advisory warnings", async () => {
@@ -466,14 +517,17 @@ it.each([
       writable: true,
       workflowsWritable: false,
     });
-    const commit = await h.request("commit", {
-      ...value,
-      sha,
-      content: r.yaml,
-      workflow: config,
-      message: "Add workflow",
-      confirmed: true,
-    });
+    const commit = await h.request(
+      "commit",
+      await reviewed({
+        ...value,
+        sha,
+        content: r.yaml,
+        workflow: config,
+        message: "Add workflow",
+        confirmed: true,
+      }),
+    );
     expect(commit.response.status).toBe(403);
     expect(commit.value.error).toBe(failed.message);
     expect(commit.value.preflight).toBe("workflow-permission");
@@ -577,3 +631,67 @@ it("workflow branch creation keeps the opt-in and Workflows: write boundary", as
   );
   expect(refWrites(allowed)).toBe(1);
 });
+it("refuses a write whose content does not match its reviewed Result SHA", async () => {
+  const h = harness();
+  await h.connect();
+  const input = await reviewed({
+    ...readmeTarget,
+    sha,
+    content: "# Reviewed",
+    message: "update",
+    confirmed: true,
+  });
+  const forged = await h.request("commit", {
+    ...input,
+    content: "# Swapped after review",
+  });
+  expect(forged.response.status).toBe(400);
+  expect(forged.value.error).toContain("Result SHA");
+  expect(puts(h)).toBe(0);
+  // The reviewed content itself is accepted.
+  expect((await h.request("commit", input)).value.commitSha).toBe(newSha);
+  expect(puts(h)).toBe(1);
+});
+it("refuses a create when the file now exists, with the remote for review", async () => {
+  const h = harness({ exists: true });
+  await h.connect();
+  const result = await h.request(
+    "commit",
+    await reviewed({
+      ...readmeTarget,
+      sha: null,
+      content: "# New",
+      message: "create",
+      confirmed: true,
+    }),
+  );
+  expect(result.response.status).toBe(409);
+  expect(result.value.error).toContain("README.md now exists");
+  expect(result.value.remote.sha).toBe(sha);
+  expect(puts(h)).toBe(0);
+});
+it.each([
+  ["no Base SHA", { sha: undefined }, "remote SHA"],
+  ["no Result SHA", { resultSha: undefined }, "Result SHA"],
+  ["a malformed Result SHA", { resultSha: "abc" }, "Result SHA"],
+  ["no change set id", { changeSetId: undefined }, "id"],
+])(
+  "rejects an update with %s before any GitHub request",
+  async (_, change, message) => {
+    const h = harness();
+    await h.connect();
+    const calls = h.upstream.mock.calls.length;
+    const input = await reviewed({
+      ...readmeTarget,
+      sha,
+      content: "# New",
+      message: "update",
+      confirmed: true,
+    });
+    const result = await h.request("commit", { ...input, ...change });
+    expect(result.response.status).toBe(400);
+    expect(result.value.error).toContain(message);
+    expect(h.upstream.mock.calls.length).toBe(calls);
+    expect(puts(h)).toBe(0);
+  },
+);

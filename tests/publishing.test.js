@@ -1,27 +1,36 @@
 import { describe, it, expect } from "vitest";
 import { target, writeInput } from "../src/publishing/validation.js";
 import { publishDiff } from "../src/publishing/diff.js";
-const t = { repository: "octocat/octocat", branch: "main", path: "README.md" };
+const t = { repository: "octocat/octocat", branch: "main", path: "README.md" },
+  reviewed = { resultSha: "d".repeat(40), changeSetId: "c".repeat(64) };
 describe("publishing boundaries", () => {
-  it("requires exact confirmed target, source, SHA and message", () => {
-    expect(
-      writeInput({
-        ...t,
-        sha: null,
-        content: "🧑‍💻\r\n",
-        message: "My update",
-        confirmed: true,
-      }).content,
-    ).toBe("🧑‍💻\r\n");
+  it("requires exact confirmed target, source, SHA, Result SHA, id and message", () => {
+    const input = writeInput({
+      ...t,
+      ...reviewed,
+      sha: null,
+      content: "🧑‍💻\r\n",
+      message: " My update ",
+      confirmed: true,
+    });
+    expect(input.content).toBe("🧑‍💻\r\n");
+    expect(input).toMatchObject({ ...reviewed, message: "My update" });
     for (const changed of [
       { confirmed: false },
       { sha: "not-sha" },
+      { sha: undefined },
       { message: "" },
       { content: "x".repeat(750001) },
+      { resultSha: undefined },
+      { resultSha: "D".repeat(40) },
+      { resultSha: "d".repeat(64) },
+      { changeSetId: undefined },
+      { changeSetId: "c".repeat(40) },
     ])
       expect(() =>
         writeInput({
           ...t,
+          ...reviewed,
           sha: null,
           content: "text",
           message: "update",

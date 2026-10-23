@@ -1,6 +1,6 @@
 # Readme Studio
 
-A local-first workspace for authoring GitHub profile and repository READMEs. This glossary covers the language used for documentation drift detection (Epic 13), for guided first-run and task-based UX (Epic 01), for reliable round-trip Markdown editing (Epic 02), for repository evidence and stack intelligence (Epic 04) and for safe GitHub publishing (Epic 08).
+A local-first workspace for authoring GitHub profile and repository READMEs. This glossary covers the language used for documentation drift detection (Epic 13), guided first-run and task-based UX (Epic 01), reliable round-trip Markdown editing (Epic 02), the actionable README audit (Epic 03), repository evidence and stack intelligence (Epic 04), and safe GitHub publishing (Epic 08).
 
 ## Language: documentation drift (Epic 13)
 
@@ -198,6 +198,82 @@ _Avoid_: Test data, samples
 The named CI check over the Round-trip corpus that must pass before a release. A failure is fixed in code, never by re-pinning a fixture to match new output.
 _Avoid_: Smoke test, snapshot test
 
+## Language: actionable README audit (Epic 03)
+
+### Improvement plans
+
+**Audit finding**:
+One observation from a repository's README audit that may call for a change: a missing or thin README, a project-type topic that was not detected, leftover placeholder or starter text, an unavailable link or image, or README history that predates significant activity. Every Audit finding has a stable identity, so decisions and snapshots can refer to the same finding across audits.
+_Avoid_: Issue, problem, error, violation, Observed mismatch (a Drift check term)
+
+**Improvement plan**:
+The ordered list of Recommendations for one audited repository, derived from its latest successful audit and the author's Audit decisions. It is recalculated, never saved, and is not a score.
+_Avoid_: Score, report, checklist, to-do list
+
+**Recommendation**:
+One concrete suggested change in an Improvement plan, derived from exactly one Audit finding. It cites the evidence that was observed and its Applicability, names what to add or review, and never supplies content, commands, links or facts that the audit did not observe.
+_Avoid_: Fix, requirement, rule, Next step, Fix proposal
+
+**Applicability**:
+The statement on a Recommendation of why it fits this repository's project type, where that type came from, and when the Recommendation might not apply.
+_Avoid_: Severity, importance, confidence score
+
+**Plan band**:
+The descriptive group a Recommendation belongs to: **Start here**, **Next** or **Optional**. Bands order a plan; they are not ratings of the README or its author.
+_Avoid_: Priority score, severity, Attention priority (the queue's High/Medium/Low)
+
+**Skip** (Recommendation):
+Setting a Recommendation aside for the rest of this session without saying anything about whether it applies.
+_Avoid_: Ignore for now (the queue's seven-day decision), defer, snooze
+
+**Dismissal**:
+The author's explicit statement that a Recommendation does not apply to a repository, made against one Observed revision. A missing or thin README cannot be dismissed; Intentionally minimal covers that.
+_Avoid_: Ignore, mute, resolve, false-positive flag
+
+### Persistent audit decisions
+
+**Audit decision**:
+An explicit choice the author made about a repository in the audit and that this browser keeps: a Manual project type, Ignore for now, Intentionally minimal or a Dismissal. Only ever created by the author's own action.
+_Avoid_: Preference, setting, rule
+
+**Canonical repository**:
+The case-insensitive owner/name identity that Audit decisions and Audit snapshots are keyed by. A renamed or transferred repository is a different Canonical repository.
+_Avoid_: Repository URL, repository ID
+
+**Observed revision**:
+The README revision the audit saw when a decision was made or a snapshot was saved: a Git blob revision, or confirmed absence of a root README.
+_Avoid_: Version, commit, README SHA
+
+**Stale decision**:
+A revision-bound Audit decision whose Observed revision differs from the one the latest audit saw. It is kept and shown, but no longer applied until the author confirms it again or forgets it.
+_Avoid_: Expired, invalid, orphaned
+
+**Manual project type**:
+The project type the author chose for a repository instead of the automatic suggestion. It belongs to the repository, not to a README revision.
+_Avoid_: Override (in user-facing text), forced type
+
+### Audit change tracking
+
+**Audit snapshot**:
+A saved, explicitly requested record of the audit results already on screen for one account at one moment: per repository its Observed revision, README state, project type and Audit findings. It holds no README content, does not contact GitHub and is never saved as a side effect.
+_Avoid_: Evidence Snapshot (per document), audit history, scan, report
+
+**Partial audit snapshot**:
+An Audit snapshot in which at least one included repository was not assessed. Still saved; the unassessed repositories are unknown, never clean.
+_Avoid_: Incomplete, failed snapshot
+
+**Audit comparison**:
+A read-only comparison of two Audit snapshots of the same account that reports each Audit finding as added, resolved, unchanged or unknown. It describes only what the two captures observed and never implies monitoring in between.
+_Avoid_: Trend, monitoring, live diff, Change check (a per-document term)
+
+**Resolved** (Audit comparison):
+An Audit finding observed in the earlier snapshot and not in the later one, with the repository re-assessed in the later snapshot under the same project type and audit rules. It means no longer observed, not fixed.
+_Avoid_: Fixed, closed, done
+
+**Unknown** (Audit comparison):
+An Audit finding whose change cannot be decided: the repository was not assessed or not captured in one snapshot, was not re-audited between them, its links were checked in only one, or its project type or the audit rules changed. Unknown is never reported as added or resolved.
+_Avoid_: Skipped, unchanged, passed
+
 ## Language: repository evidence and stack intelligence (Epic 04)
 
 ### Discovery
@@ -245,7 +321,7 @@ The time Studio read the Manifest from GitHub. Not the time the Manifest was las
 _Avoid_: Updated at, last modified, timestamp
 
 **Stale** (stack result):
-A stack result that may no longer match the repository: the loaded repository list reports a push after it was Observed at, or it was Observed at more than 24 hours ago. Stale is a reason to refresh, never a claim that anything changed. Not the same as a Different target or an Observed mismatch.
+A stack result that may no longer match the repository: the loaded repository list reports a newer push than the one the scan started from, or it was Observed at more than 24 hours ago. Stale is a reason to refresh, never a claim that anything changed. Not the same as a Different target or an Observed mismatch.
 _Avoid_: Outdated, expired, invalid
 
 **Confidence basis**:
@@ -296,8 +372,6 @@ _Avoid_: Dry run, preview mode, locked
 
 ### Change sets
 
-_Planned for later Epic #69 stories (#98, #99); not implemented yet._
-
 **Change set**:
 The complete, reviewed list of file writes one publish will make to one Publish target and branch: each file's action, Base SHA and Result SHA, plus the commit message. Any change to any of these makes a different Change set.
 _Avoid_: Patch, batch, plan, commit
@@ -324,7 +398,7 @@ _Avoid_: Conflict (reserved for merge sections), out of date, race
 
 ### Recovery
 
-_Planned for later Epic #69 stories (#98, #99); not implemented yet._
+_Publish attempts run since story #98: files are written in order and the attempt stops at the first failure, leaving later files `not attempted`. Ambiguous writes, the `unknown` and `not written` outcomes, Reconciliation and the Publish journal are planned for story #99; not implemented yet._
 
 **Publish attempt**:
 The execution of one approved Change set, writing its File changes one at a time. Can end complete, partial (some files written, the rest not attempted) or with an Ambiguous write.

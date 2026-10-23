@@ -24,9 +24,42 @@ This intentionally small deployment supports one server process. Multi-instance/
 
 1. Connect, then choose an explicitly selected repository. The picker shows visibility, default branch, and effective write status based on app installation and user access. A profile repository is suggested, never assumed or created.
 2. Enter the branch and README path. Load remote README runs a [Preflight](#preflight) for that exact Publish target and then captures the file's exact text, blob SHA and branch commit separately from your local draft.
-3. Review remote/prepared source, the unified changed-region diff, line counts and headings. The diff uses bounded linear memory and may include unchanged interior lines within a changed region; source panes are authoritative.
-4. Edit the commit message and check the confirmation naming the target. The confirmation and publish button exist only when the Preflight for the current target is writable. Confirm and publish makes exactly one Contents API write, using the loaded SHA for updates and omitting it only for a new file. GitHub rejects a stale SHA. No files are deleted.
+3. Review the [Change set](#change-set-review): every file the publish would write, with its action, Base SHA and Result SHA, and for each file the remote/prepared source, unified changed-region diff, line counts and headings. The diff uses bounded linear memory and may include unchanged interior lines within a changed region; source panes are authoritative.
+4. Edit the commit message, then check the Publish approval, which names the file count, repository, branch and change set id. The approval and publish button exist only when the Preflight for the current target is writable, and the publish button stays disabled until this exact Change set is approved. Confirm and publish re-reads every file, then makes one Contents API write per File change, sending the Base SHA for updates and requiring the file to be absent for a create. GitHub rejects a stale SHA. No files are deleted.
 5. Success shows the commit, repository and file links. Local source remains unchanged. Failure keeps the prepared source/diff and Download README fallback. If a network response is lost, check GitHub before retrying; a remote write may have completed.
+
+### Change set review
+
+A **Change set** is the complete, reviewed list of file writes one publish makes to one Publish target and branch. It is built in memory when the remote file loads (ADR epic69-02) and shown first in the review:
+
+- The header names the repository, the branch and the **base commit**, which is the branch head when the README was loaded.
+- One row per **File change**, in execution order (generated assets first, the README or workflow last), lists the path, kind, action, **Base SHA**, **Result SHA**, size in bytes and added/removed lines. Each row has an expandable diff that uses the same source panes as the README review.
+  - `create (new file)`: the file does not exist. Base SHA reads “none: new file”, and the write is refused if the file exists by then.
+  - `update`: the file is written only while GitHub still has the Base SHA. If the remote file starts with a UTF-8 byte order mark (BOM) and the prepared content does not (or the reverse), the row says so, because a BOM is invisible in the diff panes. Remote files are read with their BOM, so the reviewed text is always the exact bytes the Base SHA names.
+  - `unchanged: no write`: the prepared content already has the remote SHA, so nothing is sent for it.
+- Every SHA is a Git blob SHA (SHA-1 of `blob <bytes>`, a NUL byte, then the UTF-8 content), the same value GitHub reports for each file. The Result SHA identifies the exact reviewed content.
+- The change set id is the SHA-256 of the target, branch, base commit, commit message and ordered File changes. Its first eight characters appear in the Publish approval.
+
+There is one **Publish approval** per Change set, held in memory only. Anything that builds a new Change set withdraws it: editing the commit message (the message is part of the set), resolving a merge, reloading a baseline, changing the asset options or changing the target. Re-checking access also clears the checkbox. A Change set with no file writes cannot be approved. Approval covers one Publish attempt: once it has run, complete or partial, no change set built on that remote baseline can be approved again, because Studio's own writes would read back as remote changes. Load the remote file again to review a new one.
+
+Before the first write, Studio re-reads every file in the Change set. Only per-file SHA drift makes it a **Stale change set**. The branch head moving alone does not, because each Contents write commits on top of the head. A stale set writes nothing at all:
+
+- A stale README or workflow opens the existing remote-change review (merge, reload or cancel), which builds a new Change set.
+- A stale generated asset takes its latest remote SHA into a new Change set, which is shown under “Stale change set” and needs a fresh approval.
+
+Each write sends its Base SHA (none for a create), Result SHA and change set id. The server recomputes the Result SHA from the content it received and refuses a mismatch (400) before contacting GitHub. It then re-reads the file and refuses an update whose Base SHA no longer matches, or a create whose file now exists (409, with the remote file for review). There is no force, delete or ref-rewrite path. Writes run one at a time and stop at the first failure. The results list each file as written, no write, failed or not attempted. A Change set is **not atomic**: earlier commits remain after a later failure.
+
+The Change set and its approval are never saved to drafts, backups, projects or browser storage, and reloading the page discards them. Computing Git blob SHAs needs the browser's Web Crypto API, which requires a secure (HTTPS or localhost) page. Without it, the review stays in Read-only mode with a message, and Download remains available.
+
+#### Manual verification of change sets (not performed by CI)
+
+Automated tests use mocked GitHub responses only. An operator can confirm Change set behaviour against a real app installation on a disposable repository. CI does not run these steps.
+
+- [ ] **Result SHA matches GitHub**: publish a README update. The README row's Result SHA equals the blob SHA GitHub reports for the new file (the Contents API `sha`, or `git rev-parse HEAD:README.md` after pulling).
+- [ ] **Stale asset**: load a review with generated banner assets, then commit a change to one of those asset paths on GitHub. Confirm and publish writes nothing and shows “Stale change set” with the new Base SHA.
+- [ ] **Create when the file appears**: load a review for a README path that does not exist, create that file on GitHub, then publish. Nothing is written and the remote-change review opens.
+
+Record who ran each check and when in your deployment notes; Studio does not record or claim these results.
 
 ### Preflight
 
@@ -67,7 +100,7 @@ Publishing supports UTF-8 README text up to 750 KB, relative README paths withou
 
 ## Verification
 
-`npm test` includes server tests in Node with mocked OAuth and Contents responses: cookie flags, CSRF/Origin rejection, permission enforcement, token redaction, read/create/update, exact Unicode source and disconnect. `tests/publishing-preflight.test.js` covers every Preflight check, and the server tests prove a refused commit matches the Preflight message with zero PUT requests. `tests/browser/publishing.spec.js` covers explicit confirmation, Read-only mode, failing checks, target changes, offline Preflight, unchanged local source, new files, denied writes and mobile download fallback in all three engines. Manual deployment verification with a real app is still required before offering publishing publicly; automated tests do not prove an operator's proxy/configuration is secure.
+`npm test` includes server tests in Node with mocked OAuth and Contents responses: cookie flags, CSRF/Origin rejection, permission enforcement, token redaction, read/create/update, exact Unicode source and disconnect. `tests/publishing-preflight.test.js` covers every Preflight check, and the server tests prove a refused commit matches the Preflight message with zero PUT requests. `tests/publishing-change-set.test.js` checks Git blob SHAs against `git hash-object` vectors (including Unicode), action derivation, change set id stability, stale detection and the stop-on-first-failure executor. The server tests refuse a Result SHA mismatch, a create over an existing file and an update without a Base SHA, each with zero PUT requests. `tests/browser/publishing.spec.js` covers explicit confirmation, Change set rows with Base and Result SHAs, approval withdrawn by a message edit, approval retired after a Publish attempt, an unchanged README (asset-only publish and nothing to approve), a remote BOM named in the review, a stale asset blocking every write, missing Web Crypto, Read-only mode, failing checks, target changes, offline Preflight, unchanged local source, new files, denied writes and mobile download fallback in all three engines. Manual deployment verification with a real app is still required before offering publishing publicly; automated tests do not prove an operator's proxy/configuration is secure.
 
 The API contract follows [GitHub Contents documentation](https://docs.github.com/en/rest/repos/contents). Check upstream permission changes when enabling new write types.
 

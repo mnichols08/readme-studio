@@ -1,4 +1,4 @@
-import { normalizeDependencies } from "./dependencies.js";
+import { normalizeDependencies, provenance } from "./dependencies.js";
 import { auditClient, AuditError } from "../repository-audit/github.js";
 import { githubRepository } from "../badges/providers/github.js";
 import { manifests, analyzeManifest, MANIFEST_LIMIT } from "./manifests.js";
@@ -23,6 +23,12 @@ const nestedNotes = {
     "Local path dependencies are not followed.",
   ],
 };
+// The repository list's pushed_at, kept only when it is a parseable time.
+const pushedAt = (repo) =>
+  typeof repo.pushed_at === "string" &&
+  Number.isFinite(Date.parse(repo.pushed_at))
+    ? repo.pushed_at
+    : "";
 export class StackClient {
   constructor({ client = auditClient, now = () => Date.now() } = {}) {
     this.client = client;
@@ -63,12 +69,18 @@ export class StackClient {
         return this.client.request(path, s);
       },
     };
+    // Observed at is when Studio read the files, kept on cache hits; the
+    // `checkedAt` alias remains for one release. `pushedAt` is the repository
+    // list's pushed_at value this scan started from.
+    const observedAt = this.now();
     const result = {
-      version: 4,
+      version: 5,
       language: repo.language || "",
       repository: repo.full_name,
       ref: branch,
-      checkedAt: this.now(),
+      observedAt,
+      checkedAt: observedAt,
+      pushedAt: pushedAt(repo),
       manifests: [],
       projects: [],
       issues: [],
@@ -304,10 +316,26 @@ export class StackClient {
         : []),
       ...boundaries,
     ].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    const context = {
+      repository: name,
+      branch,
+      observedAt,
+    };
     result.dependencies = normalizeDependencies(
       repo.full_name,
       result.manifests,
+      context,
     );
+    // Engine signals carry the same Provenance as dependency Declarations.
+    for (const manifest of result.manifests)
+      manifest.signals = (manifest.signals || []).map((signal) => ({
+        ...signal,
+        ...provenance(context, manifest, {
+          section: signal.evidence,
+          line: null,
+          basis: "explicit",
+        }),
+      }));
     result.status = result.issues.length
       ? "partial"
       : result.manifests.length
@@ -350,12 +378,17 @@ export async function scanStacks(
           result = await client.repository(repo, { signal, force, nested });
         } catch (error) {
           if (signal?.aborted) return;
+          const observedAt = Date.now();
           result = {
+            version: 5,
             repository: repo.full_name,
+            ref: repo.default_branch || "HEAD",
             status: "failed",
             manifests: [],
             issues: [error.message],
-            checkedAt: Date.now(),
+            observedAt,
+            checkedAt: observedAt,
+            pushedAt: pushedAt(repo),
           };
           if (["rate-limit", "forbidden"].includes(error.kind))
             result.stopped = error.message;

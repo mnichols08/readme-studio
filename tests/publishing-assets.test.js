@@ -4,7 +4,6 @@ import {
   validateGeneratedAsset,
   rewriteOwnedBanner,
   prepareAssetPlan,
-  executeAssetPlan,
 } from "../src/publishing/assets.js";
 import { assetPath } from "../src/publishing/asset-path.js";
 import { newBanner } from "../src/banners/banner-model.js";
@@ -59,22 +58,16 @@ it("rewrites only exact owned source and accounts for nested README paths", () =
   draft.markdown = serializeBlocks(draft.blocks);
   expect(rewriteOwnedBanner(draft, "assets/readme").rewritten).toBe(false);
 });
-it("plans new/changed/unchanged and reports partial writes without claiming atomicity", async () => {
+it("plans new/changed/unchanged rows from each remote baseline", async () => {
   const files = generatedAssets(newBanner()),
-    t = { repository: "octocat/octocat", branch: "main" };
-  const rows = await prepareAssetPlan(files, t, async () => ({
-    sha: null,
-    content: "",
-  }));
-  expect(rows.map((r) => r.status)).toEqual(["new", "new"]);
-  let writes = 0;
-  const result = await executeAssetPlan(rows, t, "update", async (op) => {
-    if (op === "read") return { sha: null };
-    if (++writes === 2) throw Error("permission");
-    return { commitSha: "a".repeat(40) };
+    t = { repository: "octocat/octocat", branch: "main" },
+    reads = [];
+  const rows = await prepareAssetPlan(files, t, async (value) => {
+    reads.push(value);
+    return { sha: null, content: "" };
   });
-  expect(result.complete).toBe(false);
-  expect(result.results.map((r) => r.status)).toEqual(["published", "failed"]);
+  expect(rows.map((r) => r.status)).toEqual(["new", "new"]);
+  expect(reads.map((r) => r.kind)).toEqual(["asset", "asset"]);
   const unchanged = await prepareAssetPlan([files[0]], t, async () => ({
     sha: "a",
     content: files[0].content,
@@ -85,19 +78,4 @@ it("plans new/changed/unchanged and reports partial writes without claiming atom
     content: "previous SVG",
   }));
   expect(changed[0].status).toBe("changed");
-});
-it("preflights every asset and stops before any write on a stale SHA", async () => {
-  const rows = await prepareAssetPlan(
-    generatedAssets(newBanner()),
-    {},
-    async () => ({ sha: null, content: "" }),
-  );
-  let writes = 0;
-  await expect(
-    executeAssetPlan(rows, {}, "update", async (op) => {
-      if (op !== "read") writes++;
-      return { sha: "changed" };
-    }),
-  ).rejects.toThrow("conflict");
-  expect(writes).toBe(0);
 });

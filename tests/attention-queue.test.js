@@ -103,6 +103,28 @@ describe("descriptive attention queue", () => {
       ),
     ).toBe(null);
   });
+  it("lists Audit finding messages, not finding objects, as reasons", () => {
+    const rec = record("todo", `TODO ${prose}`, { topics: ["experiment"] });
+    rec.review = {
+      findings: [
+        {
+          id: "link:unavailable:fnv1a32:4eabad4e",
+          message:
+            "Link unavailable: https://example.org/old (HTTP 404/410 at check time).",
+          url: "https://example.org/old",
+        },
+      ],
+      notes: [],
+    };
+    const reasons = attentionItem(rec, { now }).reasons;
+    expect(reasons).toContain(
+      "Possible unresolved TODO in README prose; review whether it is intentional.",
+    );
+    expect(reasons).toContain(
+      "Link unavailable: https://example.org/old (HTTP 404/410 at check time).",
+    );
+    expect(reasons.join(" ")).not.toContain("[object Object]");
+  });
   it("omits appropriate short experiments and respects manual project types", () => {
     const rec = record("experiment", prose, { topics: ["experiment"] });
     expect(attentionItem(rec, { now })).toBe(null);

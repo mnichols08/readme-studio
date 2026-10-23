@@ -45,6 +45,13 @@ Filters combine: High/Medium/Low, missing only, active only, archived exclude/in
 - **Mark intentionally minimal** hides that README revision without an expiry. It requires a valid GitHub blob SHA or confirmed missing root README; unavailable revisions need another audit.
 - Choose **Deferred items** or **All attention items** to review hidden candidates. **Return to queue** removes the decision explicitly.
 
+Each item also has an [Improvement plan](repository-auditing.md#improvement-plans) disclosure with the evidence behind each Recommendation. The queue and plans read the same key topic subset from each project type.
+
+- **Skip** in a plan never changes the queue.
+- **Dismiss for this session** in a plan removes that gap or finding from the item's reasons and from the eligibility check. If nothing else needs attention, the item leaves the queue and focus returns to the queue heading. The count line adds **· N recommendations dismissed**. **Restore** in the plan (also available from Audit results) brings it back.
+- A missing, stub or minimal README cannot be dismissed, so High attention is never dropped silently. Use **Mark intentionally minimal** in the item or the plan instead.
+- A dismissal applies only to the README revision it was made against. Plan dismissals currently last for this tab session and are not saved in this browser.
+
 The type dropdown remains in **Audit results**. Changing it updates queue evidence from cached facts without another request.
 
 ## Changes, persistence and recovery

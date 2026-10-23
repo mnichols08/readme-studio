@@ -1,4 +1,6 @@
 // Stable IDs and deterministic, advisory profiles. No scores or required sections.
+// `key` is the subset of `topics` the README Attention Queue and Improvement
+// plans treat as key topics; the rest of the profile is optional context.
 export const projectTypes = [
   {
     id: "web-app",
@@ -11,6 +13,7 @@ export const projectTypes = [
       "testing",
       "deployment",
     ],
+    key: ["overview", "visuals", "setup", "configuration"],
   },
   {
     id: "library",
@@ -24,6 +27,7 @@ export const projectTypes = [
       "examples",
       "contributing",
     ],
+    key: ["overview", "installation", "usage", "api", "examples"],
   },
   {
     id: "cli",
@@ -35,6 +39,7 @@ export const projectTypes = [
       "examples",
       "configuration",
     ],
+    key: ["installation", "commands", "options", "examples"],
   },
   {
     id: "api",
@@ -46,6 +51,7 @@ export const projectTypes = [
       "configuration",
       "requests",
     ],
+    key: ["setup", "authentication", "endpoints", "requests"],
   },
   {
     id: "npm-package",
@@ -58,6 +64,7 @@ export const projectTypes = [
       "compatibility",
       "examples",
     ],
+    key: ["overview", "installation", "usage", "api"],
   },
   {
     id: "rust-crate",
@@ -70,6 +77,7 @@ export const projectTypes = [
       "compatibility",
       "examples",
     ],
+    key: ["overview", "installation", "usage", "api"],
   },
   {
     id: "python-package",
@@ -82,11 +90,13 @@ export const projectTypes = [
       "compatibility",
       "examples",
     ],
+    key: ["overview", "installation", "usage", "api"],
   },
   {
     id: "game",
     name: "Game",
     topics: ["overview", "controls", "setup", "visuals", "gameplay", "build"],
+    key: ["overview", "controls", "setup", "gameplay", "build"],
   },
   {
     id: "pwa",
@@ -99,27 +109,37 @@ export const projectTypes = [
       "offline",
       "deployment",
     ],
+    key: ["overview", "setup", "offline"],
   },
   {
     id: "documentation",
     name: "Documentation",
     topics: ["overview", "navigation", "examples", "contributing"],
+    key: ["overview", "navigation"],
   },
   {
     id: "open-source",
     name: "Open Source Project",
     topics: ["overview", "setup", "usage", "contributing", "license"],
+    key: ["overview", "setup", "usage", "contributing"],
   },
   {
     id: "tutorial",
     name: "Tutorial",
     topics: ["overview", "prerequisites", "steps", "examples"],
+    key: ["overview", "prerequisites", "steps"],
   },
-  { id: "experiment", name: "Experiment", topics: ["overview", "findings"] },
+  {
+    id: "experiment",
+    name: "Experiment",
+    topics: ["overview", "findings"],
+    key: ["overview"],
+  },
   {
     id: "generic",
     name: "Generic Repository",
     topics: ["overview", "setup", "usage", "links"],
+    key: ["overview", "setup", "usage"],
   },
 ];
 
@@ -185,6 +205,11 @@ const definitions = {
   ],
   links: ["Project / documentation links", /\b(?:links|resources)\b/i],
 };
+
+export const topicLabel = (key) => definitions[key]?.[0] || key;
+// Whether a heading title uses any English topic term the audit looks for.
+export const namesTopic = (title) =>
+  Object.values(definitions).some(([, pattern]) => pattern.test(title));
 
 // sectionHas only accepts populated sections outside comments/code examples.
 export function documentationFacts(metrics, sectionHas) {
@@ -286,16 +311,26 @@ export function suggestProjectType(repo = {}, prose = "") {
       (v) => name === v || name.startsWith(`${v}-`) || name.endsWith(`-${v}`),
     );
     if (topic)
-      topicCandidates.push({ id, reason: `Repository topic “${topic}”.` });
-    else if (pattern.test(prose))
+      topicCandidates.push({
+        id,
+        reason: `Repository topic “${topic}”.`,
+        source: "topic",
+        match: topic,
+      });
+    else if (pattern.test(prose)) {
+      const match = prose.match(pattern)[0];
       proseCandidates.push({
         id,
-        reason: `README prose includes “${prose.match(pattern)[0]}”.`,
+        reason: `README prose includes “${match}”.`,
+        source: "prose",
+        match,
       });
-    else if (nameHint)
+    } else if (nameHint)
       nameCandidates.push({
         id,
         reason: `Repository name contains “${nameHint}”; this is a weak hint.`,
+        source: "name",
+        match: nameHint,
       });
   }
   const candidates = [
@@ -307,6 +342,8 @@ export function suggestProjectType(repo = {}, prose = "") {
     id: "generic",
     reason:
       "No specific project-type evidence found. Language and homepage alone do not establish a project type.",
+    source: "fallback",
+    match: "",
   };
   return { ...chosen, alternatives: candidates.slice(1).map((c) => c.id) };
 }
