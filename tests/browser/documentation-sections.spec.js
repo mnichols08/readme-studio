@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
 async function open(page, type) {
   await page.getByRole("button", { name: "Library", exact: true }).click();
   await page.locator(`[data-block-type="${type}"]`).click();
@@ -20,6 +21,13 @@ test("installation and testing sections remain editable and support undo", async
   await page
     .getByLabel("Install command", { exact: true })
     .fill("pnpm add actual-package");
+  await expect(page.getByLabel("Install command status")).toHaveValue(
+    "placeholder",
+  );
+  await page.getByLabel("Install command status").selectOption("verified");
+  await page
+    .getByLabel("Install command verification note or evidence")
+    .fill("Matched the package manifest install guidance.");
   await page
     .getByLabel("Prerequisites", { exact: true })
     .fill("Confirm your runtime version first.");
@@ -38,7 +46,7 @@ test("installation and testing sections remain editable and support undo", async
     .fill("Use your own registry if required.");
   await page.getByRole("button", { name: "Save section", exact: true }).click();
   await open(page, "doc-testing");
-  await page.getByLabel("Test commands").fill("npm test");
+  await page.getByLabel("Test commands", { exact: true }).fill("npm test");
   await page.getByLabel("Test types (one per line)").fill("Unit\nBrowser");
   await page.getByLabel("Coverage notes").fill("Measured locally.");
   await page
@@ -48,6 +56,8 @@ test("installation and testing sections remain editable and support undo", async
     () => document.querySelector("app-shell").store.draft.markdown,
   );
   expect(source).toContain("```sh\nnpm test\n```");
+  expect(source).toContain("readme-studio-example: verified");
+  expect(source).toContain("readme-studio-example: placeholder");
   expect(source).toContain("- Unit\n- Browser");
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   expect(
@@ -61,6 +71,51 @@ test("installation and testing sections remain editable and support undo", async
       () => document.querySelector("app-shell").store.draft.markdown,
     ),
   ).toBe(source);
+
+  await page.getByRole("button", { name: "Export README" }).click();
+  const review = page.locator("example-export-check");
+  await expect(
+    review.getByRole("heading", { name: "Review example provenance" }),
+  ).toBeFocused();
+  await expect(review).toContainText("1 placeholder");
+  await page.evaluate(() =>
+    document
+      .querySelector("app-shell")
+      .store.raw(
+        document.querySelector("app-shell").store.draft.markdown + "\n",
+      ),
+  );
+  await review
+    .getByRole("button", { name: "Export current source anyway" })
+    .click();
+  await expect(review.locator("[data-status]")).toContainText("source changed");
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.evaluate(
+    (value) => document.querySelector("app-shell").store.raw(value),
+    source,
+  );
+  await page.getByRole("button", { name: "Export README" }).click();
+  const download = page.waitForEvent("download");
+  await page
+    .locator("example-export-check")
+    .getByRole("button", { name: "Export current source anyway" })
+    .click();
+  expect(readFileSync(await (await download).path(), "utf8")).toBe(source);
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: async () => Promise.reject(Error("Denied")) },
+      configurable: true,
+    });
+  });
+  await page
+    .getByRole("button", { name: "Copy Markdown", exact: true })
+    .click();
+  await page
+    .locator("example-export-check")
+    .getByRole("button", { name: "Copy current source anyway" })
+    .click();
+  await expect(page.getByLabel("Markdown to copy")).toHaveValue(source);
 });
 test("environment rows support keyboard ordering and placeholder guidance at mobile width", async ({
   page,

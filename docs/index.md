@@ -68,6 +68,8 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 
 - [Cross-document link checks](document-link-checks.md) — locally resolve relative paths and anchors among workspace documents before export.
 
+- [Example provenance](example-provenance.md) — explicitly label structured commands and examples, then review placeholders before exact copy/export without running source.
+
 - [Shared components](shared-components.md) — reusable Markdown definitions and explicit multi-document update previews.
 
 - [Cross-README updates](cross-readme-updates.md) — affected counts and recipient selection beside document diffs.

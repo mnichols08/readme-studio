@@ -26,7 +26,9 @@ it.each(Object.entries(documentationSections))(
     const block = createBlock(type, settings),
       source = serializeBlock(block);
     expect(source.startsWith(`## ${definition.name}`)).toBe(true);
-    expect(source).not.toContain("readme-studio");
+    if (definition.fields.some((field) => field.kind === "code"))
+      expect(source).toContain("readme-studio-example: placeholder");
+    else expect(source).not.toContain("readme-studio-example");
     const draft = newDraft("Docs", [block]);
     expect(
       validateDraft(JSON.parse(JSON.stringify(draft))).blocks[0].settings,
@@ -69,7 +71,12 @@ it("keeps code fence characters inside examples and escapes titles", () => {
   });
   const tokens = marked.lexer(source);
   expect(tokens.find((t) => t.type === "code").text).toBe(code);
-  expect(tokens.some((t) => t.type === "html")).toBe(false);
+  expect(
+    tokens
+      .filter((t) => t.type === "html")
+      .every((t) => /readme-studio-example/.test(t.text)),
+  ).toBe(true);
+  expect(source).toContain("## \\<img src=x onerror=bad\\>");
 });
 it("serializes environment rows with boolean requirements and safe table cells", () => {
   const settings = {

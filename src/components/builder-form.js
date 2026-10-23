@@ -167,8 +167,21 @@ export class BuilderForm extends HTMLElement {
           (!Array.isArray(s.items) || s.items.length > 200))
       )
         throw Error("Unsupported documentation settings.");
+      const codeFields = definition.fields.filter(
+        (field) => field.kind === "code",
+      );
+      if (codeFields.length) {
+        if (!s.exampleProvenance || typeof s.exampleProvenance !== "object")
+          s.exampleProvenance = {};
+        for (const field of codeFields)
+          if (!s.exampleProvenance[field.key])
+            s.exampleProvenance[field.key] = {
+              status: "placeholder",
+              basis: "",
+            };
+      }
       form =
-        '<p class="hint">Document verified project facts. Text areas accept Markdown; command fields generate code fences. Leave unknown details blank.</p>' +
+        '<p class="hint">Document project facts. Code and command examples need an explicit provenance status; Studio records the label but never runs them. Leave unknown details blank.</p>' +
         this.fields(
           [
             field("title", "Section heading"),
@@ -182,6 +195,23 @@ export class BuilderForm extends HTMLElement {
           ],
           s,
         );
+      form += codeFields
+        .map((field) => {
+          const provenance = s.exampleProvenance[field.key];
+          return `<fieldset class="example-provenance"><legend>${html(field.label)} provenance</legend><label>Status<select data-path="exampleProvenance.${field.key}.status" aria-label="${html(field.label)} status">${[
+            ["placeholder", "Placeholder"],
+            ["user-confirmed", "User-confirmed"],
+            ["verified", "Verified"],
+          ]
+            .map(
+              ([value, label]) =>
+                `<option value="${value}" ${provenance.status === value ? "selected" : ""}>${label}</option>`,
+            )
+            .join(
+              "",
+            )}</select></label><label>Verification note or evidence<textarea data-path="exampleProvenance.${field.key}.basis" aria-label="${html(field.label)} verification note or evidence" rows="2">${html(provenance.basis)}</textarea></label></fieldset>`;
+        })
+        .join("");
       if (definition.guidance)
         form += `<p class="hint">${html(definition.guidance)}</p>`;
       if (definition.rowFields)
