@@ -64,6 +64,8 @@ In v1.2.0, Improve README / Improve next opens the [repository README builder](r
 
 - [Workspace documents](workspace-documents.md) — multiple README sources, independent targets, switching and recovery.
 
+- [Documentation suites](documentation-suites.md) — explicitly choose, edit and exact-review a project-appropriate set of local documentation files.
+
 - [Shared components](shared-components.md) — reusable Markdown definitions and explicit multi-document update previews.
 
 - [Cross-README updates](cross-readme-updates.md) — affected counts and recipient selection beside document diffs.

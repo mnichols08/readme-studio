@@ -1,6 +1,6 @@
 # Readme Studio
 
-A local-first workspace for authoring GitHub profile and repository READMEs. This glossary covers the language used for documentation drift detection (Epic 13), guided first-run and task-based UX (Epic 01), reliable round-trip Markdown editing (Epic 02), the actionable README audit (Epic 03), repository evidence and stack intelligence (Epic 04), and safe GitHub publishing (Epic 08).
+A local-first workspace for authoring GitHub profile and repository READMEs. This glossary covers the language used for documentation drift detection (Epic 13), guided first-run and task-based UX (Epic 01), reliable round-trip Markdown editing (Epic 02), the actionable README audit (Epic 03), repository evidence and stack intelligence (Epic 04), documentation suites (Epic 05), and safe GitHub publishing (Epic 08).
 
 ## Language: documentation drift (Epic 13)
 
@@ -349,6 +349,20 @@ _Avoid_: Skill, proficiency, stack badge
 **Confirmation**:
 The author's explicit per-item acknowledgement that a selected Command suggestion or Technology claim is true for their repository. Required before the exact diff can be reviewed, separate from diff approval, and cleared when the item's text changes.
 _Avoid_: Approval (that is for the whole diff), consent (that is for reading manifests), verification
+
+## Language: documentation suites (Epic 05)
+
+**Documentation suite**:
+An explicitly selected set of separate project documentation files prepared and created together as local workspace documents. It begins empty and is not a required checklist.
+_Avoid_: Documentation pack, recommended set, generated docs
+
+**Suite template**:
+One project-type-specific option with a fixed relative path, reason and generic starting Markdown prompt. It contains no inferred project facts and is inert until selected.
+_Avoid_: Boilerplate requirement, auto-generated file
+
+**Suite manifest**:
+The versioned exact-review record of every selected path and its complete starting Markdown. Editing a choice or source invalidates it; one separate whole-suite approval is required before atomic creation.
+_Avoid_: Publish plan, file system operation, default selection
 
 ## Language: safe GitHub publishing (Epic 08)
 

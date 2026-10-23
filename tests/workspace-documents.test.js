@@ -188,4 +188,17 @@ describe("multi-README workspace", () => {
       "No matching",
     );
   });
+  it("opens the guided documentation suite without changing a document", () => {
+    const draft = newDraft("Existing");
+    draft.markdown = "# Existing exact source";
+    const el = document.createElement("workspace-documents");
+    el.configure([draft], draft.id);
+    let opened = 0;
+    el.addEventListener("document-suite", () => opened++);
+
+    el.querySelector("[data-suite]").click();
+
+    expect(opened).toBe(1);
+    expect(draft.markdown).toBe("# Existing exact source");
+  });
 });

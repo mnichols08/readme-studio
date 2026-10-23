@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.12
+
+- Add typed Documentation suite templates for generic projects, CLIs, APIs, libraries/packages, games and web apps (#86, #136). Every option has a fixed path, a relevance reason and generic editable guidance; no file starts selected and no command, contact address or project fact is invented.
+- Add a guided suite flow under Documents with an exact review of every selected path and complete starting Markdown. Editing a choice or source invalidates review, and a separate whole-suite approval is required (#137).
+- Revalidate manifests and workspace state at creation, refuse duplicate paths and capacity conflicts, then persist the entire candidate batch before changing in-memory state. Failures create nothing and preserve all existing source.
+- Keep every created file as an independent local document with intended-path metadata. Suite creation makes no network request and never publishes; add unit, mobile and cross-browser browser coverage.
+
 ## 1.9.11
 
 - Complete the evidence-to-documentation workflow by requiring an explicit per-item Confirmation for every selected Command suggestion and Technology claim before exact-diff review is available (#85, #134).
