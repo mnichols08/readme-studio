@@ -14,6 +14,7 @@ import { validateVisualLibrary } from "../themes/visual-library.js";
 import { bannerFiles } from "../banners/export.js";
 import { safeFilename } from "../state/download.js";
 import { sourceHash } from "../state/source-hash.js";
+import { validateLocalization } from "../localization/metadata.js";
 export { sourceHash } from "../state/source-hash.js";
 
 export const PROJECT_SCHEMA = 1,
@@ -41,6 +42,13 @@ const metadata = (v) =>
       .filter((k) => Object.hasOwn(v || {}, k))
       .map((k) => [k, portableData(v[k])]),
   );
+const validatedMetadata = (value) => {
+  const clean = metadata(value);
+  const document = clean.workspaceDocument;
+  if (document && Object.hasOwn(document, "localization"))
+    document.localization = validateLocalization(document.localization);
+  return clean;
+};
 function assetsFor(meta) {
   return meta.bannerSettings
     ? bannerFiles(meta.bannerSettings).map((f) => ({
@@ -67,7 +75,7 @@ export function createProject(
   now = new Date().toISOString(),
 ) {
   const portable = withoutDetachedCopies(draft);
-  const meta = metadata(portable.metadata),
+  const meta = validatedMetadata(portable.metadata),
     createdAt = meta.studioProject?.createdAt || now;
   meta.studioProject = { createdAt };
   const project = {
@@ -196,7 +204,7 @@ export function inspectProject(raw) {
       serializeBlocks(d.blocks) !== d.markdown
     )
       throw Error("Builder metadata does not exactly reproduce the README.");
-    const clean = metadata(d.metadata),
+    const clean = validatedMetadata(d.metadata),
       expected = assetsFor(clean);
     if (!Array.isArray(value.assets) || value.assets.length > 32)
       throw Error("Invalid asset manifest.");

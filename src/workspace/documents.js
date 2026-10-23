@@ -43,13 +43,14 @@ export function findDocument(drafts, destination) {
     ? drafts.find((draft) => targetIdentity(documentTarget(draft)) === identity)
     : undefined;
 }
-export function documentSettings(kind, destination) {
+export function documentSettings(kind, destination, localization = null) {
   if (!["profile", "repository", "local"].includes(kind))
     throw Error("Choose a document group.");
   return {
     version: 1,
     kind,
     target: kind === "local" ? null : target(destination),
+    ...(localization ? { localization: structuredClone(localization) } : {}),
   };
 }
 export const documentGroups = {

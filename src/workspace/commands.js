@@ -19,6 +19,7 @@ export const commandGroups = {
   ],
   Review: [
     ["learning-studio", "Learning studio"],
+    ["translation-review", "Translation review"],
     ["audience-review", "Audience review"],
     ["batch-review", "Batch review"],
     ["cross-readme-updates", "Cross-README updates"],

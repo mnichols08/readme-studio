@@ -524,6 +524,23 @@ export function installWorkspace(app) {
         });
       return true;
     }
+    if (action === "translation-review") {
+      app.modal(
+        '<h1>Translation review</h1><p data-translation-loading role="status">Loading local translation review…</p>',
+      );
+      const loading = app.querySelector("[data-translation-loading]");
+      import("../localization/dialog.js")
+        .then(({ openTranslationReview }) => {
+          if (loading.isConnected && app.dialog.open)
+            openTranslationReview(app);
+        })
+        .catch(() => {
+          if (loading.isConnected)
+            loading.textContent =
+              "Translation review could not load. Source and localization metadata are unchanged; reload and try again.";
+        });
+      return true;
+    }
     const event = activityEntry(action);
     if (event) {
       app.data.activity = validateActivity([

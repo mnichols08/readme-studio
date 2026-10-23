@@ -34,6 +34,7 @@ README Studio exports ordinary Markdown/HTML. Its preview is an approximation of
 - [Analyzer](analyzer.md)
 - [Audience review](audience-review.md) — advisory reader perspectives, first-visit checks and explicitly reviewed section ordering
 - [Learning studio](learning-studio.md) — optional project-type lessons, synthetic annotated examples and portable advisory checklists
+- [Multilingual documentation](multilingual.md) — explicit language editions, conservative translation drift, and language-aware uncertainty
 - [GitHub compatibility](compatibility.md)
 - [Safe refactors](refactors.md)
 - [Optional GitHub publishing](github-publishing.md): [Preflight](github-publishing.md#preflight) and [change set review](github-publishing.md#change-set-review)
