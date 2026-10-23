@@ -38,7 +38,6 @@ import { bindDialogDismissal } from "./dialog-dismissal.js";
 import { installWorkspace } from "../workspace/ui.js";
 import { validateGuide } from "../workspace/guide.js";
 import "./workflow-builder.js";
-import "./publish-dialog.js";
 import "./refactor-dialog.js";
 import "./compatibility-lab.js";
 import "./refresh-center.js";
@@ -378,13 +377,11 @@ export class AppShell extends HTMLElement {
       if (b.dataset.blockAction)
         this.blockAction(b.dataset.blockAction, b.dataset.id);
     };
-    this.addEventListener("workflow-publish", (e) => {
-      this.modal("<publish-dialog></publish-dialog>");
-      this.querySelector("publish-dialog").configureWorkflow(
-        this.store.draft,
-        e.detail,
-      );
-    });
+    this.addEventListener("workflow-publish", (e) =>
+      this.openPublishDialog((panel) =>
+        panel.configureWorkflow(this.store.draft, e.detail),
+      ),
+    );
     this.addEventListener("workflow-insert", (e) => {
       this.store.blocks([
         ...structuredClone(this.store.draft.blocks),
@@ -2432,24 +2429,42 @@ export class AppShell extends HTMLElement {
       : "Workspace";
     this.querySelector(".dialog-content").prepend(context);
     if (!this.dialog.open) this.dialog.showModal();
-    requestAnimationFrame(() => {
-      if (!this.dialog.open) return;
-      const title = this.dialog.querySelector("h1");
-      this.dialog.setAttribute(
-        "aria-label",
-        title?.textContent || "README Studio dialog",
-      );
-      if (
-        document.activeElement === this.dialog ||
-        document.activeElement === this.querySelector(".close-dialog") ||
-        !this.dialog.contains(document.activeElement)
-      )
-        this.dialog
-          .querySelector(
-            ".dialog-content input:not([type=hidden]),.dialog-content select,.dialog-content textarea,.dialog-content button",
-          )
-          ?.focus();
-    });
+    requestAnimationFrame(() => this.focusModalContent());
+  }
+  focusModalContent() {
+    if (!this.dialog.open) return;
+    const title = this.dialog.querySelector("h1");
+    this.dialog.setAttribute(
+      "aria-label",
+      title?.textContent || "README Studio dialog",
+    );
+    if (
+      document.activeElement === this.dialog ||
+      document.activeElement === this.querySelector(".close-dialog") ||
+      !this.dialog.contains(document.activeElement)
+    )
+      this.dialog
+        .querySelector(
+          ".dialog-content input:not([type=hidden]),.dialog-content select,.dialog-content textarea,.dialog-content button",
+        )
+        ?.focus();
+  }
+  openPublishDialog(configure) {
+    this.modal(
+      "<publish-dialog><p role='status'>Loading publishing tools…</p></publish-dialog>",
+    );
+    const panel = this.querySelector("publish-dialog");
+    import("./publish-dialog.js")
+      .then(() => {
+        if (!panel.isConnected || !this.dialog.open) return;
+        configure(panel);
+        this.focusModalContent();
+      })
+      .catch(() => {
+        if (!panel.isConnected || !this.dialog.open) return;
+        panel.innerHTML =
+          "<p role='alert'>Publishing tools could not be loaded. Close this dialog and try again.</p>";
+      });
   }
   welcome() {
     // Guided start (workspace/ui.js) keeps every earlier Start path.
@@ -2733,8 +2748,7 @@ export class AppShell extends HTMLElement {
     if (action === "workflows")
       this.modal("<workflow-builder></workflow-builder>");
     if (action === "publish-github") {
-      this.modal("<publish-dialog></publish-dialog>");
-      this.querySelector("publish-dialog").configure(this.store.draft);
+      this.openPublishDialog((panel) => panel.configure(this.store.draft));
     }
     if (action === "writing-assistant") {
       const start = this.editor.input.selectionStart,
