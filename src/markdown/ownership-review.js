@@ -29,13 +29,11 @@ const plan = (current, proposedBlock, record, label, kind) => ({
   proposedBlock: structuredClone(proposedBlock),
 });
 
-const validVisualCopy = (draft, record) => {
-  const previous = record.previous;
-  let generatedIds;
+const generatedIdsFor = (draft, blocks) => {
   try {
-    generatedIds = new Set(
+    return new Set(
       generatedRegistry({
-        blocks: [previous],
+        blocks,
         metadata: draft.metadata,
       }).flatMap((unit) => [
         ...(unit.blockId ? [unit.blockId] : []),
@@ -43,8 +41,19 @@ const validVisualCopy = (draft, record) => {
       ]),
     );
   } catch {
-    return false;
+    return null;
   }
+};
+
+const visualOwnershipKind = (draft, block) => {
+  const generatedIds = generatedIdsFor(draft, [block]);
+  return generatedIds
+    ? ownershipKind(block, draft.metadata, generatedIds)
+    : null;
+};
+
+const validVisualCopy = (draft, record) => {
+  const previous = record.previous;
   if (
     !previous ||
     typeof previous.id !== "string" ||
@@ -53,7 +62,7 @@ const validVisualCopy = (draft, record) => {
     typeof previous.settings !== "object" ||
     record.labels.length !== 1 ||
     record.kinds.length !== 1 ||
-    ownershipKind(previous, draft.metadata, generatedIds) !== record.kinds[0]
+    visualOwnershipKind(draft, previous) !== record.kinds[0]
   )
     return false;
   return record.kinds[0] === "component"
@@ -97,6 +106,20 @@ const verifyReviewRecord = (draft, review) =>
       )
     : null;
 
+const verifyReviewOwner = (draft, review) => {
+  if (review.recordId) return;
+  const current = draft.blocks.find(
+    (block) => block.id === review.targetBlockId,
+  );
+  if (
+    (current && visualOwnershipKind(draft, current) !== review.kind) ||
+    visualOwnershipKind(draft, review.proposedBlock) !== review.kind
+  )
+    throw Error(
+      "This section's owner uses a separate reviewed flow. Its Markdown remains unchanged; reopen the current section.",
+    );
+};
+
 export function ownershipReviewForEdit(draft, openedBlock, proposedBlock) {
   const current = draft.blocks.find((block) => block.id === openedBlock.id);
   if (
@@ -105,7 +128,16 @@ export function ownershipReviewForEdit(draft, openedBlock, proposedBlock) {
     source(current) === source(openedBlock)
   )
     return null;
-  if (current)
+  if (current) {
+    const expected = openedBlock.type === "component" ? "component" : "builder";
+    if (
+      [openedBlock, current, proposedBlock].some(
+        (block) => visualOwnershipKind(draft, block) !== expected,
+      )
+    )
+      throw Error(
+        "This section's owner uses a separate reviewed flow. Its Markdown remains unchanged; reopen the current section.",
+      );
     return plan(
       current,
       proposedBlock,
@@ -113,6 +145,7 @@ export function ownershipReviewForEdit(draft, openedBlock, proposedBlock) {
       blockLabel(openedBlock),
       openedBlock.type === "component" ? "component" : "builder",
     );
+  }
 
   const record = readDetachments(draft.metadata).findLast(
     (item) =>
@@ -124,6 +157,10 @@ export function ownershipReviewForEdit(draft, openedBlock, proposedBlock) {
       "This visual section was detached or removed. Its Markdown remains unchanged; reopen the current section.",
     );
   const resolved = reviewRecord(draft, record.id);
+  if (visualOwnershipKind(draft, proposedBlock) !== resolved.kinds[0])
+    throw Error(
+      "This section's owner uses a separate reviewed flow. Its Markdown remains unchanged; reopen the current section.",
+    );
   return plan(
     draft.blocks.find((block) => block.id === resolved.blockId),
     proposedBlock,
@@ -149,6 +186,7 @@ export function ownershipReviewForRecord(draft, recordId) {
 
 export function refreshOwnershipReview(draft, review) {
   verifyReviewRecord(draft, review);
+  verifyReviewOwner(draft, review);
   const current = draft.blocks.find(
     (block) => block.id === review.targetBlockId,
   );
@@ -165,6 +203,7 @@ export function refreshOwnershipReview(draft, review) {
 
 export function applyOwnershipReview(draft, review) {
   const record = verifyReviewRecord(draft, review);
+  verifyReviewOwner(draft, review);
   const blocks = structuredClone(draft.blocks);
   const index = blocks.findIndex((block) => block.id === review.targetBlockId);
   if (index < 0)

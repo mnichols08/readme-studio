@@ -194,6 +194,47 @@ describe("ownership review", () => {
     );
   });
 
+  it.each([
+    ["generated", { githubGenerated: { version: 1 } }, {}],
+    ["shared", { sharedComponent: "shared-1" }, {}],
+    ["profile", { profileIntro: { value: "Original" } }, {}],
+    ["banner", {}, { bannerReference: { blockId: "hero-1" } }],
+  ])(
+    "refuses a same-ID stale %s owner from an open visual form",
+    (_kind, ownership, metadata) => {
+      const opened = { ...hero(), ...ownership };
+      const current = {
+        ...structuredClone(opened),
+        settings: { ...opened.settings, subtitle: "Owner refreshed" },
+      };
+      const proposed = {
+        ...structuredClone(opened),
+        settings: { ...opened.settings, subtitle: "Stale visual proposal" },
+      };
+      expect(() =>
+        ownershipReviewForEdit(draft([current], metadata), opened, proposed),
+      ).toThrow("separate reviewed flow");
+    },
+  );
+
+  it("refuses forbidden ownership introduced while review is open", () => {
+    const opened = hero();
+    const current = hero("Concurrent builder change");
+    const plan = ownershipReviewForEdit(
+      draft([current]),
+      opened,
+      hero("Visual proposal"),
+    );
+    const generated = {
+      ...current,
+      githubGenerated: { version: 1 },
+      settings: { ...current.settings, subtitle: "Owner refreshed again" },
+    };
+    expect(() => applyOwnershipReview(draft([generated]), plan)).toThrow(
+      "separate reviewed flow",
+    );
+  });
+
   it("refuses a record removed or mutated while its review is open", () => {
     const original = record();
     const d = draft([detached()], { detachments: [original] });
