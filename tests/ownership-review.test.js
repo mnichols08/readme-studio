@@ -235,6 +235,29 @@ describe("ownership review", () => {
     );
   });
 
+  it("refuses a Restorable record pointed at an owned target", () => {
+    const ownedTarget = { ...detached(), sharedComponent: "shared-target" };
+    const d = draft([ownedTarget], { detachments: [record()] });
+    expect(() => ownershipReviewForRecord(d, "record-1")).toThrow(
+      "separate reviewed flow",
+    );
+  });
+
+  it("refuses ownership introduced on a detached target while review is open", () => {
+    const d = draft([detached()], { detachments: [record()] });
+    const plan = ownershipReviewForRecord(d, "record-1");
+    const generatedTarget = {
+      ...detached(),
+      githubGenerated: { version: 1 },
+    };
+    expect(() =>
+      applyOwnershipReview(
+        draft([generatedTarget], { detachments: [record()] }),
+        plan,
+      ),
+    ).toThrow("separate reviewed flow");
+  });
+
   it("refuses a record removed or mutated while its review is open", () => {
     const original = record();
     const d = draft([detached()], { detachments: [original] });

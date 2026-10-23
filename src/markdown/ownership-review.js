@@ -107,12 +107,16 @@ const verifyReviewRecord = (draft, review) =>
     : null;
 
 const verifyReviewOwner = (draft, review) => {
-  if (review.recordId) return;
   const current = draft.blocks.find(
     (block) => block.id === review.targetBlockId,
   );
+  const invalidCurrent = review.recordId
+    ? current &&
+      (current.type !== "custom" ||
+        visualOwnershipKind(draft, current) !== null)
+    : current && visualOwnershipKind(draft, current) !== review.kind;
   if (
-    (current && visualOwnershipKind(draft, current) !== review.kind) ||
+    invalidCurrent ||
     visualOwnershipKind(draft, review.proposedBlock) !== review.kind
   )
     throw Error(
@@ -161,13 +165,15 @@ export function ownershipReviewForEdit(draft, openedBlock, proposedBlock) {
     throw Error(
       "This section's owner uses a separate reviewed flow. Its Markdown remains unchanged; reopen the current section.",
     );
-  return plan(
+  const review = plan(
     draft.blocks.find((block) => block.id === resolved.blockId),
     proposedBlock,
     resolved,
     resolved.labels[0] || blockLabel(openedBlock),
     resolved.kinds[0],
   );
+  verifyReviewOwner(draft, review);
+  return review;
 }
 
 export function ownershipReviewForRecord(draft, recordId) {
@@ -175,13 +181,15 @@ export function ownershipReviewForRecord(draft, recordId) {
   const current = draft.blocks.find((block) => block.id === record.blockId);
   if (!current)
     throw Error("This detached section is no longer available for review.");
-  return plan(
+  const review = plan(
     current,
     record.previous,
     record,
     record.labels[0] || blockLabel(record.previous),
     record.kinds[0],
   );
+  verifyReviewOwner(draft, review);
+  return review;
 }
 
 export function refreshOwnershipReview(draft, review) {
