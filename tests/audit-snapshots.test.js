@@ -131,6 +131,48 @@ describe("audit snapshots", () => {
     });
   });
 
+  it("does not resolve a link that moved beyond capped later coverage", () => {
+    const earlierRecord = record("tool", sha("a"), [], 100);
+    earlierRecord.review = {
+      historyChecked: true,
+      linksChecked: true,
+      findings: [
+        {
+          id: "link:unavailable:abc",
+          message: "unavailable",
+          url: "https://example.test/moved-beyond-cap",
+        },
+      ],
+    };
+    const laterRecord = record("tool", sha("b"), [], 250);
+    laterRecord.review = {
+      historyChecked: true,
+      linksChecked: false,
+      findings: [],
+    };
+    const before = createAuditSnapshot({
+      account: "example",
+      capturedAt: 200,
+      records: [earlierRecord],
+    });
+    const after = createAuditSnapshot({
+      account: "example",
+      capturedAt: 300,
+      records: [laterRecord],
+    });
+    expect(compareAuditSnapshots(before, after)).toMatchObject({
+      added: [],
+      resolved: [],
+      unknown: [
+        {
+          repository: "example/tool",
+          id: "link:unavailable:abc",
+          reason: "Links were not checked in both snapshots.",
+        },
+      ],
+    });
+  });
+
   it("records plan identities and distinguishes history from link coverage", () => {
     const audited = record("tool", sha("a"), []);
     audited.result.state = "minimal";
@@ -212,5 +254,60 @@ describe("audit snapshots", () => {
     damaged.reset();
     expect(damaged.error).toBe("");
     expect(damaged.items).toEqual([]);
+  });
+
+  it("allowlists stored fields instead of rewriting untrusted extras", () => {
+    const storage = memory();
+    const snapshot = createAuditSnapshot({
+      account: "example",
+      capturedAt: 1,
+      records: [record("tool")],
+    });
+    snapshot.readmeSource = "secret source";
+    snapshot.repositories[0].evidence = "secret evidence";
+    snapshot.repositories[0].findings[0].message = "secret message";
+    storage.setItem(
+      AUDIT_SNAPSHOTS_KEY,
+      JSON.stringify({ version: 1, items: [snapshot] }),
+    );
+    const snapshots = new AuditSnapshots(() => storage);
+    expect(snapshots.error).toBe("");
+    snapshots.save(
+      createAuditSnapshot({ account: "other", capturedAt: 2, records: [] }),
+    );
+    expect(storage.value(AUDIT_SNAPSHOTS_KEY)).not.toContain("secret");
+  });
+
+  it("rejects duplicate identities and over-limit account history", () => {
+    const storage = memory();
+    const item = createAuditSnapshot({
+      account: "example",
+      capturedAt: 1,
+      records: [],
+    });
+    storage.setItem(
+      AUDIT_SNAPSHOTS_KEY,
+      JSON.stringify({ version: 1, items: [item, item] }),
+    );
+    expect(new AuditSnapshots(() => storage).error).toContain(
+      "could not be read",
+    );
+
+    storage.setItem(
+      AUDIT_SNAPSHOTS_KEY,
+      JSON.stringify({
+        version: 1,
+        items: Array.from({ length: 6 }, (_, index) =>
+          createAuditSnapshot({
+            account: "example",
+            capturedAt: index + 1,
+            records: [],
+          }),
+        ),
+      }),
+    );
+    expect(new AuditSnapshots(() => storage).error).toContain(
+      "could not be read",
+    );
   });
 });

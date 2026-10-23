@@ -242,7 +242,7 @@ it("limits optional checks to 20 URLs and stops on provider throttling", async (
   };
   const complete = await reviewReadme(repo, readme, { client });
   expect(complete.notes.join(" ")).toContain("20 per review");
-  expect(complete.linksChecked).toBe(true);
+  expect(complete.linksChecked).toBe(false);
   expect(calls).toBe(20);
   invalidateHealth();
   calls = 0;

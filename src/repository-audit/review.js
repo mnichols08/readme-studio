@@ -92,6 +92,6 @@ async function checks(repo, readme, { client, signal } = {}) {
     findings,
     notes,
     historyChecked,
-    linksChecked: unknown === 0 && checked === Math.min(targets.length, 20),
+    linksChecked: unknown === 0 && checked === targets.length,
   };
 }

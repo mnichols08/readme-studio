@@ -145,9 +145,40 @@ export function validateSnapshot(snapshot) {
         ? { id: finding.id }
         : { id: finding.id, url: finding.url };
     });
-    return { ...record, repository, findings };
+    return {
+      repository,
+      revision: record.revision,
+      observedAt: record.observedAt,
+      state: record.state,
+      projectType: record.projectType,
+      manualType: record.manualType,
+      historyChecked: record.historyChecked,
+      linksChecked: record.linksChecked,
+      findings,
+    };
   });
-  return { ...snapshot, account, repositories };
+  return {
+    id: snapshot.id,
+    account,
+    capturedAt: snapshot.capturedAt,
+    auditRules: snapshot.auditRules,
+    planRules: snapshot.planRules,
+    repositories,
+  };
+}
+
+function validateItems(items) {
+  const ids = new Set();
+  const accounts = new Map();
+  const clean = items.map(validateSnapshot);
+  for (const snapshot of clean) {
+    const count = (accounts.get(snapshot.account) || 0) + 1;
+    if (ids.has(snapshot.id) || count > ACCOUNT_LIMIT)
+      throw Error("Unsupported or damaged audit snapshots.");
+    ids.add(snapshot.id);
+    accounts.set(snapshot.account, count);
+  }
+  return clean;
 }
 
 export function compareAuditSnapshots(before, after) {
@@ -222,7 +253,7 @@ export class AuditSnapshots {
         value.items.length > TOTAL_LIMIT
       )
         throw Error("Unsupported or damaged audit snapshots.");
-      this.items = value.items.map(validateSnapshot);
+      this.items = validateItems(value.items);
       this.error = "";
     } catch {
       this.items = [];
