@@ -142,6 +142,7 @@ function serializeContent({ type, settings: s }) {
           typeof s.exampleProvenance.basis === "string"
             ? exampleMarker(
                 validateExampleProvenance(s.exampleProvenance).status,
+                s.code,
               )
             : "",
       });

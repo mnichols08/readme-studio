@@ -82,6 +82,20 @@ test("installation and testing sections remain editable and support undo", async
     ),
   ).toBe(source);
 
+  await page.evaluate(
+    (value) => document.querySelector("app-shell").store.raw(value),
+    source.replace("pnpm add actual-package@latest", "pnpm add other-package"),
+  );
+  await page.getByRole("button", { name: "Export README" }).click();
+  await expect(page.locator("example-export-check")).toContainText(
+    "1 stale provenance claim",
+  );
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.evaluate(
+    (value) => document.querySelector("app-shell").store.raw(value),
+    source,
+  );
+
   await page
     .locator(".block-row")
     .filter({ hasText: "Testing" })

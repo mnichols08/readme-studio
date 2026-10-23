@@ -377,7 +377,7 @@ A relative document link whose target cannot be identified exactly in its worksp
 _Avoid_: Broken remote link, automatic fix
 
 **Example provenance**:
-The author-chosen status of one structured command or code example: Verified (with a local evidence note), User-confirmed or Placeholder. Source carries only an inert portable status marker immediately before its fence; changing example text resets stale evidence to Placeholder. Studio never runs the example or infers its status, and unmarked imported/legacy fences remain unchanged but require review before copy/export.
+The author-chosen status of one structured command or code example: Verified (with a local evidence note), User-confirmed or Placeholder. Source carries only an inert portable status marker and content fingerprint immediately before its fence; changing example text in a builder resets stale evidence to Placeholder, while a raw edit makes the claim stale at review. Studio never runs the example or infers its status, and unmarked imported/legacy fences remain unchanged but require review before copy/export.
 _Avoid_: Test result, execution record, automatic verification
 
 **Placeholder example**:

@@ -21,7 +21,7 @@ describe("example provenance", () => {
       basis: "Matched package.json scripts on 2026-10-23.",
     };
     const source = serializeDocumentation("doc-testing", settings);
-    expect(source).toContain(exampleMarker("verified"));
+    expect(source).toContain(exampleMarker("verified", "npm test"));
     expect(source).toContain("```sh\nnpm test\n```");
     expect(source).not.toContain(settings.exampleProvenance.commands.basis);
     expect(inspectExampleMarkers(source)).toMatchObject({
@@ -86,6 +86,25 @@ describe("example provenance", () => {
     ).toEqual([{ kind: "unclassified" }]);
   });
 
+  it("inspects quoted and list-contained fences and rejects stale claims", () => {
+    const quoted = `> ${exampleMarker("placeholder", "npm publish")}\n> ~~~sh\n> npm publish\n> ~~~`;
+    expect(inspectExampleMarkers(quoted).issues).toEqual([
+      { kind: "placeholder", status: "placeholder" },
+    ]);
+    const listed = `- Try this\n\n  ${exampleMarker("verified", "npm test")}\n  ~~~sh\n  npm test\n  ~~~`;
+    expect(inspectExampleMarkers(listed).issues).toEqual([]);
+    expect(
+      inspectExampleMarkers(
+        listed.replace("npm test\n  ~~~", "npm run test\n  ~~~"),
+      ).issues,
+    ).toEqual([{ kind: "stale-provenance", status: "verified" }]);
+    expect(
+      inspectExampleMarkers(
+        `${exampleMarker("user-confirmed")}\n~~~sh\nnpm test\n~~~`,
+      ).issues,
+    ).toEqual([{ kind: "unbound-marker", status: "user-confirmed" }]);
+  });
+
   it("marks built-in Code Samples and places collapsed markers by their fence", () => {
     const settings = {
       title: "Try it",
@@ -97,7 +116,7 @@ describe("example provenance", () => {
     };
     const source = serializeBlock(createBlock("code", settings));
     expect(source).toContain(
-      `${exampleMarker("placeholder")}\n\`\`\`js\nrun()`,
+      `${exampleMarker("placeholder", "run()")}\n\`\`\`js\nrun()`,
     );
     expect(inspectExampleMarkers(source).issues).toEqual([
       { kind: "placeholder", status: "placeholder" },

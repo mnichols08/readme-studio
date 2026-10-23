@@ -355,7 +355,7 @@ export function serializeDocumentation(type, settings) {
                 !Array.isArray(provenance) &&
                 EXAMPLE_STATUSES.includes(provenance.status) &&
                 typeof provenance.basis === "string";
-              return `${shaped ? exampleMarker(validateExampleProvenance(provenance).status) + "\n" : ""}${fence(value, language)}`;
+              return `${shaped ? exampleMarker(validateExampleProvenance(provenance).status, value) + "\n" : ""}${fence(value, language)}`;
             })()
           : field.kind === "list"
             ? value
