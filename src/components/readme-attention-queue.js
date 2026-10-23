@@ -7,19 +7,19 @@ import {
   readmeRevision,
 } from "../repository-audit/attention.js";
 import {
-  improvementPlan,
+  improvementPlanForRecord,
   planDecision,
-  sessionDecisions,
 } from "../repository-audit/improvement-plan.js";
 import { readmeUrl } from "../repository-audit/presentation.js";
 import {
   AttentionPreferences,
   ATTENTION_KEY,
+  rememberAttentionPreference,
 } from "../repository-audit/attention-storage.js";
 
 export class ReadmeAttentionQueue extends HTMLElement {
   connectedCallback() {
-    this.preferences = new AttentionPreferences();
+    this.preferences ||= new AttentionPreferences();
     this.page = 0;
     this.innerHTML = `<h2 tabindex="-1">README Attention Queue</h2><p>Choose the next README to improve using descriptive signals, not a quality score. Load repositories and audit selected READMEs above first. Only successful assessments enter this queue.</p><p class="hint">High: recently active with missing or thin documentation. Medium: documentation needs attention or commonly useful project-type topics were not detected. Low: archived or no push in over 180 days. Within a tier: active first, README state, public-interest signals, then recent push and repository name. Pinned status and releases are not fetched.</p><div class="attention-filters"><label>Attention priority<select name="priority" aria-label="Attention priority"><option value="all">All priorities</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label><label><input type="checkbox" name="missing"> Missing only</label><label><input type="checkbox" name="active"> Active only (pushed within 30 days)</label><label>Archived repositories<select name="archived" aria-label="Archived repositories"><option value="exclude">Exclude archived</option><option value="include">Include archived</option><option value="only">Archived only</option></select></label><label>Queue language<select name="language" aria-label="Queue language"><option value="all">All languages</option></select></label><label>Queue project type<select name="type" aria-label="Queue project type"><option value="all">All project types</option>${projectTypes.map((t) => `<option value="${t.id}">${h(t.name)}</option>`).join("")}</select></label><label>Minimum stars<input name="stars" aria-label="Minimum stars" type="number" min="0" max="1000000000" step="1" value="0"></label><label>Pushed recently<select name="pushed" aria-label="Pushed recently"><option value="">Any push date</option><option value="30">Within 30 days</option><option value="90">Within 90 days</option><option value="180">Within 180 days</option><option value="365">Within 365 days</option></select></label><label>Queue visibility<select name="deferred" aria-label="Queue visibility"><option value="">Active queue</option><option value="only">Deferred items</option><option value="all">All attention items</option></select></label><button data-reset-filters>Reset queue filters</button></div><p class="hint">Filters combine. Archived/forked repositories must have been included in an audit to have evidence. “Ignore for now” lasts seven days. “Intentionally minimal” lasts until a newly fetched README revision differs. Improve next starts a local review batch from the current filtered, non-deferred queue (up to 200). Opening or reviewing a draft does not mark its remote README complete.</p><div data-storage></div><p data-queue-status role="status" aria-live="polite"></p><p data-queue-count></p><button data-improve-next>Improve next</button><ol class="attention-items" data-items></ol><div class="audit-pagination"><button data-previous>Previous queue page</button><span data-queue-page></span><button data-next>Next queue page</button></div>`;
     this.querySelectorAll(
@@ -95,9 +95,10 @@ export class ReadmeAttentionQueue extends HTMLElement {
   status(message) {
     this.querySelector("[data-queue-status]").textContent = message;
   }
-  setData(state, busy) {
+  setData(state, busy, preferences) {
     this.state = state;
     this.busy = busy;
+    if (preferences) this.preferences = preferences;
     if (!this.preferences) return;
     const language = this.querySelector("[name=language]");
     const selected = language.value;
@@ -248,23 +249,10 @@ export class ReadmeAttentionQueue extends HTMLElement {
   }
   // The plan for one queue record, with this session's decisions applied.
   plan(record) {
-    const preference = this.preferences.entries.find(
-      (entry) => entry.repository === record.repo.full_name.toLowerCase(),
-    );
-    const { decisions, skipped } = sessionDecisions(
-      this.state,
-      record.repo.full_name,
-    );
-    return improvementPlan(record, {
+    return improvementPlanForRecord(record, {
+      session: this.state,
+      preferences: this.preferences.entries,
       override: this.state.typeOverrides?.get(record.repo.full_name) || "auto",
-      decisions: {
-        ...decisions,
-        minimal:
-          preference?.kind === "minimal" &&
-          !!preference.revision &&
-          preference.revision === readmeRevision(record),
-      },
-      skipped,
     });
   }
   planAction({ action, id, repository, focus }) {
@@ -312,19 +300,15 @@ export class ReadmeAttentionQueue extends HTMLElement {
       }),
     );
   }
-  // Records a queue decision. Returns the status message or throws.
-  remember(repo, kind, revision) {
-    this.preferences.set(repo.full_name, kind, revision);
-    return kind === "minimal"
-      ? `${repo.name} marked intentionally minimal for this README revision.`
-      : kind === "ignore"
-        ? `${repo.name} ignored for seven days or until its README changes.`
-        : `${repo.name} returned to the queue.`;
-  }
   decide(item, kind) {
     if (this.busy || !item) return;
     try {
-      const message = this.remember(item.repo, kind, item.revision);
+      const message = rememberAttentionPreference(
+        this.preferences,
+        item.repo.full_name,
+        kind,
+        item.revision,
+      );
       this.draw();
       this.changed(item.repo.full_name);
       this.status(message);

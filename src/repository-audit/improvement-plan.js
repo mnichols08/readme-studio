@@ -405,3 +405,30 @@ export function sessionDecisions(session, repository) {
     skipped: session.skipped?.get(key),
   };
 }
+
+// Shared planning seam for the audit table and attention queue. Components
+// supply their state and the already-read attention preferences; this helper
+// performs no storage or DOM work.
+export function improvementPlanForRecord(
+  record,
+  { session, preferences = [], override = "auto" },
+) {
+  const preference = preferences.find(
+    (entry) => entry.repository === record.repo.full_name.toLowerCase(),
+  );
+  const { decisions, skipped } = sessionDecisions(
+    session,
+    record.repo.full_name,
+  );
+  return improvementPlan(record, {
+    override,
+    decisions: {
+      ...decisions,
+      minimal:
+        preference?.kind === "minimal" &&
+        !!preference.revision &&
+        preference.revision === readmeRevision(record),
+    },
+    skipped,
+  });
+}

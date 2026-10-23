@@ -27,13 +27,21 @@ import {
   readmeUrl,
   repositoryUrl,
 } from "../repository-audit/presentation.js";
-import { planDecision } from "../repository-audit/improvement-plan.js";
+import {
+  improvementPlanForRecord,
+  planDecision,
+} from "../repository-audit/improvement-plan.js";
 import { readmeRevision } from "../repository-audit/attention.js";
+import {
+  AttentionPreferences,
+  rememberAttentionPreference,
+} from "../repository-audit/attention-storage.js";
 
 export class RepositoryAudit extends HTMLElement {
   connectedCallback() {
     this.state = auditSession;
     this.state.stackResults ||= new Map();
+    this.preferences = new AttentionPreferences();
     this.innerHTML = `<h1>Repository README audit</h1><p>Find documentation that needs attention using evidence, not scores. Only public owned repositories are listed. README content is analyzed locally; nothing is published.</p><form data-load><label>GitHub username<input name="username" autocomplete="off" required maxlength="200" value="${h(this.state.username)}"></label><button type="submit">Load repositories</button></form><p class="hint">100 repositories per page, up to 1,000. Three concurrent README requests. GitHub's unauthenticated rate limit may stop larger scans. Use Check history and links on a result for optional extra requests to GitHub and linked hosts (up to 20 URLs). Results and a bounded source cache stay in this tab; cached requests expire after five minutes.</p><div class="audit-controls"><label><input type="checkbox" data-forks ${this.state.includeForks ? "checked" : ""}> Include forks</label><label><input type="checkbox" data-archived ${this.state.includeArchived ? "checked" : ""}> Include archived repositories</label><label><input type="checkbox" data-fresh> Fetch fresh README content</label><button data-more>Load next 100 repositories</button><button data-select>Select all filtered repositories</button><button data-clear>Clear selection</button><button data-scan>Audit selected</button><button data-cancel disabled>Cancel audit</button></div><section class="audit-controls"><h2>Stack Intelligence</h2><p>Opt in to read root package.json, Cargo.toml, pyproject.toml, requirements.txt and go.mod files from selected public repositories. This contacts GitHub only. No dependency installation, package scripts, repository code or build tools are run. Root manifests only: up to six requests per repository; rate limits may pause scans.</p><label><input type="checkbox" data-stack-consent> Allow read-only manifest analysis for this session</label><label><input type="checkbox" data-stack-nested disabled aria-describedby="stack-nested-hint"> Include nested manifests (monorepo)</label><p class="hint" id="stack-nested-hint">Reads the default branch head and one repository tree listing, the root pnpm-workspace.yaml and go.work workspace files when present, then manifests up to four directories deep, mapped to workspace members and nested projects. Dependency folders such as node_modules and vendor are skipped. Up to 24 requests per repository; at most 25 repositories per nested run.</p><label><input type="checkbox" data-stack-fresh> Fetch fresh manifests</label><button data-stack-scan disabled>Analyze selected manifests</button></section><p data-status role="status" aria-live="polite"></p><stack-results></stack-results><p data-count></p><div class="audit-pagination"><button data-audit-view="audit" aria-pressed="true">Audit results</button><button data-audit-view="queue" aria-pressed="false">README Attention Queue</button></div><section data-audit-results><h2 tabindex="-1">Repository audit results</h2><div class="audit-table-wrap"><table class="audit-table"><caption>Public repository documentation evidence</caption><thead><tr><th scope="col">Select / Repository</th><th scope="col">README state and evidence</th><th scope="col">Activity / Language</th><th scope="col">Actions</th></tr></thead><tbody></tbody></table></div><div class="audit-pagination"><button data-prev>Previous results</button><span data-page></span><button data-next>Next results</button></div></section><readme-attention-queue hidden></readme-attention-queue><p>Improve README opens a project-specific template with reviewed repository suggestions. Existing README source is preserved by default; missing READMEs can start from the template. Project types and English documentation signals are suggestions. Missing topics are commonly useful, never universally required; evidence is not a judgment of the project or its developer.</p>`;
     this.querySelectorAll("[data-audit-view]").forEach(
       (button) =>
@@ -106,7 +114,11 @@ export class RepositoryAudit extends HTMLElement {
         String(button.dataset.auditView === view),
       ),
     );
-    this.querySelector("readme-attention-queue").setData(this.state, this.busy);
+    this.querySelector("readme-attention-queue").setData(
+      this.state,
+      this.busy,
+      this.preferences,
+    );
     if (focus)
       this.querySelector(
         queue ? "readme-attention-queue h2" : "[data-audit-results] h2",
@@ -158,7 +170,11 @@ export class RepositoryAudit extends HTMLElement {
       !!this.busy || !this.state.next;
     this.querySelector("[data-scan]").disabled =
       !!this.busy || !this.selected().length;
-    this.querySelector("readme-attention-queue").setData(this.state, this.busy);
+    this.querySelector("readme-attention-queue").setData(
+      this.state,
+      this.busy,
+      this.preferences,
+    );
     // The blanket toggle above ignores per-action rules inside plans.
     this.querySelectorAll("tbody improvement-plan").forEach((plan) => {
       plan.busy = this.busy;
@@ -201,8 +217,7 @@ export class RepositoryAudit extends HTMLElement {
     const index = this.visible.findIndex((r) => r.full_name === repo.full_name);
     if (index < 0) return;
     const row = this.querySelector(`[data-row="${index}"]`),
-      record = this.state.results.get(repo.full_name),
-      queue = this.querySelector("readme-attention-queue");
+      record = this.state.results.get(repo.full_name);
     const cell = row.querySelector("[data-result]");
     if (!cell.querySelector("[data-type]")) {
       cell.innerHTML = `<div data-assessment></div><p data-suggestion></p><label for="audit-type-${index}">Project type for ${h(repo.full_name)}</label><select id="audit-type-${index}" data-type><option value="auto">Automatic suggestion</option>${projectTypes.map((type) => `<option value="${type.id}">${h(type.name)}</option>`).join("")}</select><p class="hint" data-type-mode></p><improvement-plan data-plan hidden></improvement-plan>`;
@@ -214,6 +229,7 @@ export class RepositoryAudit extends HTMLElement {
         this.querySelector("readme-attention-queue").setData(
           this.state,
           this.busy,
+          this.preferences,
         );
         this.status(
           `Project type updated for ${repo.name}. ${record?.result ? "Assessment updated from cached evidence." : "Audit the README to assess documentation."}`,
@@ -242,9 +258,16 @@ export class RepositoryAudit extends HTMLElement {
     const plan = cell.querySelector("[data-plan]");
     plan.hidden = !record;
     if (record) {
-      plan.plan = queue.plan({ ...record, repo });
+      plan.plan = improvementPlanForRecord(
+        { ...record, repo },
+        {
+          session: this.state,
+          preferences: this.preferences.entries,
+          override: this.state.typeOverrides?.get(repo.full_name) || "auto",
+        },
+      );
       plan.readmeUrl = readmeUrl(repo, record.readme);
-      plan.minimalUnavailable = !!queue.preferences?.error;
+      plan.minimalUnavailable = !!this.preferences.error;
       plan.busy = this.busy;
     }
     const url = repositoryUrl(repo);
@@ -273,16 +296,22 @@ export class RepositoryAudit extends HTMLElement {
       const revision = readmeRevision(record);
       const message =
         action === "minimal"
-          ? queue.remember(repo, "minimal", revision)
+          ? rememberAttentionPreference(
+              this.preferences,
+              repo.full_name,
+              "minimal",
+              revision,
+            )
           : planDecision(this.state, { repository, id, action, revision });
       this.result(repo);
-      queue.setData(this.state, this.busy);
+      queue.setData(this.state, this.busy, this.preferences);
       this.status(message);
       plan().focusAfter(focus);
     } catch (error) {
       if (action === "minimal") {
-        queue.setData(this.state, this.busy);
-        queue.changed(); // Storage failures disable minimal in every row.
+        queue.setData(this.state, this.busy, this.preferences);
+        // Storage failures disable intentionally-minimal in every visible row.
+        for (const visible of this.visible) this.result(visible);
       }
       this.status(error.message);
     }
