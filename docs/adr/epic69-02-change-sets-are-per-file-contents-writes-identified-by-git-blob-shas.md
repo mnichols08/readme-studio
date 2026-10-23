@@ -1,6 +1,6 @@
 # Change sets are per-file Contents writes identified by Git blob SHAs
 
-> **Status: planned, not implemented yet.** This decision is accepted for Epic #69 and lands with later stories (#98, #99). Until then, publishing does not compute Result SHAs or keep a Publish journal; it relies on the existing Base SHA check and conflict review.
+> **Status: accepted; Change sets implemented (story #98).** Result SHAs, the Change set id, Publish approval and the server's Result SHA check are in place. The Publish journal and Reconciliation that use the Result SHA after an ambiguous write (ADR epic69-03) land with story #99.
 
 A Change set lists each File change with its Base SHA and its Result SHA. The Result SHA is the Git blob SHA (SHA-1 of `blob <byte length>`, a NUL byte, then the content) of the exact prepared UTF-8 content, computed by the shared pure module `src/publishing/change-set.js` in the browser and on the server. The Change set's identity is the SHA-256 of its canonical JSON: target, branch, base commit, commit message and the ordered File changes. Publish approval binds to that identity, so any edit withdraws approval. On each commit request the server recomputes the Result SHA from the received content and refuses a mismatch. Updates always send the Base SHA, and creates require the file to be absent at write time. There is no delete, no force flag and no ref rewrite.
 

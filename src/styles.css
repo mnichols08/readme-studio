@@ -2162,6 +2162,27 @@ publish-dialog .preflight-checks {
   gap: 0.35rem;
   padding-left: 1.25rem;
 }
+publish-dialog .change-set-entries {
+  display: grid;
+  gap: 0.75rem;
+  padding-left: 1.25rem;
+}
+publish-dialog .change-set-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.15rem 0.75rem;
+  margin: 0 0 0.35rem;
+}
+publish-dialog .change-set-facts dt {
+  font-weight: 600;
+}
+publish-dialog .change-set-facts dd {
+  margin: 0;
+  min-width: 0;
+}
+publish-dialog code {
+  overflow-wrap: anywhere;
+}
 publish-dialog [data-check-status="fail"] strong,
 publish-dialog [data-check-status="unknown"] strong {
   text-decoration: underline;

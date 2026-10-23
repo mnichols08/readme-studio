@@ -33,7 +33,7 @@ README Studio exports ordinary Markdown/HTML. Its preview is an approximation of
 - [Analyzer](analyzer.md)
 - [GitHub compatibility](compatibility.md)
 - [Safe refactors](refactors.md)
-- [Optional GitHub publishing](github-publishing.md)
+- [Optional GitHub publishing](github-publishing.md): [Preflight](github-publishing.md#preflight) and [change set review](github-publishing.md#change-set-review)
 - [Asset publishing](assets.md)
 - [Workflow generation](workflows.md)
 - [Accessibility, recovery and performance checks](hardening.md)

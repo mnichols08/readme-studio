@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { evaluatePreflight } from "../../src/publishing/preflight.js";
+// The Publish approval names the file count, target and change set.
+const approval = /I reviewed \d+ file writes? to/;
 // Preflight facts for the mocked publishing server; overrides vary access.
 function preflightReport(value, overrides = {}) {
   return evaluatePreflight(
@@ -132,7 +134,7 @@ test("workflow publishing requires permissions, diff and confirmation; stale rem
   await d.getByRole("button", { name: "Load remote workflow" }).click();
   await expect(d.getByLabel("Prepared YAML")).toHaveValue(/workflow_dispatch/);
   expect(writes).toBe(0);
-  await d.getByLabel(/I reviewed this diff/).check();
+  await d.getByLabel(approval).check();
   await d.getByRole("button", { name: "Confirm and publish workflow" }).click();
   await expect(d.locator("[data-status]")).toContainText(
     "Remote README changed",
@@ -143,7 +145,7 @@ test("workflow publishing requires permissions, diff and confirmation; stale rem
       name: "Reload workflow baseline and review generated replacement",
     })
     .click();
-  await d.getByLabel(/I reviewed this diff/).check();
+  await d.getByLabel(approval).check();
   await d.getByRole("button", { name: "Confirm and publish workflow" }).click();
   await expect(d.locator("[data-status]")).toContainText("Workflow published");
   expect(writes).toBe(1);
@@ -207,7 +209,7 @@ test("denied workflow permission keeps the review read-only with YAML download",
   // Remote YAML still loads for review, but no write control exists.
   await expect(d.getByLabel("Prepared YAML")).toHaveValue(/workflow_dispatch/);
   expect(reads).toBe(1);
-  await expect(d.getByLabel(/I reviewed this diff/)).toHaveCount(0);
+  await expect(d.getByLabel(approval)).toHaveCount(0);
   await expect(
     d.getByRole("button", { name: "Confirm and publish workflow" }),
   ).toHaveCount(0);

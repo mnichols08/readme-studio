@@ -68,6 +68,8 @@ export function rewriteOwnedBanner(draft, directory, readmePath = "README.md") {
   );
   return { source: serializeBlocks(blocks), rewritten: true };
 }
+// Reads each generated file's remote baseline. Writing goes through the
+// reviewed Change set executor (src/publishing/change-set.js).
 export async function prepareAssetPlan(files, target, read) {
   const rows = [];
   for (const file of files) {
@@ -84,48 +86,4 @@ export async function prepareAssetPlan(files, target, read) {
     });
   }
   return rows;
-}
-export async function executeAssetPlan(rows, target, message, request) {
-  const results = [];
-  // Preflight all paths before writing any asset. Server SHA checks remain authoritative.
-  for (const row of rows) {
-    const current = await request("read", {
-      ...target,
-      kind: "asset",
-      path: row.path,
-    });
-    if (current.sha !== row.baseline.sha)
-      throw new Error(
-        `Asset conflict: ${row.path} changed. Reload the entire plan before publishing.`,
-      );
-  }
-  for (const row of rows) {
-    if (row.status === "unchanged") {
-      results.push({ path: row.path, status: "unchanged" });
-      continue;
-    }
-    try {
-      const result = await request("commit", {
-        ...target,
-        kind: "asset",
-        path: row.path,
-        sha: row.baseline.sha,
-        content: row.content,
-        banner: row.banner,
-        message,
-        confirmed: true,
-      });
-      results.push({
-        path: row.path,
-        status: "published",
-        commitSha: result.commitSha,
-      });
-    } catch (e) {
-      results.push({ path: row.path, status: "failed", error: e.message });
-      for (const remaining of rows.slice(results.length))
-        results.push({ path: remaining.path, status: "not attempted" });
-      return { complete: false, results };
-    }
-  }
-  return { complete: true, results };
 }

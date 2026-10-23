@@ -306,8 +306,6 @@ _Avoid_: Dry run, preview mode, locked
 
 ### Change sets
 
-_Planned for later Epic #69 stories (#98, #99); not implemented yet._
-
 **Change set**:
 The complete, reviewed list of file writes one publish will make to one Publish target and branch: each file's action, Base SHA and Result SHA, plus the commit message. Any change to any of these makes a different Change set.
 _Avoid_: Patch, batch, plan, commit
@@ -334,7 +332,7 @@ _Avoid_: Conflict (reserved for merge sections), out of date, race
 
 ### Recovery
 
-_Planned for later Epic #69 stories (#98, #99); not implemented yet._
+_Publish attempts run since story #98: files are written in order and the attempt stops at the first failure, leaving later files `not attempted`. Ambiguous writes, the `unknown` and `not written` outcomes, Reconciliation and the Publish journal are planned for story #99; not implemented yet._
 
 **Publish attempt**:
 The execution of one approved Change set, writing its File changes one at a time. Can end complete, partial (some files written, the rest not attempted) or with an Ambiguous write.
