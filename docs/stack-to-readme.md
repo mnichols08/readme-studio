@@ -7,7 +7,7 @@ Version 1.9.11 turns an opt-in manifest scan into editable documentation suggest
 1. Open the draft you want to improve. Repository Audit's **Open in Studio** can first open an existing repository README without replacing your current draft.
 2. Open **README audit**, load an account, select repositories, and allow read-only manifest analysis for this session.
 3. Choose **Analyze selected manifests**, expand a repository result, then **Review README suggestions**.
-4. Confirm the repository and target draft names. Inspect evidence and caveats; select individual suggestions and edit their Markdown. Nothing is selected automatically.
+4. Confirm the repository and target draft names. Inspect each claim's Provenance and caveats; the review names its repository, Project boundary, Manifest path and section, branch, observation time, and file revision when available. Select individual suggestions and edit their Markdown. Nothing is selected automatically.
 5. Confirm each selected suggestion for this repository. **Review exact diff** remains unavailable until every selected item is confirmed.
 6. Compare the current and resulting source, then explicitly approve the whole change and choose **Append reviewed suggestions**.
 

@@ -5,17 +5,24 @@ import { readmeSuggestions } from "../src/stack-intelligence/readme-suggestions.
 import { createBlock, serializeBlocks } from "../src/markdown/serialize.js";
 import "../src/components/stack-readme-review.js";
 
+const OBSERVED_AT = Date.parse("2026-10-22T12:00:00Z");
 const record = (...sources) => {
-  const manifests = sources.map(([path, source]) =>
-    analyzeManifest(path, source),
-  );
+  const manifests = sources.map(([path, source]) => ({
+    ...analyzeManifest(path, source),
+    sha: "a".repeat(40),
+    project: "",
+  }));
   return {
     repository: "example/app",
     status: "read",
     ref: "main",
-    checkedAt: 0,
+    observedAt: OBSERVED_AT,
+    checkedAt: OBSERVED_AT,
     manifests,
-    dependencies: normalizeDependencies("example/app", manifests),
+    dependencies: normalizeDependencies("example/app", manifests, {
+      branch: "main",
+      observedAt: OBSERVED_AT,
+    }),
   };
 };
 const node = (data) => record(["package.json", JSON.stringify(data)]);
@@ -203,6 +210,28 @@ describe("exact source review", () => {
     expect(el.querySelector("[data-status]").textContent).toContain(
       "Confirm each selected suggestion",
     );
+  });
+  it("names each Confirmation and shows its full review-only Provenance", () => {
+    const { el, draft } = setup();
+    const index = el.suggestions.findIndex(
+      (suggestion) => suggestion.id === "package.json:test",
+    );
+    const confirmation = el.querySelector(`[data-confirm="${index}"]`);
+    const item = confirmation.closest("section");
+
+    expect(confirmation.parentElement.textContent).toContain(
+      "I confirm Testing command is true for this repository.",
+    );
+    expect(item.textContent).toContain("example/app");
+    expect(item.textContent).toContain("Repository root");
+    expect(item.textContent).toContain("package.json");
+    expect(item.textContent).toContain("scripts.test");
+    expect(item.textContent).toContain("main");
+    expect(item.textContent).toContain(new Date(OBSERVED_AT).toLocaleString());
+    expect(item.querySelector("[data-blob] .sr-only").textContent).toBe(
+      "SHA " + "a".repeat(40),
+    );
+    expect(JSON.stringify(draft)).not.toContain("a".repeat(40));
   });
   it("enables exact review only while every selected item is confirmed", () => {
     const { el } = setup();

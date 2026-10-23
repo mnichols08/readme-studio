@@ -7,6 +7,18 @@ import { readmeSuggestions } from "../stack-intelligence/readme-suggestions.js";
 import { draftSnapshot } from "../state/import-plan.js";
 import { sourceDiffMarkup, fillSourceDiff } from "./source-diff.js";
 
+const observed = (time, branch) =>
+  `observed ${Number.isFinite(time) ? new Date(time).toLocaleString() : "at an unknown time"} on ${branch || "an unknown branch"}`;
+const reviewProvenanceHTML = (item) => {
+  const origin = item.manifest
+    ? `Manifest ${h(item.manifest)} · section ${h(item.section || "unknown")}${item.line ? ` · line ${h(item.line)}` : ""}${item.basis ? ` · basis: ${h(item.basis)}` : ""}`
+    : `${h(item.source || "Repository metadata")} (metadata, not a Manifest declaration)`;
+  const blob = item.blobSha
+    ? ` · <span data-blob title="Blob SHA ${h(item.blobSha)}">blob <span aria-hidden="true">${h(String(item.blobSha).slice(0, 7))}</span><span class="sr-only">SHA ${h(item.blobSha)}</span></span>`
+    : "";
+  return `<li data-provenance>${item.claim ? `<strong>${h(item.claim)}</strong>: ` : ""}${origin} · Repository ${h(item.repository || "unknown")} · Project boundary: ${h(item.project || "Repository root")} · ${h(observed(item.observedAt, item.branch))}${blob}</li>`;
+};
+
 export class StackReadmeReview extends HTMLElement {
   configure(record, draft) {
     this.draft = structuredClone(draft);
@@ -17,7 +29,7 @@ export class StackReadmeReview extends HTMLElement {
       <p>Detected technology is repository evidence, not proficiency. Select each suggestion you want, review its evidence, and edit its Markdown. Nothing is selected automatically. Commands are text only; Studio never runs them.</p>
       ${record.status === "partial" ? '<p class="hint">Partial scan: suggestions cover only successfully read manifests.</p>' : ""}
       <p>Observed: ${h(new Date(record.observedAt ?? record.checkedAt).toLocaleString())}; branch: ${h(record.ref || "unknown")}. These session results may be outdated.</p>
-      <div data-items>${this.suggestions.map((item, index) => `<section><label><input type="checkbox" data-choice="${index}"> ${h(item.title)}</label><p>${h(item.caveat)}</p><ul>${item.evidence.map((e) => `<li>${h(e)}</li>`).join("")}</ul><label>${h(item.title)} Markdown<textarea data-source="${index}" rows="3"></textarea></label><label><input type="checkbox" data-confirm="${index}" disabled> I confirm this suggestion is true for this repository.</label></section>`).join("")}</div>
+      <div data-items>${this.suggestions.map((item, index) => `<section><label><input type="checkbox" data-choice="${index}"> ${h(item.title)}</label><p>${h(item.caveat)}</p><p><strong>Provenance</strong></p><ul>${item.provenance.map(reviewProvenanceHTML).join("")}</ul><label>${h(item.title)} Markdown<textarea data-source="${index}" rows="3"></textarea></label><label><input type="checkbox" data-confirm="${index}" disabled> I confirm ${h(item.title)} is true for this repository.</label></section>`).join("")}</div>
       ${this.suggestions.length ? "" : "<p>No suggestions are available from this scan.</p>"}
       <p>Selected content is appended to the current draft. Existing sections are not replaced or deduplicated; review repeated headings before applying.</p>
       <button data-preview disabled>Review exact diff</button>

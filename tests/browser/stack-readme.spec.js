@@ -78,11 +78,15 @@ test("reviewed suggestions preserve blocks, source, undo and reload at mobile wi
   await review
     .getByRole("checkbox", { name: "Testing command", exact: true })
     .check();
-  const testing = review
-    .getByRole("checkbox", { name: "Testing command", exact: true })
-    .locator("xpath=ancestor::section");
-  const confirmation = testing.getByLabel(
-    "I confirm this suggestion is true for this repository.",
+  const confirmation = review.getByLabel(
+    "I confirm Testing command is true for this repository.",
+  );
+  const testing = confirmation.locator("xpath=ancestor::section");
+  await expect(testing.locator("[data-provenance]")).toContainText(
+    /Testing command.*Manifest package\.json.*section scripts\.test.*Repository example\/app.*Project boundary: Repository root.*on main/,
+  );
+  await expect(testing.locator("[data-blob] .sr-only")).toHaveText(
+    "SHA " + "a".repeat(40),
   );
   await expect(
     review.getByRole("button", { name: "Review exact diff" }),
@@ -149,12 +153,7 @@ test("stale draft cannot be overwritten and escape discards review", async ({
     .getByRole("checkbox", { name: "Detected stack section", exact: true })
     .check();
   await review
-    .getByRole("checkbox", {
-      name: "Detected stack section",
-      exact: true,
-    })
-    .locator("xpath=ancestor::section")
-    .getByLabel("I confirm this suggestion is true for this repository.")
+    .getByLabel("I confirm Detected stack section is true for this repository.")
     .check();
   await review.getByRole("button", { name: "Review exact diff" }).click();
   await review
@@ -193,9 +192,8 @@ test("technologies with only uncertain evidence are offered separately with thei
   await expect(
     stack.getByLabel("Detected stack section Markdown", { exact: true }),
   ).toHaveValue("## Detected stack\n\n- Core: JavaScript · React");
-  await expect(stack).toContainText(
-    "React: package.json · dependencies · basis: explicit",
-  );
+  await expect(stack).toContainText("React: Manifest package.json");
+  await expect(stack).toContainText("section dependencies · basis: explicit");
   await expect(stack).not.toContainText("Vue:");
   await expect(
     review.getByRole("checkbox", { name: "Vue badge", exact: true }),
@@ -207,7 +205,7 @@ test("technologies with only uncertain evidence are offered separately with thei
     }),
   });
   await expect(uncertain).toContainText(
-    "Vue: package.json · peerDependencies · basis: conditional",
+    "Vue: Manifest package.json · section peerDependencies · basis: conditional",
   );
   await expect(uncertain).toContainText(
     "every declaration of Vue is conditional or ambiguous",
