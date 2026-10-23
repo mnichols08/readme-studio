@@ -67,6 +67,12 @@ test("AI sends only the selection, requires a diff, preserves surrounding source
   await expect(panel.getByLabel("Proposed", { exact: true })).toHaveValue(
     "These are selected notes.",
   );
+  await expect(panel.locator("[data-claim-review]")).toContainText(
+    "confirm 1 flagged statement",
+  );
+  await expect(panel.locator("[data-claim-review]")).toContainText(
+    "Approved evidence: Original",
+  );
   expect(calls).toHaveLength(1);
   expect(JSON.stringify(calls)).not.toContain("Do not send");
   expect(await current(page)).toBe(source);
@@ -162,6 +168,11 @@ test("failures and cancellation preserve the draft and prevent late proposals", 
   await expect.poll(() => calls).toBe(2);
   await panel.getByRole("button", { name: "Cancel request" }).click();
   await expect(panel.locator("[data-status]")).toContainText("cancelled");
+  await expect(
+    panel.getByLabel("API key (optional for local models)"),
+  ).toHaveValue("");
+  await expect(panel.locator("[data-consent]")).not.toBeChecked();
+  await expect(panel.locator("[data-request]")).toHaveValue("");
   await panel
     .getByLabel("Proposed", { exact: true })
     .fill("Keep this local proposal");
@@ -170,6 +181,13 @@ test("failures and cancellation preserve the draft and prevent late proposals", 
     "Keep this local proposal",
   );
   expect(await current(page)).toBe(source);
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", { name: "Writing assistant", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("API key (optional for local models)"),
+  ).toHaveValue("");
   await panel
     .getByLabel("Chat completions endpoint")
     .fill("https://other.example/v1/chat/completions");
@@ -202,6 +220,12 @@ test("Draft section uses notes at the cursor and hostile output stays inert duri
   await configure(panel);
   await panel.getByRole("button", { name: "Generate proposal" }).click();
   await expect(panel.locator("[data-status]")).toContainText("Proposal ready");
+  await expect(panel.locator("[data-claim-review]")).toContainText(
+    "flagged statement",
+  );
+  await expect(panel.locator("[data-claim-review]")).toContainText(
+    "Reviewed facts",
+  );
   expect(JSON.parse(sent.messages[1].content)).toEqual({
     original: "",
     notes: "A small CLI for formatting text.",

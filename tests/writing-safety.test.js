@@ -13,6 +13,55 @@ const config = {
 };
 const input = { action: "improve", original: "README" };
 describe("provider and imported-context boundaries", () => {
+  it.each([
+    [
+      "compatible",
+      "https://writer.example/v1/chat/completions",
+      "credential-sentinel-924",
+      true,
+    ],
+    ["local", "http://localhost:1234/v1/chat/completions", "ignored", false],
+  ])(
+    "%s adapter conforms to the bounded request and response contract",
+    (id, endpoint, key, sendsKey) => {
+      const adapter = providerFor(id),
+        settings = adapter.connect({ endpoint, model: "test-model", key }),
+        messages = writingMessages("improve", "Source"),
+        request = adapter.request(settings, messages),
+        body = JSON.parse(request.body);
+      expect(body).toMatchObject({
+        model: "test-model",
+        messages,
+        stream: false,
+        store: false,
+        max_completion_tokens: 8192,
+      });
+      expect(Boolean(request.headers.Authorization)).toBe(sendsKey);
+      expect(
+        adapter.parse({
+          choices: [{ finish_reason: "stop", message: { content: "Revised" } }],
+        }),
+      ).toBe("Revised");
+      for (const data of [
+        null,
+        { choices: [] },
+        {
+          choices: [
+            { finish_reason: "length", message: { content: "Partial" } },
+          ],
+        },
+        {
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: "Unsafe", tool_calls: [{}] },
+            },
+          ],
+        },
+      ])
+        expect(() => adapter.parse(data)).toThrow();
+    },
+  );
   it("rejects unknown and disabled providers without sending anything", async () => {
     const fetcher = vi.fn();
     for (const provider of ["disabled", "__proto__", "unknown"])
@@ -130,5 +179,46 @@ describe("provider and imported-context boundaries", () => {
     el.review();
     el.querySelector("[data-approve]").checked = true;
     expect(el.canApply()).toBe(true);
+  });
+  it("explicit cancellation clears credentials, consent and outbound review state", () => {
+    const el = document.createElement("writing-assistant");
+    el.configure(
+      {
+        id: "d",
+        name: "Draft",
+        markdown: "Original",
+        blocks: [],
+        metadata: {},
+      },
+      0,
+      8,
+    );
+    el.querySelector("[data-key]").value = "secret";
+    el.querySelector("[data-notes]").value = "private note";
+    el.querySelector("[data-consent]").checked = true;
+    el.querySelector('[data-context-choice="profile"]').checked = true;
+    el.busyState(true);
+    el.querySelector("[data-cancel]").click();
+    expect(el.querySelector("[data-key]").value).toBe("");
+    expect(el.querySelector("[data-notes]").value).toBe("");
+    expect(el.querySelector("[data-consent]").checked).toBe(false);
+    expect(el.querySelector("[data-request]").value).toBe("");
+    expect(el.querySelector("writing-context").entries()).toEqual([]);
+    el.remove();
+
+    const reopened = document.createElement("writing-assistant");
+    reopened.configure(
+      {
+        id: "d",
+        name: "Draft",
+        markdown: "Original",
+        blocks: [],
+        metadata: {},
+      },
+      0,
+      8,
+    );
+    expect(reopened.querySelector("[data-key]").value).toBe("");
+    expect(reopened.querySelector("[data-consent]").checked).toBe(false);
   });
 });
