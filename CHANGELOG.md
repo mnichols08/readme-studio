@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.17
+
+- Add a migration-safe version-2 batch progress journal with a 500-event limit and allowlisted opened/reviewed/skipped/pending records (#91, #146). Journal entries contain document identity, target identity and exact local source fingerprints where needed, never README content or credentials.
+- Show a local Recovery review that classifies every batch item as matching, changed, missing, target-changed or not yet opened. Opening this review makes no request and never edits or publishes content.
+- Persist a fresh checkpoint after each successful one-at-a-time open, including partial runs, while leaving failed items pending and preserving all previously opened exact source.
+- Add migration, bounds, sanitization, exact-line-ending, backup, reload, offline interruption and no-publish regression coverage (#147). Remote publishing remains a separate single-document reviewed action and is never replayed.
+
 ## 1.9.16
 
 - Certify the existing bounded multi-repository review queue against Story #90 and task #144: at most 200 repository targets, one-at-a-time read-only source opening, local progress, explicit reviewed/skip decisions and no batch publishing.

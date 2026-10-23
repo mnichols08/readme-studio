@@ -1,6 +1,6 @@
 # Batch review
 
-v1.5.3 connects the README Attention Queue with the multi-document workspace. v1.9.16 re-certifies its bounded queue and per-recipient apply boundary against the current regression suite. Progress is local: reviewing a document does not assert that its remote README is fixed, published, or removed from future audit results.
+v1.5.3 connects the README Attention Queue with the multi-document workspace. v1.9.16 re-certifies its bounded queue and per-recipient apply boundary against the current regression suite. v1.9.17 adds an interruption-safe local progress journal and Recovery review. Progress is local: reviewing a document does not assert that its remote README is fixed, published, or removed from future audit results.
 
 ## Improve next
 
@@ -28,6 +28,12 @@ There is no mass publish operation. Publish to GitHub remains a separate single-
 
 Opening documents uses the existing GitHub README endpoint, session cache, timeout/rate-limit handling and one-at-a-time requests. A failed item remains pending; retry or explicitly skip it. Previously opened exact source remains in the workspace. Cancel or closing/replacing the batch dialog aborts pending fetches. Preparing a common section applies no content edits until the subsequent diff review.
 
+Every successful open and explicit reviewed, skipped or return-to-pending decision appends an allowlisted event to a 500-event local journal. An open checkpoint records only the local document ID, repository target identity, exact-source fingerprint and time. It never stores README content, credentials or a remote write instruction. Legacy batch progress migrates when read.
+
+Opening **Batch review** performs a local **Recovery review**. Each item is shown as matching its last opened source, changed since then, missing, target-changed or not yet opened. This check reads the current workspace only: it makes no GitHub request and changes nothing. A changed document remains the author's exact local document and an explicit reviewed/skip decision is still required.
+
 Progress is versioned workspace metadata referencing repository/branch/path, not copied README content. All-drafts backup contains progress alongside actual document sources. Replace restore restores incoming progress; merge keeps the current workspace's review batch. Invalid progress triggers existing safe storage recovery, preserving original recovery bytes; documents remain recoverable.
+
+No recovery path contains or replays a publish operation. Publishing remains a separate single-document review with its own fresh remote checks and approval.
 
 The existing 500-document workspace limit still applies. Storage must be writable for batch progression or newly opened sources; failures remain visible without replacing existing source. Already-open matching documents can be reopened offline. Fetching a repository not yet in the workspace requires connectivity.
