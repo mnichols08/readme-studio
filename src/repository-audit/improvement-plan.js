@@ -143,7 +143,7 @@ function revisionLabel(revision) {
  */
 export function improvementPlan(
   record,
-  { override = "auto", decisions = {}, skipped } = {},
+  { override = "auto", decisions = {}, skipped, limit = PLAN_LIMIT } = {},
 ) {
   if (!record?.result) return null;
   const { result } = record;
@@ -358,8 +358,8 @@ export function improvementPlan(
     state,
     label: assessment.label,
     caveats,
-    recommendations: visible.slice(0, PLAN_LIMIT),
-    omitted: Math.max(0, visible.length - PLAN_LIMIT),
+    recommendations: visible.slice(0, limit),
+    omitted: Math.max(0, visible.length - limit),
     hidden,
   };
 }

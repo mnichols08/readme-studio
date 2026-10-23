@@ -15,9 +15,16 @@ async function checks(repo, readme, { client, signal } = {}) {
   const findings = [],
     notes = [];
   if (readme.source === null)
-    return { findings, notes: ["No root README to inspect."] };
+    return {
+      findings,
+      notes: ["No root README to inspect."],
+      historyChecked: false,
+      linksChecked: false,
+    };
+  let historyChecked = false;
   try {
     const history = await client.history(repo, readme.path, { signal });
+    historyChecked = true;
     findings.push(
       ...historyFindings(history.updated, history.commits, client.now()),
     );
@@ -32,6 +39,8 @@ async function checks(repo, readme, { client, signal } = {}) {
     if (["rate-limit", "forbidden"].includes(error.kind))
       return {
         findings,
+        historyChecked,
+        linksChecked: false,
         notes: [
           ...notes,
           "Link checks skipped after GitHub restricted requests.",
@@ -79,5 +88,10 @@ async function checks(repo, readme, { client, signal } = {}) {
   notes.push(
     `${checked} links/images checked; ${unknown} unverifiable. ${targets.length > checked ? "Additional URLs were not checked (20 per review maximum)." : ""} Browser policy and network failures do not prove broken links.`,
   );
-  return { findings, notes };
+  return {
+    findings,
+    notes,
+    historyChecked,
+    linksChecked: unknown === 0 && checked === Math.min(targets.length, 20),
+  };
 }

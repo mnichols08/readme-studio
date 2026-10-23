@@ -238,6 +238,12 @@ Every Audit finding is a plain `{id, message}` object: `signals.js` returns plac
 
 The `<improvement-plan>` component receives a plan by property, renders its native `<details>` body only when opened, and bubbles `plan-action` events. The queue handles events from its own items and stops them there; `repository-audit` handles events from rows. Parents own state and status messages and call `focusAfter` once they have redrawn. Actions reuse the existing `attention-open` and `audit-improve` flows and the queue's intentionally-minimal preference.
 
+### Audit snapshot history (1.9.10)
+
+`repository-audit/audit-snapshots.js` is the pure capture, strict validation, retention and comparison seam. Capture derives up to 60 finding identities through the Improvement-plan rules, but stores neither Recommendation/evidence text nor Audit decisions. `review.js` returns separate `historyChecked` and `linksChecked` facts so partial optional work cannot become a false Added/Resolved claim. Comparisons require a later observation with matching Audit/plan rule versions and project-type identity; repository absence, retained observations and incomplete optional checks produce Unknown reasons.
+
+`audit-snapshot-history` owns the separate `readme-studio:audit-snapshots:v1` boundary and receives session state by property. It captures only on its button, filters history to the current account, refreshes on storage events and supports explicit deletion, recovery download and confirmed reset. The key is outside Workspace validation, projects, drafts, backups and Markdown export. Failed writes leave the prior in-memory and stored envelope unchanged; damaged/future envelopes block writes without being overwritten.
+
 ## Repository README templates
 
 `data/repository-templates.js` defines twelve project-type section profiles and pure suggestion/serialization functions. `repository-readme-builder` reviews metadata and selected sections before emitting a new-draft plan. The audit supplies its explicit override or suggested type; PWA maps to Web App and Experiment to Generic. Existing source remains an exact Custom Markdown block by default. Generated sections use editable Custom Markdown with explicit writing comments, not fabricated commands. `metadata.repositoryReadme` carries versioned reviewed context in Studio state only; normal README export remains plain source. The builder is loaded lazily, reuses the modal focus/dismissal boundary, and makes no network requests itself.

@@ -219,6 +219,7 @@ it("reuses link health, resolves relative images, and treats CORS failures as un
   });
   expect(result.findings[0].url).toContain("missing.png");
   expect(result.notes.join(" ")).toContain("1 unverifiable");
+  expect(result).toMatchObject({ historyChecked: true, linksChecked: false });
   await reviewReadme(repo, readme, { client });
   expect(urls).toHaveLength(2);
 });
@@ -239,9 +240,9 @@ it("limits optional checks to 20 URLs and stops on provider throttling", async (
     ).join("\n"),
     path: "README.md",
   };
-  expect(
-    (await reviewReadme(repo, readme, { client })).notes.join(" "),
-  ).toContain("20 per review");
+  const complete = await reviewReadme(repo, readme, { client });
+  expect(complete.notes.join(" ")).toContain("20 per review");
+  expect(complete.linksChecked).toBe(true);
   expect(calls).toBe(20);
   invalidateHealth();
   calls = 0;
@@ -249,6 +250,8 @@ it("limits optional checks to 20 URLs and stops on provider throttling", async (
     calls++;
     return response({}, 429);
   };
-  await reviewReadme(repo, readme, { client });
+  expect((await reviewReadme(repo, readme, { client })).linksChecked).toBe(
+    false,
+  );
   expect(calls).toBe(1);
 });
