@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.20.** Download a deterministic, versioned asset manifest alongside generated banner SVGs. It records validated paths, byte sizes, content fingerprints, and the exact portable Markdown references without embedding asset source or publishing anything. [Generated assets](docs/assets.md)
+**Version 1.9.21.** The optional Writing Assistant is certified against its evidence, provider, consent, privacy, cancellation and manual-review contracts. No AI account is required, and no content is sent before exact payload review and consent. [Writing Assistant](docs/writing-assistant.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

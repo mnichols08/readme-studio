@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.21
+
+- Certify evidence-scoped optional writing across Story #100 and tasks #160/#161: prompts limit factual support to approved Original, notes and selected context; a fail-safe local response check names the provenance and flags every statement not found within one approved source, including contradictions and cross-source recombinations; proposals remain inert until exact diff approval.
+- Certify provider-independent behavior across Story #101 and tasks #162/#163 with a direct compatible/local adapter conformance matrix, bounded complete-text parsing, predictable malformed/unavailable-provider errors and offline manual mode.
+- Certify consent and data minimization across Story #102 and tasks #164/#165: the UI shows destination and exact messages, sends only after consent, keeps keys in tab memory, clears credentials/consent on provider changes, and clears credentials plus outbound review state on explicit cancellation/close without changing README Source.
+
 ## 1.9.20
 
 - Add a deterministic version-1 asset manifest for generated banner SVG packages, with stable ordering, byte sizes, media types, roles, content fingerprints and the exact exported Markdown references (#96, #152).

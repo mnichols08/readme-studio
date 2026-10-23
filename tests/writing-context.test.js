@@ -6,6 +6,10 @@ import {
   validateContext,
 } from "../src/writing/context.js";
 import { writingMessages } from "../src/writing/model.js";
+import {
+  MAX_CLAIM_FINDINGS,
+  reviewClaims,
+} from "../src/writing/claim-review.js";
 import { generateWriting } from "../src/writing/client.js";
 import "../src/components/writing-assistant.js";
 const draft = {
@@ -114,6 +118,157 @@ describe("explicit writing context", () => {
       writingMessages("draft", "", "", [{ id: "style", content: "Casual" }]),
     ).toThrow();
   });
+  it("flags response claims that cannot be traced to approved evidence", () => {
+    const input = {
+      action: "draft",
+      original: "",
+      notes: "A small CLI for formatting text.",
+      context: [{ id: "style", content: "Friendly" }],
+    };
+    expect(
+      reviewClaims("A small CLI for formatting text.", input),
+    ).toMatchObject({ unsupported: [] });
+    const review = reviewClaims(
+      "A small CLI for formatting text. It runs on Linux and has 10,000 users.",
+      input,
+    );
+    expect(review.unsupported).toHaveLength(1);
+    expect(review.unsupported[0].text).toContain("Linux");
+    expect(review.unsupported[0].terms).toEqual(
+      expect.arrayContaining(["linux", "10,000"]),
+    );
+    expect(review.evidence).toEqual(["Notes"]);
+    expect(
+      reviewClaims("Alice maintains Beta repositories.", {
+        original: "Alice maintains no Beta repositories.",
+        notes: "",
+        context: [],
+      }).unsupported,
+    ).toHaveLength(1);
+    expect(
+      reviewClaims("Alice maintains Alpha.", {
+        original: "~~Alice maintains Alpha.~~",
+        notes: "",
+        context: [],
+      }).unsupported,
+    ).toHaveLength(1);
+    for (const original of [
+      "~Old ~ Alice maintains Alpha.~",
+      "~~Old ~~ Alice maintains Alpha.~~",
+    ])
+      expect(
+        reviewClaims("Alice maintains Alpha.", {
+          original,
+          notes: "",
+          context: [],
+        }).unsupported,
+      ).toHaveLength(1);
+    expect(
+      reviewClaims("Alice maintains Alpha.", {
+        original:
+          '<del>\n<span title="</del>">\nAlice maintains Alpha.\n</span>\n</del>',
+        notes: "",
+        context: [],
+      }).unsupported,
+    ).toHaveLength(1);
+    expect(
+      reviewClaims("Alice maintains Alpha.", {
+        original: "~Alice maintains Alpha.~",
+        notes: "",
+        context: [],
+      }).unsupported,
+    ).toHaveLength(1);
+    for (const tag of ["del", "s"])
+      expect(
+        reviewClaims("Alice maintains Alpha.", {
+          original: `<${tag}>\nAlice maintains Alpha.\n</${tag}>`,
+          notes: "",
+          context: [],
+        }).unsupported,
+      ).toHaveLength(1);
+    for (const [outer, inner] of [
+      ["del", "del"],
+      ["s", "s"],
+      ["del", "s"],
+    ])
+      expect(
+        reviewClaims("Alice maintains Alpha.", {
+          original: `<${outer}>\n<${inner}>Old.</${inner}>\nAlice maintains Alpha.\n</${outer}>`,
+          notes: "",
+          context: [],
+        }).unsupported,
+      ).toHaveLength(1);
+    expect(
+      reviewClaims("Alice maintains Alpha.", {
+        original: "<del>\nOld.\n</s>\nAlice maintains Alpha.\n</del>",
+        notes: "",
+        context: [],
+      }).unsupported,
+    ).toHaveLength(1);
+    expect(
+      reviewClaims("Alice maintains Alpha.", {
+        original: "<del><s>Old.</del>\nAlice maintains Alpha.\n</s>",
+        notes: "",
+        context: [],
+      }).unsupported,
+    ).toHaveLength(1);
+    expect(
+      reviewClaims("Bob maintains Beta.", {
+        original:
+          "~~Alice maintains Alpha. Bob maintains Beta. Carol maintains Gamma.~~",
+        notes: "",
+        context: [],
+      }).unsupported,
+    ).toHaveLength(1);
+    expect(
+      reviewClaims("Alice maintains Beta repositories.", {
+        original: "Alice maintains Beta repositories no longer.",
+        notes: "",
+        context: [],
+      }).unsupported,
+    ).toHaveLength(1);
+    expect(
+      reviewClaims("Alice maintains Project Beta.", {
+        original: "Alice maintains Project Alpha. Bob maintains Project Beta.",
+        notes: "",
+        context: [],
+      }).unsupported[0].reason,
+    ).toContain("not present in any single approved source");
+    for (const [original, proposed] of [
+      ["Node != 20.", "Node = 20."],
+      ["Version is < 2.", "Version is > 2."],
+      ["Version is ≤ 2.", "Version is ≥ 2."],
+      ["Open README.md.", "Open readme.md."],
+    ])
+      expect(
+        reviewClaims(proposed, {
+          original,
+          notes: "",
+          context: [],
+        }).unsupported,
+      ).toHaveLength(1);
+    expect(
+      reviewClaims("README runs on Go, R, AI, ML, AWS, SQL and C#.", {
+        original: "README runs.",
+        notes: "",
+        context: [],
+      }).unsupported,
+    ).toHaveLength(1);
+  });
+  it("bounds displayed findings while retaining the complete flag count", () => {
+    const proposed = Array.from(
+      { length: 2_000 },
+      (_, index) => `Unsupported claim ${index}.`,
+    ).join("\n");
+    const review = reviewClaims(proposed, {
+      original: "Approved evidence.",
+      notes: "",
+      context: [],
+    });
+    expect(review.unsupported).toHaveLength(MAX_CLAIM_FINDINGS);
+    expect(review.unsupportedCount).toBe(2_000);
+    expect(review.omitted).toBe(2_000 - MAX_CLAIM_FINDINGS);
+  });
   it("transmits the same normalized messages shown in preview", async () => {
     const input = {
       action: "improve",
@@ -171,5 +326,31 @@ describe("explicit writing context", () => {
       "profile",
     ]);
     expect(el.querySelector("script")).toBeNull();
+  });
+  it("flushes an unsupported-claim flag before immediate diff approval", () => {
+    const el = document.createElement("writing-assistant");
+    el.configure(draft, 9, 17);
+    const proposed = el.querySelector("[data-proposed]");
+    proposed.value = "Selected text runs on Go.";
+    proposed.dispatchEvent(new Event("input", { bubbles: true }));
+    el.review();
+    expect(el.querySelector("[data-claim-summary]").textContent).toContain(
+      "confirm 1 flagged statement",
+    );
+    expect(el.querySelector("[data-review-panel]").hidden).toBe(false);
+  });
+  it("fails closed when selected context cannot be validated", () => {
+    const el = document.createElement("writing-assistant");
+    el.configure(draft, 9, 17);
+    const context = el.querySelector("writing-context");
+    context.value("profile").value = "x".repeat(12_001);
+    context.querySelector('[data-context-choice="profile"]').checked = true;
+    el.querySelector("[data-proposed]").value = "Selected with a change";
+    expect(() => el.review()).not.toThrow();
+    expect(el.querySelector("[data-claim-summary]").textContent).toContain(
+      "Support check unavailable",
+    );
+    expect(el.querySelector("[data-review-panel]").hidden).toBe(true);
+    expect(el.canApply()).toBe(false);
   });
 });

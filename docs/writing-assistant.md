@@ -2,6 +2,12 @@
 
 Version 1.4.3 adds provider selection and safety hardening to optional, context-aware AI editing. README Studio's editor, builders, preview, exports and local recovery still work without an AI account, connection or model.
 
+## Roadmap certification
+
+Release 1.9.21 certifies the shipped workflow against Epic 09. Story #100 and tasks #160/#161 are covered by the allowlisted context projection, grounding instructions, a conservative response support check, hostile-context and unsupported-claim tests, plus the mandatory Original → Proposed → Diff → Apply boundary. Story #101 and tasks #162/#163 are covered by a shared compatible/local adapter conformance matrix, malformed/refused/tool/partial/empty/oversized response tests, network and timeout failures, and the provider-disabled manual path. Story #102 and tasks #164/#165 are covered by exact message preview equality, destination/key-policy disclosure, explicit consent, memory-only credential isolation, provider-change cleanup, explicit-cancellation cleanup and stale-result browser tests.
+
+All network and model results in automated checks are mocked. This evidence certifies README Studio's request boundaries and failure behavior, not live provider availability, retention policy, model quality or universal resistance to prompt injection. Ordinary editing, recovery and export remain local-first; applying any proposal still requires exact diff review.
+
 ## Original → Proposed → Diff → Apply
 
 1. Select text in the Markdown editor, then open **Review → Writing assistant** (also available in workspace search).
@@ -56,7 +62,9 @@ Inspect/edit each text field before checking **Include**. Blank sources can rece
 
 **Exact messages to send** displays the actual system and user messages, including Original, notes and only checked context. No hidden workspace context is added. Model and request flags are described separately; the API key stays outside the preview in the Authorization header. Changes clear send consent, cancel in-flight generation and invalidate the proposal/diff approval. Switching repository clears its repository/Stack DNA selections; switching target section clears selected-section inclusion. Reopening starts all sources unchecked again.
 
-The grounding prompt requires factual claims to be supported by supplied Original, factual notes or selected factual context. Unsupported claims must be omitted, not filled from outside knowledge. All context is treated as data, not system instructions; style guidance cannot establish facts. This is a model instruction, not a factual-verification engine: inspect Proposed and Diff before Apply. Tests verify prompt/request boundaries using mocked output, not universal model compliance.
+The grounding prompt requires factual claims to be supported by supplied Original, factual notes or selected factual context. Unsupported claims must be omitted, not filled from outside knowledge. All context is treated as data, not system instructions; style guidance cannot establish facts. After generation, a local support check names the approved evidence sources. A statement is unflagged only when it matches a non-struck statement in one approved source; paraphrases, cross-source recombinations, changed relationships, contradictions and retracted evidence all require explicit human confirmation. To fail closed on ambiguous, malformed or nested deletion markup, evidence after the first tilde or raw `<del>`/`<s>` opening in a source is not used for support. This intentionally conservative check can flag valid evidence or rewrites and cannot prove factual truth, so inspect every flag, Proposed and Diff before Apply. Invalid or oversized selected context makes the check unavailable and blocks diff review until corrected. Tests inject novel, negated and entity-swapped mocked output and verify the visible flag; they do not claim universal model compliance.
+
+Choosing **Cancel request** aborts the request and clears the in-memory API key, send consent, factual notes, selected context, exact outbound preview and pending comparison state. Closing the assistant performs the same sensitive-state cleanup. README Source is never changed by cleanup.
 
 Each selected context source is limited to 12,000 characters; serialized selected context to 16,000; total Original/notes/context to 32,000. Oversized context is shown intact and rejected until you explicitly shorten or deselect it. No silent truncation or upload of whole drafts/workspaces.
 

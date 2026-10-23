@@ -12,6 +12,7 @@ import {
 } from "../writing/model.js";
 import { connection, generateWriting } from "../writing/client.js";
 import { sourceDiffMarkup, fillSourceDiff } from "./source-diff.js";
+import { reviewClaims } from "../writing/claim-review.js";
 
 // Deliberately outside draft/workspace state, storage, backups and activity logs.
 let sessionConnection = { endpoint: "", model: "", key: "" };
@@ -52,6 +53,7 @@ export class WritingAssistant extends HTMLElement {
       <p data-status role="status"></p>
       <writing-comparison hidden></writing-comparison>
       <label>Proposed<textarea data-proposed rows="8" maxlength="64000" placeholder="Generate a proposal, or paste and edit one here without connecting AI."></textarea></label>
+      <section data-claim-review><p data-claim-summary role="status"></p><div data-claim-details></div></section>
       <p>AI can make mistakes. Verify facts, links and commands. Applying uses source editing: builder, component or generated sections whose lines change become Custom Markdown, and untouched sections keep their ownership. Undo restores source and ownership.</p>
       <button data-review>Review diff</button>
       <section data-review-panel hidden><h2>Diff</h2>${sourceDiffMarkup({ beforeLabel: "Current README", afterLabel: "Proposed README", label: "Writing assistant diff" })}
@@ -103,6 +105,7 @@ export class WritingAssistant extends HTMLElement {
       if (this.busy) return;
       this.invalidate();
       this.querySelector("[data-proposed]").value = event.detail;
+      this.updateClaimReview();
       this.status(
         "Alternative copied into Proposed. Review its diff before applying.",
       );
@@ -111,6 +114,10 @@ export class WritingAssistant extends HTMLElement {
     this.querySelector("[data-proposed]").oninput = () => {
       this.cancel();
       this.invalidate();
+      clearTimeout(this.claimReviewTimer);
+      this.querySelector("[data-claim-summary]").textContent =
+        "Support check pending…";
+      this.claimReviewTimer = setTimeout(() => this.updateClaimReview(), 200);
     };
     this.querySelector("[data-connection]").oninput = (e) => {
       this.cancel();
@@ -147,8 +154,10 @@ export class WritingAssistant extends HTMLElement {
     };
     this.querySelector("[data-generate]").onclick = () => this.generate();
     this.querySelector("[data-cancel]").onclick = () => {
-      this.cancel();
-      this.status("Request cancelled. Your draft is unchanged.");
+      this.cancel({ clearSensitive: true });
+      this.status(
+        "Request cancelled. Credentials, consent and outbound review details were cleared; your draft is unchanged.",
+      );
     };
     this.querySelector("[data-review]").onclick = () => this.review();
     this.querySelector("[data-approve]").onchange = () => {
@@ -230,6 +239,7 @@ export class WritingAssistant extends HTMLElement {
     this.querySelector("writing-comparison").show([]);
     this.invalidate();
     this.querySelector("[data-proposed]").value = "";
+    this.updateClaimReview();
     this.querySelector("[data-consent]").checked = false;
     this.updateRequest();
   }
@@ -238,6 +248,49 @@ export class WritingAssistant extends HTMLElement {
     this.querySelector("[data-review-panel]").hidden = true;
     this.querySelector("[data-approve]").checked = false;
     this.querySelector("[data-apply]").disabled = true;
+  }
+  updateClaimReview() {
+    const panel = this.querySelector("[data-claim-review]");
+    const summary = panel.querySelector("[data-claim-summary]");
+    const details = panel.querySelector("[data-claim-details]");
+    const proposed = this.querySelector("[data-proposed]").value;
+    if (!proposed.trim()) {
+      summary.textContent = "";
+      details.replaceChildren();
+      this.claimReviewSignature = null;
+      return false;
+    }
+    let review;
+    try {
+      review = reviewClaims(proposed, this.input());
+    } catch (error) {
+      this.claimReviewSignature = null;
+      summary.textContent = `Support check unavailable: ${error.message} Resolve the input before diff review.`;
+      details.replaceChildren();
+      return false;
+    }
+    summary.textContent = review.unsupportedCount
+      ? `Support check: confirm ${review.unsupportedCount} flagged statement${review.unsupportedCount === 1 ? "" : "s"} before applying.`
+      : "Support check: every statement was found in one approved evidence source; manual verification is still required.";
+    const provenance = document.createElement("p");
+    provenance.textContent = `Approved evidence: ${review.evidence.join(", ") || "none"}.`;
+    details.replaceChildren(provenance);
+    if (review.unsupported.length) {
+      const list = document.createElement("ul");
+      for (const item of review.unsupported) {
+        const entry = document.createElement("li");
+        entry.textContent = `${item.text} — ${item.reason}`;
+        list.append(entry);
+      }
+      details.append(list);
+      if (review.omitted) {
+        const omitted = document.createElement("p");
+        omitted.textContent = `${review.omitted} additional flagged statement${review.omitted === 1 ? "" : "s"} omitted from this bounded display; review the complete proposal and diff.`;
+        details.append(omitted);
+      }
+    }
+    this.claimReviewSignature = this.signature();
+    return true;
   }
   signature() {
     return JSON.stringify([
@@ -254,6 +307,7 @@ export class WritingAssistant extends HTMLElement {
       !this.busy &&
       typeof this.plan === "string" &&
       this.reviewSignature === this.signature() &&
+      this.claimReviewSignature === this.signature() &&
       this.querySelector("[data-approve]").checked
     );
   }
@@ -268,15 +322,30 @@ export class WritingAssistant extends HTMLElement {
     this.querySelector("[data-cancel]").disabled = !value;
     this.querySelector("[data-review]").disabled = value;
   }
-  cancel() {
+  cancel({ clearSensitive = false } = {}) {
+    clearTimeout(this.claimReviewTimer);
     this.requestId++;
     this.controller?.abort();
+    this.controller = null;
     for (const item of this.alternatives || [])
       if (item.status === "pending") item.status = "not generated";
     if (this.querySelector("[data-generate]")) this.busyState(false);
+    if (clearSensitive && this.querySelector("[data-key]")) {
+      sessionConnection = { ...sessionConnection, key: "" };
+      this.querySelector("[data-key]").value = "";
+      this.querySelector("[data-consent]").checked = false;
+      this.querySelector("[data-notes]").value = "";
+      this.querySelectorAll("[data-context-choice]").forEach(
+        (choice) => (choice.checked = false),
+      );
+      this.querySelector("[data-request]").value = "";
+      this.alternatives = [];
+      this.querySelector("writing-comparison").show([]);
+      this.invalidate();
+    }
   }
   disconnectedCallback() {
-    this.cancel();
+    this.cancel({ clearSensitive: true });
   }
   async generate() {
     if (this.busy) return;
@@ -335,6 +404,7 @@ export class WritingAssistant extends HTMLElement {
         });
         if (id !== this.requestId || !this.isConnected) return;
         this.querySelector("[data-proposed]").value = proposed;
+        this.updateClaimReview();
         this.status(
           "Proposal ready. Review and edit it, then review the diff before applying.",
         );
@@ -357,6 +427,9 @@ export class WritingAssistant extends HTMLElement {
       const plan = replaceScope(this.draft.markdown, this.range(), proposed);
       if (plan === this.draft.markdown)
         throw Error("There are no changes to apply.");
+      clearTimeout(this.claimReviewTimer);
+      if (!this.updateClaimReview())
+        throw Error("Resolve the support-check input before diff review.");
       this.plan = plan;
       this.reviewSignature = this.signature();
       fillSourceDiff(this, this.draft.markdown, plan);
