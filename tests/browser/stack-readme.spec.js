@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-async function suggestions(page) {
+async function suggestions(page, { python = false } = {}) {
   await page.route("https://api.github.com/**", async (route) => {
     const url = route.request().url();
     if (url.includes("/users/"))
@@ -36,7 +36,38 @@ async function suggestions(page) {
         },
       });
     }
-    return route.fulfill({ json: [{ type: "file", path: "package.json" }] });
+    if (url.includes("pyproject.toml")) {
+      const source = '[project]\nname="sample"';
+      return route.fulfill({
+        json: {
+          type: "file",
+          path: "pyproject.toml",
+          size: Buffer.byteLength(source),
+          encoding: "base64",
+          content: Buffer.from(source).toString("base64"),
+          sha: "b".repeat(40),
+        },
+      });
+    }
+    if (url.includes("requirements.txt")) {
+      const source = "requests>=2";
+      return route.fulfill({
+        json: {
+          type: "file",
+          path: "requirements.txt",
+          size: Buffer.byteLength(source),
+          encoding: "base64",
+          content: Buffer.from(source).toString("base64"),
+          sha: "c".repeat(40),
+        },
+      });
+    }
+    return route.fulfill({
+      json: (python
+        ? ["pyproject.toml", "requirements.txt"]
+        : ["package.json"]
+      ).map((path) => ({ type: "file", path })),
+    });
   });
   await page.goto("/");
   await page
@@ -216,4 +247,30 @@ test("technologies with only uncertain evidence are offered separately with thei
       exact: true,
     }),
   ).not.toBeChecked();
+});
+
+test("duplicate Python suggestion titles have Manifest-specific accessible names", async ({
+  page,
+}) => {
+  await suggestions(page, { python: true });
+  const review = page.locator("stack-readme-review");
+  for (const manifest of ["pyproject.toml", "requirements.txt"]) {
+    await expect(
+      review.getByRole("checkbox", {
+        name: `Python package manager suggestion — ${manifest}`,
+        exact: true,
+      }),
+    ).toHaveCount(1);
+    await expect(
+      review.getByLabel(
+        `I confirm Python package manager suggestion — ${manifest} is true for this repository.`,
+      ),
+    ).toHaveCount(1);
+    await expect(
+      review.getByLabel(
+        `Python package manager suggestion — ${manifest} Markdown`,
+        { exact: true },
+      ),
+    ).toHaveCount(1);
+  }
 });

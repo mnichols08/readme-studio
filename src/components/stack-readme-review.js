@@ -24,12 +24,22 @@ export class StackReadmeReview extends HTMLElement {
     this.draft = structuredClone(draft);
     this.snapshot = draftSnapshot(draft);
     this.suggestions = readmeSuggestions(record);
+    const titleCounts = new Map();
+    for (const item of this.suggestions)
+      titleCounts.set(item.title, (titleCounts.get(item.title) || 0) + 1);
+    this.labels = this.suggestions.map((item) => {
+      if (titleCounts.get(item.title) === 1) return item.title;
+      const manifest = item.provenance.find(
+        (entry) => entry.manifest,
+      )?.manifest;
+      return `${item.title} — ${manifest || item.id}`;
+    });
     this.innerHTML = `<h1>Review stack-to-README suggestions</h1>
       <p>Repository: ${h(record.repository)}. Target draft: ${h(draft.name)}.</p>
       <p>Detected technology is repository evidence, not proficiency. Select each suggestion you want, review its evidence, and edit its Markdown. Nothing is selected automatically. Commands are text only; Studio never runs them.</p>
       ${record.status === "partial" ? '<p class="hint">Partial scan: suggestions cover only successfully read manifests.</p>' : ""}
       <p>Observed: ${h(new Date(record.observedAt ?? record.checkedAt).toLocaleString())}; branch: ${h(record.ref || "unknown")}. These session results may be outdated.</p>
-      <div data-items>${this.suggestions.map((item, index) => `<section><label><input type="checkbox" data-choice="${index}"> ${h(item.title)}</label><p>${h(item.caveat)}</p><p><strong>Provenance</strong></p><ul>${item.provenance.map(reviewProvenanceHTML).join("")}</ul><label>${h(item.title)} Markdown<textarea data-source="${index}" rows="3"></textarea></label><label><input type="checkbox" data-confirm="${index}" disabled> I confirm ${h(item.title)} is true for this repository.</label></section>`).join("")}</div>
+      <div data-items>${this.suggestions.map((item, index) => `<section><label><input type="checkbox" data-choice="${index}"> ${h(this.labels[index])}</label><p>${h(item.caveat)}</p><p><strong>Provenance</strong></p><ul>${item.provenance.map(reviewProvenanceHTML).join("")}</ul><label>${h(this.labels[index])} Markdown<textarea data-source="${index}" rows="3"></textarea></label><label><input type="checkbox" data-confirm="${index}" disabled> I confirm ${h(this.labels[index])} is true for this repository.</label></section>`).join("")}</div>
       ${this.suggestions.length ? "" : "<p>No suggestions are available from this scan.</p>"}
       <p>Selected content is appended to the current draft. Existing sections are not replaced or deduplicated; review repeated headings before applying.</p>
       <button data-preview disabled>Review exact diff</button>

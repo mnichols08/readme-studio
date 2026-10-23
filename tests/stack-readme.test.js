@@ -233,6 +233,38 @@ describe("exact source review", () => {
     );
     expect(JSON.stringify(draft)).not.toContain("a".repeat(40));
   });
+  it("disambiguates every review control when two Manifests produce the same title", () => {
+    const el = document.createElement("stack-readme-review");
+    const blocks = [createBlock("custom", { markdown: "# Python" })];
+    el.configure(
+      record(
+        ["pyproject.toml", '[project]\nname="sample"'],
+        ["requirements.txt", "requests>=2"],
+      ),
+      {
+        id: "python-draft",
+        name: "Python",
+        blocks,
+        markdown: serializeBlocks(blocks),
+        metadata: {},
+      },
+    );
+
+    const labels = [...el.querySelectorAll("label")].map((label) =>
+      label.textContent.trim(),
+    );
+    for (const manifest of ["pyproject.toml", "requirements.txt"]) {
+      expect(labels).toContain(
+        `Python package manager suggestion — ${manifest}`,
+      );
+      expect(labels).toContain(
+        `Python package manager suggestion — ${manifest} Markdown`,
+      );
+      expect(labels).toContain(
+        `I confirm Python package manager suggestion — ${manifest} is true for this repository.`,
+      );
+    }
+  });
   it("enables exact review only while every selected item is confirmed", () => {
     const { el } = setup();
     const index = el.suggestions.findIndex(
