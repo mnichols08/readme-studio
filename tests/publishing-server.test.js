@@ -27,6 +27,9 @@ function harness({
   rules = [],
   rulesStatus = 200,
   remoteContent = "# Old",
+  remoteSha = sha,
+  commitThrows = false,
+  commitBody = null,
 } = {}) {
   let clock = 1000,
     cookie,
@@ -85,13 +88,23 @@ function harness({
       );
     if (url.endsWith("/git/refs"))
       return Response.json({ ref: "refs/heads/readme-studio/update" });
-    if (options.method === "PUT")
+    if (options.method === "PUT") {
+      if (commitThrows) throw new Error("response lost after PUT");
+      const putInput = JSON.parse(options.body);
       return Response.json(
         commitStatus === 200
-          ? { commit: { sha: newSha }, content: { sha: newSha } }
+          ? (commitBody ?? {
+              commit: { sha: newSha },
+              content: {
+                sha: await gitBlobSha(
+                  Buffer.from(putInput.content, "base64").toString("utf8"),
+                ),
+              },
+            })
           : { message: "PRIVATE_ACCESS" },
         { status: commitStatus },
       );
+    }
     if (url.includes("/contents/"))
       return Response.json(
         exists
@@ -99,7 +112,7 @@ function harness({
               type: "file",
               encoding: "base64",
               size: 6,
-              sha,
+              sha: remoteSha,
               content: Buffer.from(remoteContent).toString("base64"),
             }
           : {},
@@ -318,6 +331,74 @@ it("stops stale writes on the server before PUT and returns a reviewable remote 
   expect(result.value.remote.content).toBe("# Old");
   expect(h.upstream.mock.calls.some(([, o]) => o.method === "PUT")).toBe(false);
 });
+it("refuses an already-applied Result SHA without issuing a duplicate PUT", async () => {
+  const input = await reviewed({
+    repository: "octocat/octocat",
+    branch: "main",
+    path: "README.md",
+    sha,
+    content: "New",
+    message: "update",
+    confirmed: true,
+  });
+  const h = harness({ remoteSha: input.resultSha, remoteContent: "New" });
+  await h.connect();
+  const result = await h.request("commit", input);
+  expect(result.response.status).toBe(409);
+  expect(result.value.alreadyApplied).toBe(true);
+  expect(result.value.remote.sha).toBe(input.resultSha);
+  expect(
+    h.upstream.mock.calls.some(([, options]) => options.method === "PUT"),
+  ).toBe(false);
+});
+it("marks a lost GitHub write response as ambiguous and never retries it", async () => {
+  const h = harness({ commitThrows: true });
+  await h.connect();
+  const result = await h.request(
+    "commit",
+    await reviewed({
+      repository: "octocat/octocat",
+      branch: "main",
+      path: "README.md",
+      sha,
+      content: "New",
+      message: "update",
+      confirmed: true,
+    }),
+  );
+  expect(result.response.status).toBe(502);
+  expect(result.value.ambiguous).toBe(true);
+  expect(
+    h.upstream.mock.calls.filter(([, options]) => options.method === "PUT"),
+  ).toHaveLength(1);
+});
+it.each([
+  ["missing fields", {}],
+  ["invalid SHAs", { commit: { sha: "no" }, content: { sha: "wrong" } }],
+])(
+  "marks a 2xx GitHub write response with %s ambiguous",
+  async (_, commitBody) => {
+    const h = harness({ commitBody });
+    await h.connect();
+    const result = await h.request(
+      "commit",
+      await reviewed({
+        repository: "octocat/octocat",
+        branch: "main",
+        path: "README.md",
+        sha,
+        content: "New",
+        message: "update",
+        confirmed: true,
+      }),
+    );
+    expect(result.response.status).toBe(502);
+    expect(result.value.ambiguous).toBe(true);
+    expect(
+      h.upstream.mock.calls.filter(([, options]) => options.method === "PUT"),
+    ).toHaveLength(1);
+  },
+);
 it("creates only explicitly confirmed branches at an unchanged source commit", async () => {
   const h = harness();
   await h.connect();

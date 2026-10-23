@@ -40,6 +40,7 @@ export function readPublishingHistory(storage = localStorage) {
           ? e.previousCommitSha
           : null,
         timestamp: e.timestamp,
+        ...(e.reconciled === true ? { reconciled: true } : {}),
       })),
       checkpoint: value.checkpoint
         ? {
@@ -86,6 +87,7 @@ export function recordPublish(
       ? previousCommitSha
       : null,
     timestamp: Date.now(),
+    ...(result.reconciled === true ? { reconciled: true } : {}),
   });
   value.entries = value.entries.slice(0, 50);
   save(value, storage);

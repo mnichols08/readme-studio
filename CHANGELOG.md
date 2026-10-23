@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.6
+
+- Add a machine-local, content-free Publish journal before the first remote write (#99, #158). It records the exact target, change set id, Base/Result SHAs, byte counts and per-file outcomes without storing README, asset or workflow content.
+- Treat a lost or unreadable write response as `unknown`, stop the attempt, and require explicit Reconciliation reads before any retry. Result SHA means written, Base SHA or absence means not written, and any third state is diverged and requires a fresh review.
+- Allow retry only in the same open review, only for files reconciled as not written, and only after a new explicit approval (#159). A reload retains enough metadata to reconcile but intentionally cannot replay content.
+- Have the server refuse an already-applied Result SHA before PUT, and distinguish ambiguous 5xx/lost PUT responses from definitive refusals. Malformed journal data is preserved, blocks publishing, and must be downloaded before explicit clearing.
+- Add injected lost-response, idempotency, partial-state, malformed-storage and browser recovery coverage; local Markdown, builder state, portable projects and backups remain unchanged.
+
 ## 1.9.5
 
 - Make raw Markdown edits source-preserving (#77, #118): only the Blocks and Seams an edit touches change, while every byte outside that scope—including CRLF, BOM, trailing whitespace, fenced code and raw HTML—stays identical. Untouched builder, component, generated, shared, profile and banner Blocks keep visual ownership.

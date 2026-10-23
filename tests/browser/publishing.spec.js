@@ -22,11 +22,15 @@ async function setup(
     // When set, the README read returns remote.content with its real Git
     // blob SHA; tests may change remote.content between loads.
     remote = null,
+    // Simulate a commit request whose response is lost. "written" updates
+    // the mocked remote first; "not-written" drops the request outcome only.
+    ambiguousOutcome = null,
   } = {},
 ) {
   const writes = [],
     ops = [];
   let connected = false,
+    ambiguousUsed = false,
     reads = 0,
     darkReads = 0;
   if (noCrypto)
@@ -124,7 +128,14 @@ async function setup(
       };
     }
     if (op === "commit") {
-      writes.push(route.request().postDataJSON());
+      const write = route.request().postDataJSON();
+      writes.push(write);
+      if (ambiguousOutcome && !ambiguousUsed) {
+        ambiguousUsed = true;
+        if (ambiguousOutcome === "written" && remote)
+          remote.content = write.content;
+        return route.abort("failed");
+      }
       if (
         fail ||
         (failAsset && route.request().postDataJSON().path.endsWith("-dark.svg"))
@@ -248,6 +259,137 @@ test("failed publish preserves review and download at mobile width", async ({
   expect(await d.evaluate((el) => el.scrollWidth <= el.clientWidth + 2)).toBe(
     true,
   );
+});
+test("a lost successful response is reconciled as written without a duplicate write", async ({
+  page,
+}) => {
+  const remote = { content: "# Old" },
+    { d, writes } = await setup(page, {
+      remote,
+      ambiguousOutcome: "written",
+    });
+  await d.getByLabel(approval).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await expect(d.locator("[data-status]")).toContainText("outcome");
+  await expect(d.locator("[data-journal]")).toContainText("README.md: unknown");
+  expect(writes).toHaveLength(1);
+  await d.getByRole("button", { name: "Reconcile with GitHub" }).click();
+  await expect(d.locator("[data-status]")).toContainText(
+    "Reconciliation confirmed",
+  );
+  await expect(d.locator("[data-journal]")).toBeEmpty();
+  await expect(d.locator("[data-result]")).toContainText(
+    "not attribution to the commit",
+  );
+  await expect(d.locator("[data-result]")).not.toContainText(
+    "Published commit",
+  );
+  await expect(d.locator("[data-history]")).toContainText(
+    "reconciled at observed branch head",
+  );
+  expect(writes).toHaveLength(1);
+});
+test("a lost non-write is read first and retried only after new approval", async ({
+  page,
+}) => {
+  const remote = { content: "# Old" },
+    { d, writes } = await setup(page, {
+      remote,
+      ambiguousOutcome: "not-written",
+    });
+  await d.getByLabel(approval).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await expect(d.locator("[data-status]")).toContainText("outcome");
+  expect(writes).toHaveLength(1);
+  await d.getByRole("button", { name: "Reconcile with GitHub" }).click();
+  await expect(d.locator("[data-journal]")).toContainText(
+    "README.md: not-written",
+  );
+  const retry = d.getByRole("button", { name: "Retry reconciled files" });
+  await expect(retry).toBeDisabled();
+  expect(writes).toHaveLength(1);
+  await d.getByLabel(/approve retrying only files marked not-written/).check();
+  await retry.click();
+  await expect(d.locator("[data-status]")).toContainText("README published");
+  expect(writes).toHaveLength(2);
+});
+test("malformed journal data is preserved, blocks writes, and must be downloaded before clearing", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      "readme-studio-publish-journal-v1",
+      '{"privateRecovery":"preserve exactly"}',
+    ),
+  );
+  const { d, writes } = await setup(page);
+  await expect(d.locator("[data-journal]")).toContainText(
+    "Original recovery data was preserved",
+  );
+  const clear = d.getByRole("button", {
+    name: "Clear downloaded Publish journal",
+  });
+  await expect(clear).toBeDisabled();
+  await d.getByLabel(approval).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await expect(d.locator("[data-status]")).toContainText("malformed");
+  expect(writes).toHaveLength(0);
+  const download = page.waitForEvent("download");
+  await d
+    .getByRole("button", { name: "Download original Publish journal" })
+    .click();
+  expect((await download).suggestedFilename()).toBe(
+    "readme-studio-publish-journal-recovery.json",
+  );
+  await expect(clear).toBeEnabled();
+  await clear.click();
+  await expect(d.locator("[data-journal]")).toBeEmpty();
+});
+test("reload can reconcile but cannot replay content or retry without a fresh review", async ({
+  page,
+}) => {
+  const remote = { content: "# Old" },
+    { d, writes } = await setup(page, {
+      remote,
+      ambiguousOutcome: "not-written",
+    });
+  await d.getByLabel(approval).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await expect(d.locator("[data-status]")).toContainText("outcome");
+  expect(writes).toHaveLength(1);
+
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Publish to GitHub", exact: true })
+    .click();
+  const reopened = page.getByRole("dialog");
+  await expect(reopened.locator("[data-journal]")).toContainText(
+    "README.md: unknown",
+  );
+  await reopened.getByRole("button", { name: "Reconcile with GitHub" }).click();
+  await expect(reopened.locator("[data-status]")).toContainText(
+    "retry is unavailable",
+  );
+  await expect(
+    reopened.getByRole("button", { name: "Retry reconciled files" }),
+  ).toHaveCount(0);
+  expect(writes).toHaveLength(1);
+
+  await reopened
+    .getByRole("button", { name: "Clear reconciled journal and review fresh" })
+    .click();
+  await reopened
+    .getByLabel("Target repository")
+    .selectOption("octocat/octocat");
+  await reopened.getByRole("button", { name: "Load remote README" }).click();
+  await reopened.getByLabel(approval).check();
+  await reopened
+    .getByRole("button", { name: "Confirm and publish README" })
+    .click();
+  await expect(reopened.locator("[data-status]")).toContainText(
+    "README published",
+  );
+  expect(writes).toHaveLength(2);
 });
 
 test("stale README requires explicit conflict resolution and fresh confirmation", async ({
@@ -518,6 +660,15 @@ for (const failAsset of [false, true])
       );
       await expect(d.locator("[data-change-set-results]")).toContainText(
         "README.md: not attempted",
+      );
+      await expect(d.locator("[data-journal]")).toContainText(
+        "banner-light.svg: written",
+      );
+      await expect(d.locator("[data-journal]")).toContainText(
+        "banner-dark.svg: failed",
+      );
+      await expect(d.locator("[data-journal]")).toContainText(
+        "README.md: not-attempted",
       );
     } else {
       await expect(d.locator("[data-status]")).toContainText(

@@ -177,7 +177,12 @@ export async function verifyChangeSet(changeSet, read) {
 // at the first failure: later entries are "not attempted". Each request names
 // its Base SHA (null for a create), Result SHA and the Change set id, so the
 // server can refuse anything other than the reviewed content.
-export async function executeChangeSet(changeSet, contents, request) {
+export async function executeChangeSet(
+  changeSet,
+  contents,
+  request,
+  { beforeWrite, afterWrite, onlyPaths } = {},
+) {
   for (const entry of fileWrites(changeSet)) {
     const file = contents.get(entry.path);
     if (
@@ -201,9 +206,17 @@ export async function executeChangeSet(changeSet, contents, request) {
       results.push(row(entry, "no write"));
       continue;
     }
+    if (onlyPaths && !onlyPaths.has(entry.path)) {
+      results.push(row(entry, "already written"));
+      continue;
+    }
     const file = contents.get(entry.path);
+    let started = false,
+      result;
     try {
-      const result = await request("commit", {
+      await beforeWrite?.(entry);
+      started = true;
+      result = await request("commit", {
         ...file.fields,
         ...entryTarget(changeSet, entry),
         sha: entry.baseSha,
@@ -213,17 +226,39 @@ export async function executeChangeSet(changeSet, contents, request) {
         message: changeSet.message,
         confirmed: true,
       });
-      results.push(
-        row(entry, "written", { commitSha: result?.commitSha, result }),
-      );
     } catch (error) {
-      results.push(row(entry, "failed", { error: error.message }));
+      if (started)
+        try {
+          await afterWrite?.(entry, error.ambiguous ? "unknown" : "failed");
+        } catch (journalError) {
+          journalError.ambiguous = true;
+          error = journalError;
+        }
+      const status = error.ambiguous ? "unknown" : "failed";
+      results.push(row(entry, status, { error: error.message }));
       for (const rest of changeSet.entries.slice(index + 1))
         results.push(
           row(rest, rest.action === "unchanged" ? "no write" : "not attempted"),
         );
       return { complete: false, results, failure: { entry, error } };
     }
+    try {
+      await afterWrite?.(entry, "written", result);
+    } catch (error) {
+      // GitHub answered, but the durable outcome could not be recorded. Stop
+      // and reconcile instead of allowing another request from this state.
+      error.ambiguous = true;
+      error.recoveryReason = "journal";
+      results.push(row(entry, "unknown", { error: error.message }));
+      for (const rest of changeSet.entries.slice(index + 1))
+        results.push(
+          row(rest, rest.action === "unchanged" ? "no write" : "not attempted"),
+        );
+      return { complete: false, results, failure: { entry, error } };
+    }
+    results.push(
+      row(entry, "written", { commitSha: result?.commitSha, result }),
+    );
   }
   return { complete: true, results };
 }

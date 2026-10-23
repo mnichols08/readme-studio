@@ -21,6 +21,15 @@ import {
   savePublishCheckpoint,
   recordPublish,
 } from "../publishing/history.js";
+import {
+  clearPublishJournal,
+  rawPublishJournal,
+  readPublishJournal,
+  reconcilePublishJournal,
+  savePublishJournal,
+  startPublishJournal,
+  updatePublishJournal,
+} from "../publishing/journal.js";
 import { PublishingClient } from "../github/publishing-client.js";
 import { html } from "../markdown/serialize.js";
 import { target } from "../publishing/validation.js";
@@ -59,7 +68,7 @@ const CHECK_STATUS = {
 export class PublishDialog extends HTMLElement {
   connectedCallback() {
     this.client = new PublishingClient();
-    this.innerHTML = `<h1>Publish to GitHub</h1><p>Optional publishing. Your README source stays unchanged. Every write requires a source review and confirmation.</p><p role="status" data-status>Checking connection…</p><section data-auth></section><section data-target></section><section data-preflight aria-labelledby="publish-preflight-heading"></section><section data-review></section><section data-history></section><button data-download>Download README fallback</button>`;
+    this.innerHTML = `<h1>Publish to GitHub</h1><p>Optional publishing. Your README source stays unchanged. Every write requires a source review and confirmation.</p><p role="status" data-status>Checking connection…</p><section data-auth></section><section data-target></section><section data-preflight aria-labelledby="publish-preflight-heading"></section><section data-review></section><section data-journal></section><section data-history></section><button data-download>Download README fallback</button>`;
     this.querySelector("[data-download]").onclick = () =>
       this.emit("publish-download", {
         content: this.source,
@@ -569,12 +578,25 @@ export class PublishDialog extends HTMLElement {
         "The change set changed while it was being verified. Nothing was written; approve it again.",
       );
     savePublishCheckpoint(this.draftId, this.originalSource);
+    startPublishJournal(cs);
+    this.retrySessionChangeSetId = cs.id;
     this.historyView();
     this.status("Publishing the reviewed change set…");
     const outcome = await executeChangeSet(
       cs,
       changeSetContents(this.changeFiles),
       (op, data) => this.client.request(op, data),
+      {
+        beforeWrite: (entry) =>
+          updatePublishJournal(cs.id, entry.path, "pending"),
+        afterWrite: (entry, status, result) =>
+          updatePublishJournal(
+            cs.id,
+            entry.path,
+            status,
+            result?.commitSha ? { commitSha: result.commitSha } : {},
+          ),
+      },
     );
     // Approval covers one attempt; a retry needs a fresh baseline and review.
     this.executedBaseline = this.baseline;
@@ -591,6 +613,15 @@ export class PublishDialog extends HTMLElement {
     const assetWrites = fileWrites(cs).some((e) => e.kind === "asset");
     if (!outcome.complete) {
       const { entry, error } = outcome.failure;
+      this.journalView();
+      if (error.ambiguous) {
+        this.status(
+          error.recoveryReason === "journal"
+            ? `The outcome of ${entry.path} is not durably recorded because the local Publish journal could not be updated after GitHub answered. Do not retry. Reconcile with GitHub first.`
+            : `The outcome of ${entry.path} is unknown because its response was lost. Do not retry. Reconcile the Publish journal with GitHub first.`,
+        );
+        return;
+      }
       if (entry.kind === "asset") {
         this.status(
           `Partial asset publish: ${entry.path} was not written (${error.message}). The ${this.kind === "workflow" ? "workflow" : "README"} was not attempted. Review the reported files and reload before retrying.`,
@@ -619,6 +650,9 @@ export class PublishDialog extends HTMLElement {
     }
     const primary = outcome.results.at(-1);
     if (primary.status !== "written") {
+      clearPublishJournal();
+      this.retrySessionChangeSetId = null;
+      this.journalView();
       this.status(
         "All reviewed assets published or unchanged. README needed no write. Local draft is unchanged.",
       );
@@ -674,6 +708,8 @@ export class PublishDialog extends HTMLElement {
     }
     try {
       recordPublish(result, previous);
+      clearPublishJournal();
+      this.retrySessionChangeSetId = null;
       this.emit("publish-complete", {
         draftId: this.draftId,
         kind: this.kind || "readme",
@@ -694,7 +730,7 @@ export class PublishDialog extends HTMLElement {
     if (!area) return;
     try {
       const history = readPublishingHistory();
-      area.innerHTML = `<details><summary>Local publishing history and recovery</summary>${history.checkpoint ? "<button data-recovery>Download pre-publish checkpoint</button><button data-restore>Restore checkpoint as a new draft</button>" : ""}<ol>${history.entries.map((e) => `<li>${html(e.repository)} · ${html(e.branch)} · ${html(e.path)} · ${html(e.commitSha)} · ${html(new Date(e.timestamp).toISOString())}</li>`).join("")}</ol></details>`;
+      area.innerHTML = `<details><summary>Local publishing history and recovery</summary>${history.checkpoint ? "<button data-recovery>Download pre-publish checkpoint</button><button data-restore>Restore checkpoint as a new draft</button>" : ""}<ol>${history.entries.map((e) => `<li>${html(e.repository)} · ${html(e.branch)} · ${html(e.path)} · ${e.reconciled ? "reconciled at observed branch head " : "published commit "}${html(e.commitSha)} · ${html(new Date(e.timestamp).toISOString())}</li>`).join("")}</ol></details>`;
       area.querySelector("[data-recovery]")?.addEventListener("click", () =>
         this.emit("publish-download", {
           content: history.checkpoint.source,
@@ -708,6 +744,210 @@ export class PublishDialog extends HTMLElement {
         );
     } catch (e) {
       area.textContent = e.message;
+    }
+    this.journalView();
+  }
+  journalView() {
+    const area = this.querySelector("[data-journal]");
+    if (!area) return;
+    let journal;
+    try {
+      journal = readPublishJournal();
+    } catch (error) {
+      area.innerHTML = `<h2>Publish journal needs attention</h2><p role="alert">${html(error.message)}</p><button data-journal-download>Download original Publish journal</button><button data-journal-clear disabled>Clear downloaded Publish journal</button>`;
+      const download = area.querySelector("[data-journal-download]"),
+        clear = area.querySelector("[data-journal-clear]");
+      download.onclick = () => {
+        this.emit("publish-download", {
+          content: rawPublishJournal() || "",
+          name: "readme-studio-publish-journal-recovery.json",
+          type: "application/json",
+        });
+        clear.disabled = false;
+      };
+      clear.onclick = () => {
+        clearPublishJournal();
+        this.retrySessionChangeSetId = null;
+        this.journalView();
+        this.status(
+          "Downloaded Publish journal cleared. Publishing can continue after a fresh review.",
+        );
+      };
+      return;
+    }
+    if (!journal) {
+      area.replaceChildren();
+      return;
+    }
+    const rows = journal.entries
+      .map((entry) => `<li>${html(entry.path)}: ${html(entry.status)}</li>`)
+      .join("");
+    const retryable =
+      this.retrySessionChangeSetId === journal.changeSetId &&
+      this.changeSet?.id === journal.changeSetId &&
+      journal.entries.some((entry) => entry.status === "not-written") &&
+      journal.entries.every((entry) =>
+        ["written", "not-written", "no-write"].includes(entry.status),
+      );
+    const settled = journal.entries.every((entry) =>
+      ["written", "not-written", "diverged", "no-write"].includes(entry.status),
+    );
+    area.innerHTML = `<h2>Publish journal</h2><p>${html(journal.target.repository)} · ${html(journal.target.branch)} · change set ${html(shortChangeSetId(journal.changeSetId))}. Remote writes are never retried until this journal is reconciled.</p><ol>${rows}</ol><button data-reconcile>Reconcile with GitHub</button>${retryable ? `<label class="check"><input type="checkbox" data-retry-confirm> I reviewed the reconciled files and approve retrying only files marked not-written.</label><button data-retry disabled>Retry reconciled files</button>` : ""}${settled ? "<button data-journal-dismiss>Clear reconciled journal and review fresh</button>" : ""}`;
+    area.querySelector("[data-reconcile]").onclick = () =>
+      this.run(() => this.reconcileJournal());
+    const confirm = area.querySelector("[data-retry-confirm]"),
+      retry = area.querySelector("[data-retry]");
+    if (confirm && retry) {
+      confirm.onchange = () => (retry.disabled = !confirm.checked);
+      retry.onclick = () => this.run(() => this.retryReconciled());
+    }
+    area
+      .querySelector("[data-journal-dismiss]")
+      ?.addEventListener("click", () => {
+        clearPublishJournal();
+        this.retrySessionChangeSetId = null;
+        this.journalView();
+        this.status(
+          "Reconciled Publish journal cleared. Load GitHub again and review a fresh change set before writing.",
+        );
+      });
+  }
+  async reconcileJournal() {
+    const journal = readPublishJournal();
+    if (!journal) throw new Error("There is no Publish journal to reconcile.");
+    const remotes = {};
+    for (const entry of journal.entries) {
+      if (entry.action === "unchanged") continue;
+      remotes[entry.path] = await this.client.request("read", {
+        ...journal.target,
+        path: entry.path,
+        ...(entry.kind === "readme" ? {} : { kind: entry.kind }),
+      });
+    }
+    const reconciled = reconcilePublishJournal(journal, remotes);
+    savePublishJournal(reconciled);
+    this.journalView();
+    if (reconciled.entries.some((entry) => entry.status === "diverged"))
+      this.status(
+        "Reconciliation found remote content different from both the Base and Result SHA. Nothing was retried; load and review a fresh change set.",
+      );
+    else if (reconciled.entries.some((entry) => entry.status === "not-written"))
+      this.status(
+        this.retrySessionChangeSetId === reconciled.changeSetId
+          ? "Reconciliation is complete. Only files marked not-written can be retried, after a new explicit approval."
+          : "Reconciliation is complete. This page no longer has the reviewed content, so retry is unavailable; clear the reconciled journal, load GitHub and review a fresh change set.",
+      );
+    else {
+      const primary = reconciled.entries.at(-1),
+        remote = remotes[primary.path];
+      if (primary.status === "written" && remote?.commitSha)
+        this.reconciledPublished({
+          ...reconciled.target,
+          path: primary.path,
+          commitSha: remote.commitSha,
+          previousCommitSha: reconciled.baseCommitSha,
+        });
+      else {
+        clearPublishJournal();
+        this.retrySessionChangeSetId = null;
+        this.journalView();
+        this.status(
+          "Reconciliation is complete. No remote write remains unknown.",
+        );
+      }
+    }
+  }
+  async retryReconciled() {
+    const journal = readPublishJournal(),
+      confirm = this.querySelector("[data-retry-confirm]");
+    if (
+      !journal ||
+      this.retrySessionChangeSetId !== journal.changeSetId ||
+      journal.changeSetId !== this.changeSet?.id ||
+      !confirm?.checked
+    )
+      throw new Error(
+        "Reconcile and explicitly approve this exact change set before retrying.",
+      );
+    const onlyPaths = new Set(
+      journal.entries
+        .filter((entry) => entry.status === "not-written")
+        .map((entry) => entry.path),
+    );
+    if (!onlyPaths.size)
+      throw new Error("No reconciled file is eligible for retry.");
+    const outcome = await executeChangeSet(
+      this.changeSet,
+      changeSetContents(this.changeFiles),
+      (op, data) => this.client.request(op, data),
+      {
+        onlyPaths,
+        beforeWrite: (entry) =>
+          updatePublishJournal(this.changeSet.id, entry.path, "pending"),
+        afterWrite: (entry, status, result) =>
+          updatePublishJournal(
+            this.changeSet.id,
+            entry.path,
+            status,
+            result?.commitSha ? { commitSha: result.commitSha } : {},
+          ),
+      },
+    );
+    this.querySelector("[data-change-set-results]").textContent =
+      outcome.results
+        .map((result) => `${result.path}: ${result.status}`)
+        .join(" · ");
+    if (!outcome.complete) {
+      this.journalView();
+      this.status(
+        outcome.failure.error.ambiguous
+          ? "The retry response was lost. Do not retry again; reconcile the Publish journal."
+          : "The retry was refused. Reconcile the Publish journal before any further attempt.",
+      );
+      return;
+    }
+    const saved = readPublishJournal(),
+      primaryEntry = saved.entries.at(-1),
+      primaryResult = outcome.results.find(
+        (result) => result.path === primaryEntry.path && result.result,
+      );
+    if (primaryResult) this.published(primaryResult.result);
+    else if (primaryEntry.status === "written" && primaryEntry.commitSha)
+      this.reconciledPublished({
+        ...saved.target,
+        path: primaryEntry.path,
+        commitSha: primaryEntry.commitSha,
+        previousCommitSha: saved.baseCommitSha,
+      });
+    else {
+      clearPublishJournal();
+      this.retrySessionChangeSetId = null;
+      this.journalView();
+      this.status(
+        "Reconciled files were published. Local source is unchanged.",
+      );
+    }
+  }
+  reconciledPublished(result) {
+    const repo = `https://github.com/${result.repository}`,
+      file = `${repo}/blob/${result.commitSha}/${result.path
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/")}`;
+    this.querySelector("[data-result]").innerHTML =
+      `<p>Reconciliation observed the reviewed Result SHA at branch head <code>${html(result.commitSha)}</code>. This is evidence of the remote file state, not attribution to the commit that performed the write. <a href="${html(file)}" target="_blank" rel="noopener noreferrer">View the observed file</a></p>`;
+    try {
+      recordPublish({ ...result, reconciled: true }, result.previousCommitSha);
+      clearPublishJournal();
+      this.retrySessionChangeSetId = null;
+      this.historyView();
+      this.status(
+        "Reconciliation confirmed the reviewed Result SHA on GitHub. No duplicate write was made; local source is unchanged.",
+      );
+    } catch (error) {
+      this.status(
+        `Reconciliation confirmed the remote Result SHA, but local history could not be saved. ${error.message}`,
+      );
     }
   }
   stale(remote) {

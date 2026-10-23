@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.5.** Raw Markdown edits now preserve every untouched source byte and visual owner, detach only the blocks they change, and carry visible Detachment records through local drafts and portable files without retaining removed text. [Source-preserving edits](docs/editing.md#source-preserving-raw-edits) · [Round-trip identity](docs/adr/epic63-04-round-trip-identity-is-a-byte-level-ci-gate.md)
+**Version 1.9.6.** A machine-local, content-free Publish journal now makes ambiguous GitHub writes recoverable: Studio reads the remote Result SHA before offering any retry, records already-applied writes without duplicating them, and requires a new approval before retrying only files proven not written. [Publishing recovery](docs/github-publishing.md#ambiguous-write-recovery-196) · [Recovery decision](docs/adr/epic69-03-ambiguous-writes-are-reconciled-from-a-machine-local-publish-journal.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
