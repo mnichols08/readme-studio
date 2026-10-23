@@ -149,7 +149,7 @@ export function attentionQueue(
   return records
     .map((record) =>
       attentionItem(record, {
-        override: overrides.get(record.repo.full_name) || "auto",
+        override: overrides.get(record.repo.full_name.toLowerCase()) || "auto",
         preference: saved.get(record.repo.full_name.toLowerCase()),
         dismissed: dismissals.get(record.repo.full_name.toLowerCase()),
         now,

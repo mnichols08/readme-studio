@@ -12,14 +12,18 @@ import {
 } from "../repository-audit/improvement-plan.js";
 import { readmeUrl } from "../repository-audit/presentation.js";
 import {
-  AttentionPreferences,
   ATTENTION_KEY,
   rememberAttentionPreference,
 } from "../repository-audit/attention-storage.js";
+import {
+  AUDIT_DECISIONS_KEY,
+  AuditDecisions,
+  applyAuditDecisions,
+} from "../repository-audit/audit-decisions-storage.js";
 
 export class ReadmeAttentionQueue extends HTMLElement {
   connectedCallback() {
-    this.preferences ||= new AttentionPreferences();
+    this.preferences ||= new AuditDecisions();
     this.page = 0;
     this.innerHTML = `<h2 tabindex="-1">README Attention Queue</h2><p>Choose the next README to improve using descriptive signals, not a quality score. Load repositories and audit selected READMEs above first. Only successful assessments enter this queue.</p><p class="hint">High: recently active with missing or thin documentation. Medium: documentation needs attention or commonly useful project-type topics were not detected. Low: archived or no push in over 180 days. Within a tier: active first, README state, public-interest signals, then recent push and repository name. Pinned status and releases are not fetched.</p><div class="attention-filters"><label>Attention priority<select name="priority" aria-label="Attention priority"><option value="all">All priorities</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label><label><input type="checkbox" name="missing"> Missing only</label><label><input type="checkbox" name="active"> Active only (pushed within 30 days)</label><label>Archived repositories<select name="archived" aria-label="Archived repositories"><option value="exclude">Exclude archived</option><option value="include">Include archived</option><option value="only">Archived only</option></select></label><label>Queue language<select name="language" aria-label="Queue language"><option value="all">All languages</option></select></label><label>Queue project type<select name="type" aria-label="Queue project type"><option value="all">All project types</option>${projectTypes.map((t) => `<option value="${t.id}">${h(t.name)}</option>`).join("")}</select></label><label>Minimum stars<input name="stars" aria-label="Minimum stars" type="number" min="0" max="1000000000" step="1" value="0"></label><label>Pushed recently<select name="pushed" aria-label="Pushed recently"><option value="">Any push date</option><option value="30">Within 30 days</option><option value="90">Within 90 days</option><option value="180">Within 180 days</option><option value="365">Within 365 days</option></select></label><label>Queue visibility<select name="deferred" aria-label="Queue visibility"><option value="">Active queue</option><option value="only">Deferred items</option><option value="all">All attention items</option></select></label><button data-reset-filters>Reset queue filters</button></div><p class="hint">Filters combine. Archived/forked repositories must have been included in an audit to have evidence. “Ignore for now” lasts seven days. “Intentionally minimal” lasts until a newly fetched README revision differs. Improve next starts a local review batch from the current filtered, non-deferred queue (up to 200). Opening or reviewing a draft does not mark its remote README complete.</p><div data-storage></div><p data-queue-status role="status" aria-live="polite"></p><p data-queue-count></p><button data-improve-next>Improve next</button><ol class="attention-items" data-items></ol><div class="audit-pagination"><button data-previous>Previous queue page</button><span data-queue-page></span><button data-next>Next queue page</button></div>`;
     this.querySelectorAll(
@@ -76,7 +80,11 @@ export class ReadmeAttentionQueue extends HTMLElement {
       this.querySelector("[data-items]").firstElementChild?.focus();
     };
     this.onStorage = (event) => {
-      if (event.key === ATTENTION_KEY || event.key === null) {
+      if (
+        event.key === ATTENTION_KEY ||
+        event.key === AUDIT_DECISIONS_KEY ||
+        event.key === null
+      ) {
         this.preferences.read();
         this.draw();
         this.changed();
@@ -127,6 +135,13 @@ export class ReadmeAttentionQueue extends HTMLElement {
         const record = this.state.results.get(repo.full_name);
         return record ? { ...record, repo } : { repo };
       });
+    for (const record of records)
+      if (record.result)
+        applyAuditDecisions(
+          this.state,
+          this.preferences,
+          record.repo.full_name,
+        );
     const items = attentionQueue(records, {
       overrides: this.state?.typeOverrides,
       preferences: this.preferences.entries,
@@ -218,7 +233,11 @@ export class ReadmeAttentionQueue extends HTMLElement {
       return;
     }
     if (target.childElementCount) return;
-    target.innerHTML = `<p role="alert">${h(this.preferences.error)}</p>${this.preferences.raw !== null ? "<button data-recovery>Download attention recovery data</button>" : ""}<label><input type="checkbox" data-confirm-reset> I want to discard only damaged attention settings</label><button data-reset-storage>Reset attention settings</button>`;
+    const label =
+      this.preferences.source === "legacy"
+        ? "legacy attention"
+        : "audit decision";
+    target.innerHTML = `<p role="alert">${h(this.preferences.error)}</p>${this.preferences.raw !== null ? `<button data-recovery>Download ${label} recovery data</button>` : ""}<label><input type="checkbox" data-confirm-reset> I want to start fresh without changing the damaged source data</label><button data-reset-storage>Start fresh with audit decisions</button>`;
     const download = target.querySelector("[data-recovery]");
     if (download)
       download.onclick = () =>
@@ -227,7 +246,10 @@ export class ReadmeAttentionQueue extends HTMLElement {
             bubbles: true,
             detail: {
               content: this.preferences.raw,
-              name: "readme-attention-recovery.json",
+              name:
+                this.preferences.source === "legacy"
+                  ? "readme-attention-recovery.json"
+                  : "readme-audit-decisions-recovery.json",
               type: "application/json",
             },
           }),
@@ -241,7 +263,9 @@ export class ReadmeAttentionQueue extends HTMLElement {
         this.preferences.reset();
         this.draw();
         this.changed();
-        this.status("Attention settings reset. Drafts are unchanged.");
+        this.status(
+          "Audit decisions reset. Damaged source data and drafts are unchanged.",
+        );
       } catch (error) {
         this.status(error.message);
       }
@@ -252,7 +276,9 @@ export class ReadmeAttentionQueue extends HTMLElement {
     return improvementPlanForRecord(record, {
       session: this.state,
       preferences: this.preferences.entries,
-      override: this.state.typeOverrides?.get(record.repo.full_name) || "auto",
+      override:
+        this.state.typeOverrides?.get(record.repo.full_name.toLowerCase()) ||
+        "auto",
     });
   }
   planAction({ action, id, repository, focus }) {
@@ -270,12 +296,20 @@ export class ReadmeAttentionQueue extends HTMLElement {
     }
     let message;
     try {
-      message = planDecision(this.state, {
+      const detail = {
         repository,
         id,
         action,
         revision: item.revision,
-      });
+      };
+      if (action === "dismiss")
+        this.preferences.setDismissal(repository, id, item.revision);
+      else if (
+        action === "restore" &&
+        this.preferences.dismissals(repository).has(id)
+      )
+        this.preferences.removeDismissal(repository, id);
+      message = planDecision(this.state, detail);
     } catch (error) {
       this.status(error.message);
       return;

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.9
+
+- Persist Manual project types per canonical repository and continue applying them after reloads, account switches and README revisions (#81, #126).
+- Persist Dismissals against the observed README revision; changed revisions surface the saved choice as stale instead of silently hiding fresh evidence. Automatic and Restore explicitly remove their respective decisions.
+- Store decisions in `readme-studio:audit-decisions:v1`, migrate valid legacy attention preferences in memory on first write, and never rewrite or delete the old key. Damaged new or legacy data stays downloadable and blocks writes until an explicit start-fresh action (#127).
+- Add repository-scoped reset, rejected-write safety, migration/recovery unit coverage and cross-browser reload/revision coverage.
+
 ## 1.9.8
 
 - Complete the Round-trip corpus with SHA-256-pinned Studio-project fixtures for raw source and mixed builder/Custom Markdown/component ownership (#79, #122).

@@ -265,7 +265,7 @@ test("queue decisions and other-tab changes refresh the audit-row improvement pl
   await expect(thin).toContainText(note);
   await expect(mark).toHaveCount(0);
   const minimal = await page.evaluate(() =>
-    localStorage.getItem("readme-studio:attention:v1"),
+    localStorage.getItem("readme-studio:audit-decisions:v1"),
   );
   await view("README Attention Queue");
   await queue
@@ -279,9 +279,11 @@ test("queue decisions and other-tab changes refresh the audit-row improvement pl
   await expect(mark).toBeVisible();
   // Another tab marks it minimal again.
   await page.evaluate((value) => {
-    localStorage.setItem("readme-studio:attention:v1", value);
+    localStorage.setItem("readme-studio:audit-decisions:v1", value);
     window.dispatchEvent(
-      new StorageEvent("storage", { key: "readme-studio:attention:v1" }),
+      new StorageEvent("storage", {
+        key: "readme-studio:audit-decisions:v1",
+      }),
     );
   }, minimal);
   await expect(thin).toContainText(note);
@@ -318,20 +320,28 @@ test("damaged and unwritable attention storage stays visible and does not lose d
   ).toBe("damaged");
   const download = page.waitForEvent("download");
   await queue
-    .getByRole("button", { name: "Download attention recovery data" })
+    .getByRole("button", { name: "Download legacy attention recovery data" })
     .click();
   expect((await download).suggestedFilename()).toBe(
     "readme-attention-recovery.json",
   );
   await queue
-    .getByRole("button", { name: "Reset attention settings", exact: true })
+    .getByRole("button", {
+      name: "Start fresh with audit decisions",
+      exact: true,
+    })
     .click();
-  await expect(queue).toContainText("Confirm discarding");
+  await expect(queue).toContainText("start fresh");
   await queue
-    .getByLabel("I want to discard only damaged attention settings")
+    .getByLabel(
+      "I want to start fresh without changing the damaged source data",
+    )
     .check();
   await queue
-    .getByRole("button", { name: "Reset attention settings", exact: true })
+    .getByRole("button", {
+      name: "Start fresh with audit decisions",
+      exact: true,
+    })
     .click();
   await expect(
     queue.getByRole("button", {
@@ -342,7 +352,7 @@ test("damaged and unwritable attention storage stays visible and does not lose d
   await page.evaluate(() => {
     const original = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key, value) {
-      if (key === "readme-studio:attention:v1")
+      if (key === "readme-studio:audit-decisions:v1")
         throw new DOMException("Quota", "QuotaExceededError");
       return original.call(this, key, value);
     };
@@ -402,7 +412,10 @@ test("improvement plans explain evidence, move focus after Skip and Dismiss, and
   // Skip never changes the queue.
   await expect(item).toContainText("Game controls not detected");
   await setup
-    .getByRole("button", { name: "Dismiss for this session", exact: true })
+    .getByRole("button", {
+      name: "Dismiss for this README revision",
+      exact: true,
+    })
     .click();
   await expect(item).not.toContainText(
     "Build/run or setup instructions not detected",
@@ -416,7 +429,7 @@ test("improvement plans explain evidence, move focus after Skip and Dismiss, and
       .filter({ hasText: "Add a Gameplay section" })
       .getByRole("button", { name: "Improve README", exact: true }),
   ).toBeFocused();
-  await expect(plan).toContainText("Dismissed for this session (1)");
+  await expect(plan).toContainText("Dismissed for this README revision (1)");
   // Thin READMEs offer Intentionally minimal instead of Dismiss.
   const thin = plan
     .locator("li[data-rec]")
@@ -425,7 +438,7 @@ test("improvement plans explain evidence, move focus after Skip and Dismiss, and
     thin.getByRole("button", { name: "Mark intentionally minimal" }),
   ).toBeVisible();
   await expect(
-    thin.getByRole("button", { name: "Dismiss for this session" }),
+    thin.getByRole("button", { name: "Dismiss for this README revision" }),
   ).toHaveCount(0);
   await plan
     .getByRole("button", {
@@ -476,7 +489,7 @@ test("dismissing every key gap removes the item from the queue and the plan says
     await plan
       .locator("li[data-rec]")
       .filter({ hasText: title })
-      .getByRole("button", { name: "Dismiss for this session" })
+      .getByRole("button", { name: "Dismiss for this README revision" })
       .click();
   await expect(queue.locator("[data-item]")).toHaveCount(0);
   await expect(
@@ -492,5 +505,87 @@ test("dismissing every key gap removes the item from the queue and the plan says
     .click();
   const rowPlan = page.locator("repository-audit tbody improvement-plan");
   await rowPlan.locator("summary").click();
-  await expect(rowPlan).toContainText("Dismissed for this session (2)");
+  await expect(rowPlan).toContainText("Dismissed for this README revision (2)");
+});
+
+test("saved project type and dismissal survive reload for the same README revision", async ({
+  page,
+}) => {
+  let sha = "a".repeat(40);
+  await page.route("https://api.github.com/**", (route) =>
+    route.fulfill({
+      json: route.request().url().includes("/users/")
+        ? [repo("saved")]
+        : file(basic, sha),
+    }),
+  );
+  await audit(page);
+  await scan(page);
+  const auditPanel = page.locator("repository-audit");
+  const queue = page.locator("readme-attention-queue");
+  const plan = queue.locator("improvement-plan");
+  await plan.locator("summary").click();
+  await plan
+    .locator("li[data-rec]")
+    .filter({ hasText: "Add setup or how-to-run instructions" })
+    .getByRole("button", { name: /Dismiss/ })
+    .click();
+  await auditPanel
+    .getByRole("button", { name: "Audit results", exact: true })
+    .click();
+  await page
+    .getByLabel("Project type for example/saved", { exact: true })
+    .selectOption("web-app");
+
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await page
+    .getByRole("button", { name: "README Attention Queue", exact: true })
+    .click();
+  await page.getByLabel("GitHub username", { exact: true }).fill("example");
+  await page
+    .getByRole("button", { name: "Load repositories", exact: true })
+    .click();
+  await scan(page);
+
+  await expect(
+    page.getByLabel("Project type for example/saved", { exact: true }),
+  ).toHaveValue("web-app");
+  await queue.locator("improvement-plan summary").click();
+  await expect(queue.locator("improvement-plan")).toContainText(
+    "Dismissed for this README revision (1)",
+  );
+
+  await auditPanel
+    .getByRole("button", { name: "Audit results", exact: true })
+    .click();
+  sha = "b".repeat(40);
+  await page.getByLabel("Fetch fresh README content").check();
+  await page
+    .getByRole("button", { name: "Audit selected", exact: true })
+    .click();
+  const type = page.getByLabel("Project type for example/saved", {
+    exact: true,
+  });
+  await expect(type).toHaveValue("web-app");
+  await expect(auditPanel).toContainText(
+    "Manual override saved on this device for this repository",
+  );
+  const rowPlan = auditPanel.locator("tbody improvement-plan");
+  await rowPlan.locator("summary").click();
+  await expect(rowPlan).toContainText(
+    "Dismissed for an earlier README revision",
+  );
+
+  await auditPanel
+    .getByRole("button", {
+      name: "Reset saved audit decisions for example/saved",
+    })
+    .click();
+  await expect(auditPanel).not.toContainText(
+    "Manual override saved on this device for this repository",
+  );
+  await expect(rowPlan).not.toContainText(
+    "Dismissed for an earlier README revision",
+  );
 });

@@ -493,7 +493,7 @@ describe("session Skip and Dismiss", () => {
         action: "dismiss",
         revision: `sha:${sha}`,
       }),
-    ).toContain("for this session and README revision abcdef1");
+    ).toContain("on this device for README revision abcdef1");
     expect(state.dismissed.get("example/game").get("topic:controls")).toBe(
       `sha:${sha}`,
     );

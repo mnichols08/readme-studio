@@ -369,8 +369,8 @@ function kindRank(id) {
   return rank < 0 ? kindOrder.length : rank;
 }
 
-// Story 03.1 decisions live in the audit session only (`skipped` and
-// `dismissed`, keyed by canonical owner/name). Returns a status message.
+// The session map holds skips and the currently hydrated persistent dismissals,
+// keyed by canonical owner/name. Persistence is owned by the UI boundary.
 export function planDecision(session, { repository, id, action, revision }) {
   const key = repository.toLowerCase();
   const title = findingTitle(id);
@@ -388,7 +388,7 @@ export function planDecision(session, { repository, id, action, revision }) {
       throw Error("Refresh the audit to obtain a README revision.");
     if (!session.dismissed.has(key)) session.dismissed.set(key, new Map());
     session.dismissed.get(key).set(id, revision);
-    return `Dismissed “${title}” for ${repository} for this session and ${revisionLabel(revision)}.`;
+    return `Dismissed “${title}” for ${repository} on this device for ${revisionLabel(revision)}.`;
   }
   if (action === "restore") {
     session.skipped.get(key)?.delete(id);

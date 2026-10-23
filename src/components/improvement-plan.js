@@ -5,7 +5,7 @@ const labels = {
   improve: "Improve README",
   open: "Open in Studio",
   skip: "Skip",
-  dismiss: "Dismiss for this session",
+  dismiss: "Dismiss for this README revision",
   minimal: "Mark intentionally minimal",
 };
 let instances = 0;
@@ -134,7 +134,7 @@ export class ImprovementPlan extends HTMLElement {
         : anyHidden
           ? "<p>All recommendations are skipped or dismissed.</p>"
           : "<p>No recommendations from the current evidence. This is not a quality verdict.</p>"
-    }${plan.omitted ? `<p>${plan.omitted} more not shown; plans list at most 30 recommendations.</p>` : ""}${restorable("Skipped", hidden.skipped)}${restorable("Dismissed for this session", hidden.dismissed)}`;
+    }${plan.omitted ? `<p>${plan.omitted} more not shown; plans list at most 30 recommendations.</p>` : ""}${restorable("Skipped", hidden.skipped)}${restorable("Dismissed for this README revision", hidden.dismissed)}`;
     this.applyDisabled();
   }
   applyDisabled() {

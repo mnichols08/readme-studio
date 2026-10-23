@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.8.** The release gate now proves unchanged round trips against a byte-pinned compatibility corpus spanning raw Markdown, Studio JSON and mixed builder/Custom Markdown/component ownership. [Project compatibility](docs/project-schema.md#round-trip-compatibility) · [Identity decision](docs/adr/epic63-04-round-trip-identity-is-a-byte-level-ci-gate.md)
+**Version 1.9.9.** Manual project types and README-revision Dismissals now persist locally per canonical repository, with explicit reset and non-destructive recovery. [Repository auditing](docs/repository-auditing.md#project-types-111) · [Storage decision](docs/adr/epic64-02-audit-decisions-use-a-new-key-and-never-rewrite-the-attention-key.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

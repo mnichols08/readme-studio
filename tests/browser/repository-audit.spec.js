@@ -597,11 +597,14 @@ test("audit rows open improvement plans by keyboard, offline, with evidence, emp
     "https://github.com/example/cli-notes/blob/main/README.md",
   );
   await installation
-    .getByRole("button", { name: "Dismiss for this session", exact: true })
+    .getByRole("button", {
+      name: "Dismiss for this README revision",
+      exact: true,
+    })
     .focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("repository-audit [data-status]")).toContainText(
-    "Dismissed “Add an Installation section” for example/cli-notes for this session and README revision aaaaaaa",
+    "Dismissed “Add an Installation section” for example/cli-notes on this device for README revision aaaaaaa",
   );
   await expect(
     plan
@@ -609,7 +612,7 @@ test("audit rows open improvement plans by keyboard, offline, with evidence, emp
       .filter({ hasText: "Add a Commands section" })
       .getByRole("button", { name: "Improve README", exact: true }),
   ).toBeFocused();
-  await expect(plan).toContainText("Dismissed for this session (1)");
+  await expect(plan).toContainText("Dismissed for this README revision (1)");
   // Skipping the last recommendation moves focus to the summary.
   const last = plan.locator("li[data-rec]").last();
   await last.getByRole("button", { name: "Skip", exact: true }).click();
@@ -619,7 +622,7 @@ test("audit rows open improvement plans by keyboard, offline, with evidence, emp
   await unversioned.locator("summary").click();
   await expect(
     unversioned
-      .getByRole("button", { name: "Dismiss for this session" })
+      .getByRole("button", { name: "Dismiss for this README revision" })
       .first(),
   ).toBeDisabled();
   await expect(unversioned).toContainText(
