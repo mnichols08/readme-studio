@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.11.** Stack-to-README turns reviewed Manifest evidence into editable documentation hints, but keeps exact-diff review unavailable until every selected Command suggestion and Technology claim has its own Confirmation. Editing an item clears its Confirmation; inserted Markdown remains provenance-free and source-preserving. [Stack-to-README](docs/stack-to-readme.md) · [Safety decision](docs/adr/epic65-03-evidence-suggestions-need-per-item-confirmation-and-leave-no-provenance-in-drafts.md)
+**Version 1.9.12.** Documentation suites let an owner explicitly choose, edit and exact-review a project-appropriate set of files before creating the complete batch as local documents. Nothing is preselected, invented, fetched or published. [Documentation suites](docs/documentation-suites.md) · [Safety decision](docs/adr/epic66-01-documentation-suites-are-explicit-atomic-local-batches.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

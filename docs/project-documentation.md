@@ -4,6 +4,8 @@ The builder Library recommends documentation sections for the repository templat
 
 Changing this selector saves a draft-specific preference and is undoable. It does not rewrite source, change existing fields or claim the project was conclusively classified. Recommended sections appear first; other builders remain available below them. New repository templates use the specialized structures, while existing drafts keep their original blocks and Markdown.
 
+For a set of separate files such as `README.md`, `CONTRIBUTING.md`, `SECURITY.md` and project-specific references, use [Documentation suites](documentation-suites.md). Suite choices begin empty and create independent local documents only after exact review; section builders here continue to shape one document.
+
 ## Available builders
 
 | Project type    | Documentation tools                                                                                                                              |

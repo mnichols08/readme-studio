@@ -33,6 +33,7 @@ import {
   documentationProfiles,
   documentationProfile,
 } from "../documentation/project-types.js";
+import { planDocumentationSuiteDrafts } from "../documentation/suites.js";
 import { saveProjectDialog, openProjectDialog } from "../studio-projects/ui.js";
 import { bindDialogDismissal } from "./dialog-dismissal.js";
 import { installWorkspace } from "../workspace/ui.js";
@@ -1679,6 +1680,7 @@ export class AppShell extends HTMLElement {
       this.notify(`Opened ${this.store.draft.name}.`);
     });
     panel.addEventListener("document-evidence", () => this.evidenceSnapshots());
+    panel.addEventListener("document-suite", () => this.documentationSuite());
     panel.addEventListener("document-new", () => {
       this.addDraft("Untitled document", []);
       this.closeDialog();
@@ -1696,6 +1698,61 @@ export class AppShell extends HTMLElement {
         "Document settings saved locally. No GitHub changes were made.",
       );
     });
+  }
+
+  documentationSuiteSnapshot() {
+    return JSON.stringify({
+      active: this.data.active,
+      drafts: this.data.drafts.map((draft) => ({
+        name: draft.name,
+        snapshot: draftSnapshot(draft),
+      })),
+    });
+  }
+  async documentationSuite() {
+    await import("./documentation-suite.js");
+    this.modal("<documentation-suite></documentation-suite>");
+    const panel = this.querySelector("documentation-suite");
+    panel.configure({
+      availableSlots: 500 - this.data.drafts.length,
+      snapshot: this.documentationSuiteSnapshot(),
+    });
+    panel.addEventListener("documentation-suite-create", ({ detail }) => {
+      try {
+        if (this.storageBlocked)
+          throw Error(
+            "Storage recovery is active. Restore workspace storage before creating a documentation suite.",
+          );
+        if (detail.snapshot !== this.documentationSuiteSnapshot())
+          throw Error(
+            "The workspace changed. Review the documentation suite again.",
+          );
+        const created = planDocumentationSuiteDrafts(
+          detail.plan,
+          this.data.drafts,
+        );
+        if (this.data.drafts.length + created.length > 500)
+          throw Error(
+            "The workspace does not have room for every reviewed document.",
+          );
+        const drafts = [...this.data.drafts, ...created];
+        const active = created.at(-1).id;
+        saveDrafts({ ...this.data, drafts, active });
+        this.data.drafts = drafts;
+        this.data.active = active;
+        this.load(active);
+        this.closeDialog();
+        this.focusDocument();
+        this.notify(
+          `Created ${created.length} reviewed local document${created.length === 1 ? "" : "s"}. Nothing was published.`,
+        );
+      } catch (error) {
+        if (!panel.isConnected) return;
+        panel.querySelector("[data-status]").textContent =
+          `${error.message} No documents were created.`;
+      }
+    });
+    panel.querySelector("[data-project-type]").focus();
   }
 
   saveCollections(items) {

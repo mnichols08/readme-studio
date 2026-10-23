@@ -2587,6 +2587,29 @@ workspace-documents [aria-current="true"] {
   font-weight: 700;
   border-width: 2px;
 }
+documentation-suite [data-options] {
+  display: grid;
+  gap: 12px;
+  margin-block: 16px;
+}
+documentation-suite [data-options] section,
+documentation-suite [data-exact] article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+documentation-suite textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+}
+documentation-suite pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 shared-components fieldset {
   max-height: 35vh;

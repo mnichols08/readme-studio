@@ -8,7 +8,7 @@ Use **Documents** in the workspace bar or **Save → Workspace documents**. Sear
 
 The Documents dialog also opens **Evidence snapshots** for the current document: read-only records of its GitHub target's branch head, README revision, manifests, lockfiles and linked files. See [Evidence snapshots](evidence-snapshots.md).
 
-Create a **New document**, or use existing templates, import, audit and draft duplication. Use **Manage drafts** to rename, duplicate, delete or export a document. Each document has independent Markdown, builder metadata and GitHub target. The workspace retains the existing limit of 500 local documents.
+Create a **New document**, or use existing templates, import, audit and draft duplication. **Create documentation suite** prepares an explicitly selected, exact-reviewed set of local files as one atomic batch; see [Documentation suites](documentation-suites.md). Use **Manage drafts** to rename, duplicate, delete or export a document. Each document has independent Markdown, builder metadata and GitHub target. The workspace retains the existing limit of 500 local documents.
 
 In Documents, edit the current document's group and, if applicable, repository (`owner/repository`), branch and relative README path. These are validated local settings; saving them does not contact GitHub. Selecting Local documents explicitly clears its target. Profile and repository groups organize the list, without asserting repository ownership or access.
 
