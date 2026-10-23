@@ -2,9 +2,9 @@
 
 ## 1.9.14
 
-- Add explicit Verified, User-confirmed and Placeholder provenance to every structured documentation command/code field (#88, #140). New fields default to Placeholder; Verified requires a bounded local note, and existing/imported examples are never run or silently reclassified.
+- Add explicit Verified, User-confirmed and Placeholder provenance to every structured documentation command/code field and Code Sample block (#88, #140). New fields default to Placeholder; Verified requires a bounded local note, edits reset stale claims, and existing/imported examples are never run or silently reclassified.
 - Export inert portable status comments immediately before code fences while keeping verification notes in local block metadata. Copying builder output and README export preserve the exact marker and example source.
-- Inspect only bounded provenance markers before whole-document Copy/Export (#141). Placeholder, malformed or truncated results open a read-only review; continuing preserves exact Source and stale reviews fail closed.
+- Inspect fenced examples and adjacent provenance markers before whole-document, form and block Copy or Export (#141). Placeholder, unclassified, orphaned, duplicated, invalid or truncated results open a read-only review; continuing preserves exact Source and stale reviews fail closed.
 - Add source-inertness, invalid/bounded marker, stale review, keyboard focus, exact copy/download and cross-browser coverage.
 
 ## 1.9.13

@@ -2,6 +2,7 @@ import { projectSections } from "./project-types.js";
 import { safeUrl } from "../markdown/url-safety.js";
 import { mdText } from "../styling/presentation.js";
 import {
+  EXAMPLE_STATUSES,
   exampleMarker,
   validateExampleProvenance,
 } from "./example-provenance.js";
@@ -346,7 +347,16 @@ export function serializeDocumentation(type, settings) {
       field.kind === "link"
         ? `[${mdText(field.label)}](${value.replace(/[()\s<>]/g, (character) => encodeURIComponent(character).replace(/\(/g, "%28").replace(/\)/g, "%29"))})`
         : field.kind === "code"
-          ? `${settings.exampleProvenance?.[field.key] ? exampleMarker(validateExampleProvenance(settings.exampleProvenance[field.key]).status) + "\n" : ""}${fence(value, language)}`
+          ? (() => {
+              const provenance = settings.exampleProvenance?.[field.key];
+              const shaped =
+                provenance &&
+                typeof provenance === "object" &&
+                !Array.isArray(provenance) &&
+                EXAMPLE_STATUSES.includes(provenance.status) &&
+                typeof provenance.basis === "string";
+              return `${shaped ? exampleMarker(validateExampleProvenance(provenance).status) + "\n" : ""}${fence(value, language)}`;
+            })()
           : field.kind === "list"
             ? value
                 .split(/\r?\n/)

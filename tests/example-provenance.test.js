@@ -8,7 +8,9 @@ import {
   documentationDefaults,
   serializeDocumentation,
 } from "../src/documentation/sections.js";
+import { createBlock, serializeBlock } from "../src/markdown/serialize.js";
 import "../src/components/example-export-check.js";
+import "../src/components/builder-form.js";
 
 describe("example provenance", () => {
   it("serializes exact portable status markers without executing examples", () => {
@@ -66,6 +68,89 @@ describe("example provenance", () => {
     expect(inspectExampleMarkers("x".repeat(800_000)).truncatedSource).toBe(
       true,
     );
+  });
+
+  it("reports unclassified fences, orphan markers and duplicate markers", () => {
+    expect(inspectExampleMarkers("```sh\nnpm test\n```").issues).toEqual([
+      { kind: "unclassified" },
+    ]);
+    expect(
+      inspectExampleMarkers(
+        `${exampleMarker("verified")}\ntext\n${exampleMarker("verified")}\n${exampleMarker("placeholder")}\n\`\`\`sh\nnpm test\n\`\`\``,
+      ).issues.map((issue) => issue.kind),
+    ).toEqual(["orphan-marker", "duplicate-marker"]);
+    expect(
+      inspectExampleMarkers(
+        "```text\n<!-- readme-studio-example: verified -->\n```",
+      ).issues,
+    ).toEqual([{ kind: "unclassified" }]);
+  });
+
+  it("marks built-in Code Samples and places collapsed markers by their fence", () => {
+    const settings = {
+      title: "Try it",
+      language: "js",
+      code: "run()",
+      collapsed: true,
+      open: false,
+      exampleProvenance: { status: "placeholder", basis: "" },
+    };
+    const source = serializeBlock(createBlock("code", settings));
+    expect(source).toContain(
+      `${exampleMarker("placeholder")}\n\`\`\`js\nrun()`,
+    );
+    expect(inspectExampleMarkers(source).issues).toEqual([
+      { kind: "placeholder", status: "placeholder" },
+    ]);
+  });
+
+  it("does not dirty legacy examples and safely replaces malformed metadata", () => {
+    const settings = documentationDefaults("doc-testing");
+    settings.commands = "npm test";
+    delete settings.exampleProvenance;
+    const form = document.createElement("builder-form");
+    form.block = createBlock("doc-testing", settings);
+    expect(form.isDirty()).toBe(false);
+    form.querySelector('[data-path="title"]').value = "Testing locally";
+    form
+      .querySelector('[data-path="title"]')
+      .dispatchEvent(new Event("input", { bubbles: true }));
+    expect(form.value.settings.exampleProvenance).toBeUndefined();
+
+    form.value.settings.exampleProvenance = { commands: "verified" };
+    form.draw();
+    const status = form.querySelector(
+      '[data-path="exampleProvenance.commands.status"]',
+    );
+    status.value = "user-confirmed";
+    expect(() =>
+      status.dispatchEvent(new Event("input", { bubbles: true })),
+    ).not.toThrow();
+    expect(form.value.settings.exampleProvenance.commands).toEqual({
+      status: "user-confirmed",
+    });
+  });
+
+  it("downgrades provenance whenever a verified example changes", () => {
+    const settings = documentationDefaults("doc-testing");
+    settings.commands = "npm test";
+    settings.exampleProvenance.commands = {
+      status: "verified",
+      basis: "Matched package.json.",
+    };
+    const form = document.createElement("builder-form");
+    form.block = createBlock("doc-testing", settings);
+    const commands = form.querySelector('[data-path="commands"]');
+    commands.value = "npm run test:browser";
+    commands.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(form.value.settings.exampleProvenance.commands).toEqual({
+      status: "placeholder",
+      basis: "",
+    });
+    expect(
+      form.querySelector('[data-path="exampleProvenance.commands.status"]')
+        .value,
+    ).toBe("placeholder");
   });
 });
 

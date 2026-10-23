@@ -42,6 +42,16 @@ test("installation and testing sections remain editable and support undo", async
     "pnpm add actual-package",
   );
   await page
+    .getByLabel("Install command", { exact: true })
+    .fill("pnpm add actual-package@latest");
+  await expect(page.getByLabel("Install command status")).toHaveValue(
+    "placeholder",
+  );
+  await page.getByLabel("Install command status").selectOption("verified");
+  await page
+    .getByLabel("Install command verification note or evidence")
+    .fill("Rechecked against the package manifest.");
+  await page
     .getByLabel("Additional notes", { exact: true })
     .fill("Use your own registry if required.");
   await page.getByRole("button", { name: "Save section", exact: true }).click();
@@ -71,6 +81,16 @@ test("installation and testing sections remain editable and support undo", async
       () => document.querySelector("app-shell").store.draft.markdown,
     ),
   ).toBe(source);
+
+  await page
+    .locator(".block-row")
+    .filter({ hasText: "Testing" })
+    .getByRole("button", { name: /Copy/ })
+    .click();
+  await expect(page.locator("example-export-check")).toContainText(
+    "1 placeholder",
+  );
+  await page.getByRole("button", { name: "Close dialog" }).click();
 
   await page.getByRole("button", { name: "Export README" }).click();
   const review = page.locator("example-export-check");

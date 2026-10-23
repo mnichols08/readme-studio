@@ -843,7 +843,16 @@ export class AppShell extends HTMLElement {
     this.addEventListener("open-badge-studio", () =>
       this.openBadges(this.selectedBlock),
     );
-    this.addEventListener("copy-markup", (e) => this.copy(e.detail));
+    this.addEventListener("copy-markup", (e) => {
+      const source = e.detail;
+      this.exampleOutputCheck({
+        action: "copy",
+        proceed: () => this.copy(source),
+        source,
+        snapshot: source,
+        currentSnapshot: () => serializeBlock(e.target.value),
+      });
+    });
     this.querySelector("#draft-select").onchange = (e) =>
       this.load(e.target.value);
     this.querySelector("#preview-size").onchange = (e) => {
@@ -1825,9 +1834,14 @@ export class AppShell extends HTMLElement {
     });
     panel.querySelector("[data-export], h1").focus();
   }
-  exampleOutputCheck({ action, proceed }) {
-    const snapshot = draftSnapshot(this.store.draft);
-    const report = inspectExampleMarkers(this.store.draft.markdown);
+  exampleOutputCheck({
+    action,
+    proceed,
+    source = this.store.draft.markdown,
+    snapshot = draftSnapshot(this.store.draft),
+    currentSnapshot = () => draftSnapshot(this.store.draft),
+  }) {
+    const report = inspectExampleMarkers(source);
     if (
       !report.issues.length &&
       !report.truncatedMarkers &&
@@ -1840,7 +1854,7 @@ export class AppShell extends HTMLElement {
     const panel = this.querySelector("example-export-check");
     panel.configure({ report, action, snapshot });
     panel.addEventListener("example-export-continue", ({ detail }) => {
-      if (detail.snapshot !== draftSnapshot(this.store.draft)) {
+      if (detail.snapshot !== currentSnapshot()) {
         panel.querySelector("[data-status]").textContent =
           "The source changed. Close this review and try again.";
         return;
@@ -2476,7 +2490,20 @@ export class AppShell extends HTMLElement {
       return;
     }
     if (action === "copy") {
-      this.copy(serializeBlock(blocks[i]));
+      const id = blocks[i].id;
+      const source = serializeBlock(blocks[i]);
+      this.exampleOutputCheck({
+        action: "copy",
+        proceed: () => this.copy(source),
+        source,
+        snapshot: source,
+        currentSnapshot: () => {
+          const current = this.store.draft.blocks.find(
+            (item) => item.id === id,
+          );
+          return current ? serializeBlock(current) : "";
+        },
+      });
       return;
     }
     if (action === "duplicate")
