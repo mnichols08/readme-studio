@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.2.** Stack Intelligence shows where each detected declaration came from and its named confidence basis, lists uncertain results separately, and marks results Stale after a newer push or 24 hours. [Stack Intelligence](docs/stack-intelligence.md#provenance-confidence-and-staleness) · [Stack DNA](docs/stack-dna.md) · [Stack-to-README](docs/stack-to-readme.md)
+**Version 1.9.3.** Repository audits now turn observed findings into bounded, evidence-backed Improvement plans with project-type applicability, descriptive ordering, and explicit session-only Skip or Dismiss choices. [Improvement plans](docs/repository-auditing.md#improvement-plans) · [README Attention Queue](docs/readme-attention-queue.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

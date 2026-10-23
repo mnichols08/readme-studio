@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.3
+
+- Add an evidence-backed Improvement plan to every assessed repository in the audit and README Attention Queue (#80, #124). Each Recommendation comes from one observed finding, cites the README revision and observation/check time, explains project-type applicability and never invents replacement content, commands, links or facts.
+- Group Recommendations into descriptive **Start here**, **Next** and **Optional** bands instead of scores. Missing/thin READMEs, starter text and placeholders lead; key type-specific gaps and unavailable links/images follow; other topics and README-history review remain optional. Plans are deterministic and capped at 30 items.
+- Fold a missing or stub README into one Recommendation with relevant sections to consider, instead of flooding the plan with one item per topic. Weak project-type inference, likely non-English headings, public APIs, documentation links and Experiments receive explicit conservative caveats.
+- Add reviewed actions for every Recommendation: Improve README, Open in Studio, Open README on GitHub, session-only Skip and revision-bound session-only Dismiss (#125). Missing/thin README findings use the existing Mark intentionally minimal decision instead of Dismiss.
+- Keep audit decisions local and non-destructive. Skip and Dismiss make no request, change no Markdown and publish nothing; stale dismissals return when the observed README revision changes or becomes unknown, with explicit re-dismiss/forget controls.
+- Add keyboard, mobile, offline, focus-management, empty/failure-state and type-specific false-positive coverage, plus user documentation and a synthetic Improvement plan screenshot.
+
 ## 1.9.2
 
 - Stack Intelligence shows the Provenance of every detected declaration (#84, #132): Manifest path, section, line, branch, shortened blob SHA and when it was observed. The full blob SHA is available to screen readers. A cached result keeps its original Observed at.
