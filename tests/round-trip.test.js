@@ -52,11 +52,24 @@ function normalizedProject(project) {
 describe("round-trip gate", () => {
   it("pins every fixture byte-for-byte and rejects unlisted corpus files", () => {
     expect(manifest.version).toBe(2);
+    const markdownFixtures = manifest.fixtures.filter(
+      ({ kind }) => kind === "markdown",
+    );
+    const projectFixtures = manifest.fixtures.filter(
+      ({ kind }) => kind === "studio-project",
+    );
+    expect(markdownFixtures.length).toBeGreaterThan(0);
+    expect(projectFixtures.length).toBeGreaterThan(0);
+    expect(
+      projectFixtures.some(({ blockTypes = [] }) =>
+        ["hero", "custom", "component"].every((type) =>
+          blockTypes.includes(type),
+        ),
+      ),
+    ).toBe(true);
     const listed = manifest.fixtures.map((entry) => entry.name).sort();
     const present = readdirSync(root)
-      .filter(
-        (name) => name.endsWith(".md") || name.endsWith(".readme-studio.json"),
-      )
+      .filter((name) => name !== "manifest.json")
       .sort();
     expect(listed).toEqual(present);
     for (const entry of manifest.fixtures) {
@@ -121,6 +134,7 @@ describe("round-trip gate", () => {
       expect(opened.mode).toBe("project");
       expect(opened.source).toBe(pinned.document.markdown);
       expect(serializeBlocks(opened.draft.blocks)).toBe(opened.source);
+      expect(opened.settings).toEqual(pinned.settings);
       expect(opened.draft.blocks.map((block) => block.type)).toEqual(
         blockTypes,
       );
@@ -146,6 +160,7 @@ describe("round-trip gate", () => {
       const restored = validateWorkspace(backup, { preserveIds: true });
       expect(restored.drafts[0].markdown).toBe(opened.source);
       expect(restored.drafts[0].blocks).toEqual(opened.draft.blocks);
+      expect(restored.settings).toEqual(opened.settings);
       expect(normalizedBackup(createBackup(restored))).toEqual(
         normalizedBackup(createBackup(validateWorkspace(backup))),
       );
