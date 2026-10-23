@@ -6,6 +6,7 @@ const names = {
   "missing-anchor": "Missing anchor",
   "outside-workspace": "Path leaves the workspace",
   "invalid-link": "Invalid relative link",
+  "unchecked-anchor": "Anchor target was too large to check",
 };
 
 export class DocumentLinkCheck extends HTMLElement {
@@ -24,6 +25,9 @@ export class DocumentLinkCheck extends HTMLElement {
         : "",
       report.truncatedIssues
         ? `${report.truncatedIssues} additional issue(s) were not displayed.`
+        : "",
+      report.truncatedSources
+        ? `${report.truncatedSources} document source(s) exceeded the safe parsing budget and were not fully checked.`
         : "",
     ].filter(Boolean);
     this.innerHTML = `<h1 tabindex="-1">Document link check</h1>

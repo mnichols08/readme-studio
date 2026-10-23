@@ -365,7 +365,7 @@ The versioned exact-review record of every selected path and its complete starti
 _Avoid_: Publish plan, file system operation, default selection
 
 **Document path**:
-The explicit relative path used to locate one workspace document: a Suite template path or a validated repository-document target. A local document without one has no resolvable base.
+The explicit relative path used to locate one workspace document: a Suite template path in the local workspace namespace or a validated repository-document target scoped to its canonical repository and exact branch. A local document without one has no resolvable base.
 _Avoid_: Filename (it may include folders), Publish target
 
 **Document link check**:
@@ -373,7 +373,7 @@ A local, read-only comparison of relative links and anchors against current work
 _Avoid_: Link Health (which checks remote URLs), Drift check, navigation repair
 
 **Unresolved navigation**:
-A relative document link whose target cannot be identified exactly in the workspace, or whose requested anchor is absent. Advisory until the author edits Source or explicitly exports it unchanged.
+A relative document link whose target cannot be identified exactly in its workspace/repository scope, whose requested anchor is absent, or whose target Source could not be checked within the byte budget. Advisory until the author edits Source or explicitly exports it unchanged.
 _Avoid_: Broken remote link, automatic fix
 
 ## Language: safe GitHub publishing (Epic 08)

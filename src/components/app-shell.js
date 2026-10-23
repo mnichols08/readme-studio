@@ -1767,8 +1767,27 @@ export class AppShell extends HTMLElement {
       exportAction();
       return;
     }
-    const { checkDocumentLinks } =
-      await import("../workspace/document-links.js");
+    const reviewSnapshot = exportCurrent
+      ? JSON.stringify({
+          active: this.data.active,
+          drafts: this.data.drafts.map((draft) => draftSnapshot(draft)),
+        })
+      : null;
+    const [{ checkDocumentLinks }] = await Promise.all([
+      import("../workspace/document-links.js"),
+      import("./document-link-check.js"),
+    ]);
+    if (
+      exportCurrent &&
+      reviewSnapshot !==
+        JSON.stringify({
+          active: this.data.active,
+          drafts: this.data.drafts.map((draft) => draftSnapshot(draft)),
+        })
+    ) {
+      this.notify("The workspace changed. Export again to run a fresh check.");
+      return;
+    }
     const report = checkDocumentLinks(
       this.data.drafts,
       exportCurrent ? { sourceId: this.store.draft.id } : {},
@@ -1777,22 +1796,23 @@ export class AppShell extends HTMLElement {
       report.issues.length ||
       report.truncatedDocuments ||
       report.truncatedLinks ||
-      report.truncatedIssues;
+      report.truncatedIssues ||
+      report.truncatedSources;
     if (exportCurrent && !needsReview) {
       exportAction();
       return;
     }
-    await import("./document-link-check.js");
     this.modal("<document-link-check></document-link-check>");
     const panel = this.querySelector("document-link-check");
-    const exportSnapshot = exportCurrent
-      ? JSON.stringify(this.data.drafts.map((draft) => draftSnapshot(draft)))
-      : null;
+    const exportSnapshot = exportCurrent ? reviewSnapshot : null;
     panel.configure({ report, exportSnapshot });
     panel.addEventListener("document-link-export", ({ detail }) => {
       if (
         detail.snapshot !==
-        JSON.stringify(this.data.drafts.map((draft) => draftSnapshot(draft)))
+        JSON.stringify({
+          active: this.data.active,
+          drafts: this.data.drafts.map((draft) => draftSnapshot(draft)),
+        })
       ) {
         panel.querySelector("[data-status]").textContent =
           "The workspace changed. Close this check and export again.";

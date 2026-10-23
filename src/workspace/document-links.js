@@ -12,17 +12,33 @@ export const DOCUMENT_LINK_LIMITS = Object.freeze({
   documents: 500,
   linksPerDocument: 200,
   issues: 1_000,
+  sourceBytes: 256_000,
+  aggregateSourceBytes: 8_000_000,
 });
 
-export function documentPath(draft) {
-  const candidate =
-    draft?.metadata?.documentationSuite?.path || documentTarget(draft)?.path;
+function documentLocation(draft) {
+  const suitePath = draft?.metadata?.documentationSuite?.path;
+  const destination = suitePath ? null : documentTarget(draft);
+  const candidate = suitePath || destination?.path;
   try {
-    return candidate ? evidencePath(candidate) : null;
+    return candidate
+      ? {
+          path: evidencePath(candidate),
+          scope: destination
+            ? `repository:${destination.repository.toLowerCase()}@${destination.branch}`
+            : "workspace",
+        }
+      : null;
   } catch {
     return null;
   }
 }
+
+export function documentPath(draft) {
+  return documentLocation(draft)?.path || null;
+}
+
+const locationKey = (scope, path) => `${scope}\0${path}`;
 
 function decoded(value) {
   return decodeURIComponent(value);
@@ -51,24 +67,40 @@ export function checkDocumentLinks(drafts, { sourceId = null } = {}) {
     : [];
   const indexed = new Map();
   for (const draft of bounded) {
-    const path = documentPath(draft);
-    if (!path) continue;
-    if (!indexed.has(path)) indexed.set(path, []);
-    indexed.get(path).push(draft);
+    const location = documentLocation(draft);
+    if (!location) continue;
+    const key = locationKey(location.scope, location.path);
+    if (!indexed.has(key)) indexed.set(key, []);
+    indexed.get(key).push(draft);
   }
   const anchorCache = new Map();
+  const sourceState = new Map();
   const issues = [];
   let checked = 0,
     truncatedLinks = 0,
-    truncatedIssues = 0;
+    truncatedIssues = 0,
+    truncatedSources = 0,
+    parsedBytes = 0;
+  const parseable = (draft) => {
+    if (sourceState.has(draft.id)) return sourceState.get(draft.id);
+    const bytes = new TextEncoder().encode(draft.markdown).byteLength;
+    const allowed =
+      bytes <= DOCUMENT_LINK_LIMITS.sourceBytes &&
+      parsedBytes + bytes <= DOCUMENT_LINK_LIMITS.aggregateSourceBytes;
+    sourceState.set(draft.id, allowed);
+    if (allowed) parsedBytes += bytes;
+    else truncatedSources++;
+    return allowed;
+  };
   const issue = (details) => {
     if (issues.length < DOCUMENT_LINK_LIMITS.issues) issues.push(details);
     else truncatedIssues++;
   };
   for (const draft of bounded) {
     if (sourceId && draft.id !== sourceId) continue;
-    const sourcePath = documentPath(draft);
-    if (!sourcePath) continue;
+    const source = documentLocation(draft);
+    if (!source || !parseable(draft)) continue;
+    const sourcePath = source.path;
     const links = sourceUrls(draft.markdown).filter((item) => !item.image);
     truncatedLinks += Math.max(
       links.length - DOCUMENT_LINK_LIMITS.linksPerDocument,
@@ -95,7 +127,8 @@ export function checkDocumentLinks(drafts, { sourceId = null } = {}) {
       }
       if (!target) continue;
       checked++;
-      const matches = indexed.get(target.targetPath) || [];
+      const matches =
+        indexed.get(locationKey(source.scope, target.targetPath)) || [];
       if (!matches.length) {
         issue({
           sourceId: draft.id,
@@ -117,6 +150,16 @@ export function checkDocumentLinks(drafts, { sourceId = null } = {}) {
         continue;
       }
       if (target.anchor) {
+        if (!parseable(matches[0])) {
+          issue({
+            sourceId: draft.id,
+            sourcePath,
+            value,
+            ...target,
+            kind: "unchecked-anchor",
+          });
+          continue;
+        }
         if (!anchorCache.has(matches[0].id))
           anchorCache.set(
             matches[0].id,
@@ -148,5 +191,6 @@ export function checkDocumentLinks(drafts, { sourceId = null } = {}) {
     ),
     truncatedLinks,
     truncatedIssues,
+    truncatedSources,
   };
 }

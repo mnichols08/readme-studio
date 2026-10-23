@@ -18,6 +18,17 @@ const draftDocument = (path, markdown) => {
   return draft;
 };
 
+const repositoryDocument = (repository, branch, path, markdown) => {
+  const draft = newDraft(`${repository}:${path}`);
+  draft.markdown = markdown;
+  draft.metadata.workspaceDocument = {
+    version: 1,
+    kind: "repository",
+    target: { repository, branch, path },
+  };
+  return draft;
+};
+
 describe("cross-document navigation", () => {
   it("checks relative files and anchors against exact workspace source", () => {
     const readme = draftDocument(
@@ -83,14 +94,60 @@ describe("cross-document navigation", () => {
     });
   });
 
+  it("scopes paths to a repository and branch", () => {
+    const source = repositoryDocument(
+      "example/one",
+      "main",
+      "README.md",
+      "[API](docs/README.md#one)",
+    );
+    const wrongRepository = repositoryDocument(
+      "example/two",
+      "main",
+      "docs/README.md",
+      "# One",
+    );
+    expect(
+      checkDocumentLinks([source, wrongRepository]).issues[0],
+    ).toMatchObject({ kind: "missing-document", targetPath: "docs/README.md" });
+
+    const target = repositoryDocument(
+      "EXAMPLE/ONE",
+      "main",
+      "docs/README.md",
+      "# One",
+    );
+    expect(
+      checkDocumentLinks([source, wrongRepository, target]).issues,
+    ).toEqual([]);
+    target.metadata.workspaceDocument.target.branch = "next";
+    expect(checkDocumentLinks([source, target]).issues[0]).toMatchObject({
+      kind: "missing-document",
+    });
+  });
+
+  it("preserves explicit HTML anchor case", () => {
+    const readme = draftDocument(
+      "README.md",
+      "[Exact](docs/API.md#API-V2) [Wrong](docs/API.md#api-v2)",
+    );
+    const api = draftDocument("docs/API.md", '<a id="API-V2"></a>');
+    const report = checkDocumentLinks([readme, api]);
+    expect(report.issues).toHaveLength(1);
+    expect(report.issues[0]).toMatchObject({
+      value: "docs/API.md#api-v2",
+      kind: "missing-anchor",
+    });
+  });
+
   it("uses repository targets, same-document anchors and safe bounded failures", () => {
     const local = draftDocument(
       "docs/README.md",
       "# Intro\n[Top](#intro) [Root](/README.md) [Out](../../outside.md) [Bad](%E0%A4%A.md)",
     );
-    const root = newDraft("Root");
-    root.markdown = "# Root";
-    root.metadata.workspaceDocument = {
+    const repository = newDraft("Repository root");
+    repository.markdown = "# Root";
+    repository.metadata.workspaceDocument = {
       version: 1,
       kind: "repository",
       target: {
@@ -99,7 +156,8 @@ describe("cross-document navigation", () => {
         path: "README.md",
       },
     };
-    expect(documentPath(root)).toBe("README.md");
+    expect(documentPath(repository)).toBe("README.md");
+    const root = draftDocument("README.md", "# Root");
 
     const report = checkDocumentLinks([local, root]);
     expect(report.checked).toBe(4);
@@ -130,6 +188,24 @@ describe("cross-document navigation", () => {
     expect(report.issues).toHaveLength(200);
     expect(report.truncatedLinks).toBe(1);
     expect(report.truncatedDocuments).toBe(1);
+  });
+
+  it("bounds source parsing before collecting links", () => {
+    const oversized = draftDocument(
+      "README.md",
+      `[Missing](docs/MISSING.md)${"x".repeat(300_000)}`,
+    );
+    const report = checkDocumentLinks([oversized]);
+    expect(report.checked).toBe(0);
+    expect(report.issues).toEqual([]);
+    expect(report.truncatedSources).toBe(1);
+
+    const aggregate = checkDocumentLinks(
+      Array.from({ length: 33 }, (_, index) =>
+        draftDocument(`docs/${index}.md`, "x".repeat(250_000)),
+      ),
+    );
+    expect(aggregate.truncatedSources).toBe(1);
   });
 });
 

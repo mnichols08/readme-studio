@@ -349,12 +349,10 @@ test("checks workspace navigation before export without changing source", async 
   await expect(check).toContainText("Missing anchor");
   expect(await current(page)).toBe(source);
 
-  await page.evaluate((id) => {
-    const target = document
-      .querySelector("app-shell")
-      .data.drafts.find((draft) => draft.id === id);
-    target.metadata.documentationSuite.path = "docs/REFERENCE.md";
-  }, ids[1]);
+  await page.evaluate(
+    (id) => document.querySelector("app-shell").load(id),
+    ids[1],
+  );
   await check
     .getByRole("button", { name: "Export current source anyway" })
     .click();
@@ -362,13 +360,12 @@ test("checks workspace navigation before export without changing source", async 
     "workspace changed",
   );
 
-  await page.evaluate((id) => {
-    const target = document
-      .querySelector("app-shell")
-      .data.drafts.find((draft) => draft.id === id);
-    target.metadata.documentationSuite.path = "docs/API.md";
+  await page.evaluate(([sourceId, targetId]) => {
+    const app = document.querySelector("app-shell");
+    const target = app.data.drafts.find((draft) => draft.id === targetId);
     target.markdown = "# API\n\n## Authentication\n\n## Tokens";
-  }, ids[1]);
+    app.load(sourceId);
+  }, ids);
 
   await page.getByRole("button", { name: "Close dialog" }).click();
   const download = page.waitForEvent("download");
