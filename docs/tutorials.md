@@ -1,5 +1,9 @@
 # Task tutorials
 
+## Practice README writing without changing source automatically
+
+Open **Review → Learning studio** and choose Profile, CLI, Library, API, or Game. Read the evidence state and explanation for each guided task. **Practice in Markdown editor** selects a matching heading when exactly one is observed; otherwise it opens at the end so you can decide what belongs there. Skip any lesson, compare the synthetic annotated examples, and mark only checklist items you have verified. Download the checklist as ordinary Markdown when you want a portable copy. Learning studio never inserts or publishes text. See [Learning studio](learning-studio.md).
+
 ## Build your first profile README
 
 Choose a template, edit the hero and About fields, then add skills through Badge Studio or Stack. Add contact links with meaningful labels. Check Preview at desktop and mobile widths and review Health. Save a Studio project before downloading README. Put the README in your profile repository yourself or use reviewed publishing.

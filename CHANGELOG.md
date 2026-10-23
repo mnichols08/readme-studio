@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.27
+
+- Add optional, skippable Profile, CLI, Library, API, and Game writing lessons that distinguish observed, not-detected, and unknown heading evidence and open the real editor without inserting text (#198, #222, #223).
+- Add synthetic setup, usage, and troubleshooting before/after examples with explicit placeholders and annotations so guidance never invents project facts or changes README source (#199, #224, #225).
+- Add bounded, content-free per-document checklist progress, safe storage recovery, and ordinary Markdown export without lock-in (#187, #200, #226, #227).
+
 ## 1.9.26
 
 - Add explicit same-repository documentation-PR discovery and selection, with exact head recheck, stale/closed/conflicting PR refusal and no unreviewed file-write path (#195, #196, #216–#219).

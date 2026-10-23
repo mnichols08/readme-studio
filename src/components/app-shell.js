@@ -503,6 +503,27 @@ export class AppShell extends HTMLElement {
         e.detail.sourceRange.end,
       );
     });
+    this.addEventListener("learning-practice", (e) => {
+      if (e.detail.source !== this.store.draft.markdown) {
+        this.notify(
+          "The document changed. Reopen Learning studio before practicing.",
+        );
+        return;
+      }
+      if (this.dialog.open) this.closeDialog(this.editor.input);
+      this.mobile("markdown");
+      this.editor.input.focus();
+      this.editor.input.setSelectionRange(
+        e.detail.range.start,
+        e.detail.range.end,
+      );
+      this.notify(
+        `${e.detail.label}: practice in the editor. No text was inserted.`,
+      );
+    });
+    this.addEventListener("learning-download", (e) =>
+      this.download(e.detail.content, e.detail.name, "text/markdown"),
+    );
     this.addEventListener("markdown-change", (e) => {
       // Raw edits detach only the Blocks they touch; announce each new
       // Detachment record politely without moving focus.

@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.26.** Optional GitHub publishing can update an explicitly selected same-repository documentation PR or create a separately reviewed draft PR after an approved branch commit. Exact head/base checks, duplicate prevention and a content-free recovery journal prevent silent or blind remote retries. [GitHub publishing](docs/github-publishing.md#branch-and-pull-request-review) · [Privacy](docs/privacy.md)
+**Version 1.9.27.** Learning studio adds optional project-type writing lessons, synthetic annotated examples, and reusable local checklists. It focuses the real Markdown editor without inserting text, distinguishes observed, not-detected, and unknown evidence, and exports ordinary Markdown without lock-in. [Learning studio](docs/learning-studio.md) · [Privacy](docs/privacy.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -23,6 +23,7 @@ Guided start asks whether you want to write a profile README, write a repository
 - Coordinate themes, generate local light/dark SVG banners, and configure attributed external widget embeds.
 - Import public GitHub data, review refreshes, analyze compatibility and apply explicit, undoable refactors.
 - Review a README for end users, recruiters, contributors or maintainers, distinguish unknown evidence from topics not detected, and optionally apply a reviewed section order without rewriting section text.
+- Practice README writing through optional Profile, CLI, Library, API, or Game lessons, annotated synthetic examples, and portable advisory checklists without automatic source edits.
 - Audit selected public repositories with advisory expectations for 14 project types, review an evidence-backed [Improvement plan](docs/repository-auditing.md#improvement-plans) for each, optionally compare explicit [Audit snapshots](docs/repository-auditing.md#audit-snapshot-history-1910), then choose the next README from the attention queue.
 - Analyze declared dependencies in repository manifests with explicit consent, including bounded monorepo discovery that maps Workspace members and Nested projects ([Stack Intelligence](docs/stack-intelligence.md)). Every declaration shows where and when it was observed and a named confidence basis, with uncertain and Stale results labelled ([Provenance, confidence and staleness](docs/stack-intelligence.md#provenance-confidence-and-staleness)).
 - Record read-only evidence snapshots of a repository's branch head, README, manifests and linked files, then check what changed since a pinned Baseline.
