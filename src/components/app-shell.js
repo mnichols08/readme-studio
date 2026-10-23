@@ -122,8 +122,15 @@ import {
   detachedSummary,
   detachmentFor,
   detachmentNotice,
+  isRestorable,
   moveBlock,
 } from "../markdown/source-patch.js";
+import {
+  applyOwnershipReview as applyOwnershipPlan,
+  ownershipReviewForEdit,
+  ownershipReviewForRecord,
+  refreshOwnershipReview,
+} from "../markdown/ownership-review.js";
 // A status message plus the polite Detachment notice for a raw source edit.
 const withDetachments = (message, result) =>
   [message, detachmentNotice(result)].filter(Boolean).join(" ");
@@ -231,6 +238,7 @@ export class AppShell extends HTMLElement {
       this.querySelector("repository-health")?.controller?.abort();
       this.querySelector("repository-audit")?.cancel();
       this.querySelector("repository-authoring")?.controller?.abort();
+      if (this.querySelector("ownership-review")) this.ownershipReview = null;
       const target = this.afterDialogFocus || this.dialogTrigger;
       this.afterDialogFocus = null;
       if (target?.isConnected && target.getClientRects().length) target.focus();
@@ -563,8 +571,31 @@ export class AppShell extends HTMLElement {
         "GitHub profile applied. Use Undo to restore your previous draft.",
       );
     });
+    this.addEventListener("ownership-keep", () => {
+      this.ownershipReview = null;
+      this.closeDialog();
+    });
+    this.addEventListener("ownership-use", () => this.applyOwnershipReview());
     this.addEventListener("commit", (e) => {
       const b = e.detail;
+      const opened =
+        this.sectionEditOpened?.id === b.id ? this.sectionEditOpened : b;
+      try {
+        const review = b.id
+          ? ownershipReviewForEdit(this.store.draft, opened, b)
+          : null;
+        if (review) {
+          this.openOwnershipReview(review, () => {
+            this.sectionCommits++;
+            this.showTab("sections");
+            this.content.querySelector(`[data-id="${b.id}"]`)?.focus();
+          });
+          return;
+        }
+      } catch (error) {
+        this.notify(error.message);
+        return;
+      }
       const blocks = structuredClone(this.store.draft.blocks);
       if (b.id) {
         const i = blocks.findIndex((v) => v.id === b.id);
@@ -1741,6 +1772,7 @@ export class AppShell extends HTMLElement {
   }
   openComponentEditor(block) {
     this.componentEditId = block.id;
+    this.componentEditOpened = structuredClone(block);
     this.componentEditSnapshot = JSON.stringify(block);
     this.modal("<component-customizer></component-customizer>");
     this.dialog.classList.add("import-modal");
@@ -1758,15 +1790,31 @@ export class AppShell extends HTMLElement {
     const customizer = this.querySelector("component-customizer"),
       blocks = structuredClone(this.store.draft.blocks),
       index = blocks.findIndex((b) => b.id === id);
+    if (mode === "save") {
+      try {
+        const generated = instanceBlock(instance);
+        const proposed = {
+          ...structuredClone(this.componentEditOpened),
+          settings: generated.settings,
+        };
+        const review = ownershipReviewForEdit(
+          this.store.draft,
+          this.componentEditOpened,
+          proposed,
+        );
+        if (review) {
+          this.openOwnershipReview(review, () => this.focusDocument());
+          return;
+        }
+      } catch (error) {
+        customizer.status(error.message);
+        return;
+      }
+    }
     if (index < 0 || blocks[index].type !== "component") {
       customizer.status(
         "This component was detached or removed. Its Markdown remains yours; reopen the current section.",
       );
-      return;
-    }
-    if (JSON.stringify(blocks[index]) !== this.componentEditSnapshot) {
-      this.componentEditSnapshot = JSON.stringify(blocks[index]);
-      customizer.reviewConflict(blocks[index]);
       return;
     }
     try {
@@ -2213,10 +2261,17 @@ export class AppShell extends HTMLElement {
       const record =
         b.type === "custom" && detachmentFor(this.store.draft.metadata, b.id);
       return record
-        ? `<small class="detached" data-detached>Detached from ${html(record.labels.slice(0, 3).join(", ") + (record.labels.length > 3 ? ` and ${record.labels.length - 3} more` : ""))}</small>`
+        ? `<small class="detached" data-detached>Detached from ${html(record.labels.slice(0, 3).join(", ") + (record.labels.length > 3 ? ` and ${record.labels.length - 3} more` : ""))}${isRestorable(record) ? " · Visual version available" : ""}</small>`
         : "";
     };
-    this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button>${this.store.draft.metadata.importSource?.type === "github" ? '<button class="wide" data-action="reimport">Re-import current GitHub README</button>' : ""}<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(b.type.startsWith("doc-") ? b.settings.title || blockTypes[b.type] : b.section?.title || (b.type === "component" ? "Edit visually: " + b.settings.name : blockTypes[b.type]) || "Section")}</strong><small>${html((b.type.startsWith("doc-") ? "Structured documentation" : b.section ? `Suggested ${b.section.kind} · Custom Markdown` : "") || b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small>${detached(b)}</span></button><div class="block-actions"><button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p>' : ""}${this.store.draft.markdown ? '<button class="wide" data-action="split">Split into sections</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for GitHub READMEs</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
+    const ownershipAction = (b) => {
+      const record =
+        b.type === "custom" && detachmentFor(this.store.draft.metadata, b.id);
+      return record && isRestorable(record)
+        ? `<button data-block-action="ownership-review" data-id="${b.id}" aria-label="Review visual version for ${html(record.labels[0] || "detached section")}">Review</button>`
+        : "";
+    };
+    this.content.innerHTML = `<button class="profile-entry" data-action="profile">Autofill from GitHub ↗</button>${this.store.draft.metadata.importSource?.type === "github" ? '<button class="wide" data-action="reimport">Re-import current GitHub README</button>' : ""}<div class="section-title"><h2>Your sections <span>${blocks.length}</span></h2><p>Shape the story behind your code.</p></div><div class="block-list">${blocks.map((b, i) => `<article class="block-row"><button class="block-open" data-block-action="edit" data-id="${b.id}"><span class="block-number">${String(i + 1).padStart(2, "0")}</span><span><strong>${html(b.type.startsWith("doc-") ? b.settings.title || blockTypes[b.type] : b.section?.title || (b.type === "component" ? "Edit visually: " + b.settings.name : blockTypes[b.type]) || "Section")}</strong><small>${html((b.type.startsWith("doc-") ? "Structured documentation" : b.section ? `Suggested ${b.section.kind} · Custom Markdown` : "") || b.settings.name || b.settings.title || (b.type === "custom" ? "Your original Markdown" : b.type === "stack" ? `${b.settings.items?.length || 0} technologies` : "Click to edit"))}</small>${detached(b)}</span></button><div class="block-actions">${ownershipAction(b)}<button data-block-action="up" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} up" ${i === 0 ? "disabled" : ""}>↑</button><button data-block-action="down" data-id="${b.id}" aria-label="Move ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])} down" ${i === blocks.length - 1 ? "disabled" : ""}>↓</button><button data-block-action="copy" data-id="${b.id}" aria-label="Copy ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">⧉</button><button data-block-action="duplicate" data-id="${b.id}" aria-label="Duplicate ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">+</button><button data-block-action="remove" data-id="${b.id}" aria-label="Remove ${html(b.type === "component" ? b.settings.name : blockTypes[b.type])}">×</button></div></article>`).join("")}</div>${!blocks.length ? '<div class="empty-state"><h3>Introduce yourself.</h3><p>Start with a Hero, add a few skills, then share what you’re building.</p></div>' : ""}<button class="add-section wide" data-tab="library">+ Add a section</button>${blocks.length === 1 && blocks[0].type === "custom" ? '<p class="hint ownership">Manual Markdown is preserved in a Custom Markdown block. New sections are appended.</p>' : ""}${this.store.draft.markdown ? '<button class="wide" data-action="split">Split into sections</button>' : ""}<div class="tip"><span>↳</span><p><strong>Built for GitHub READMEs</strong><br>Export a README.md that works anywhere. No lock-in, no extra setup.</p></div><button class="text-button" data-action="templates">Start from a template ↗</button>`;
   }
   edit(block) {
     if (block.type === "component") {
@@ -2228,6 +2283,7 @@ export class AppShell extends HTMLElement {
       this.openProjects(block.id);
       return;
     }
+    this.sectionEditOpened = structuredClone(block);
     this.selectedBlock = block.id;
     this.tab = "form";
     this.content.innerHTML = `<div class="section-title"><h2>${html(blockTypes[block.type])}</h2><p>Customize, preview, then add to your story.</p></div><builder-form></builder-form>`;
@@ -2247,6 +2303,21 @@ export class AppShell extends HTMLElement {
     const blocks = structuredClone(this.store.draft.blocks);
     const i = blocks.findIndex((b) => b.id === id);
     if (i < 0) return;
+    if (action === "ownership-review") {
+      try {
+        const record = detachmentFor(this.store.draft.metadata, id);
+        const review = ownershipReviewForRecord(this.store.draft, record?.id);
+        this.openOwnershipReview(review, () => {
+          this.showTab("sections");
+          this.content
+            .querySelector(`[data-id="${review.proposedBlock.id}"]`)
+            ?.focus();
+        });
+      } catch (error) {
+        this.notify(error.message);
+      }
+      return;
+    }
     if (action === "edit") {
       this.edit(blocks[i]);
       return;
@@ -2448,6 +2519,60 @@ export class AppShell extends HTMLElement {
           ".dialog-content input:not([type=hidden]),.dialog-content select,.dialog-content textarea,.dialog-content button",
         )
         ?.focus();
+  }
+  openOwnershipReview(review, onApply) {
+    this.ownershipReview = {
+      review,
+      snapshot: JSON.stringify(this.store.draft),
+      onApply,
+    };
+    this.modal(
+      "<ownership-review><p role='status'>Loading Ownership review…</p></ownership-review>",
+    );
+    const panel = this.querySelector("ownership-review");
+    import("./ownership-review.js")
+      .then(() => {
+        if (!panel.isConnected || !this.dialog.open) return;
+        panel.configure(review);
+        this.focusModalContent();
+        panel.querySelector("[data-keep]").focus();
+      })
+      .catch(() => {
+        if (!panel.isConnected || !this.dialog.open) return;
+        panel.innerHTML =
+          "<p role='alert'>Ownership review could not be loaded. Your Markdown is unchanged. Close this dialog and try again.</p>";
+      });
+  }
+  applyOwnershipReview() {
+    const state = this.ownershipReview;
+    const panel = this.querySelector("ownership-review");
+    if (!state || !panel) return;
+    if (state.snapshot !== JSON.stringify(this.store.draft)) {
+      try {
+        state.review = refreshOwnershipReview(this.store.draft, state.review);
+        state.snapshot = JSON.stringify(this.store.draft);
+        panel.refresh(
+          state.review,
+          "The draft changed while Ownership review was open. Nothing was applied; the comparison has been refreshed.",
+        );
+      } catch (error) {
+        panel.fail(`${error.message} Your Markdown is unchanged.`);
+      }
+      return;
+    }
+    try {
+      const result = applyOwnershipPlan(this.store.draft, state.review);
+      this.store.blocks(result.blocks, result.metadata);
+      const onApply = state.onApply;
+      this.ownershipReview = null;
+      this.closeDialog();
+      onApply?.();
+      this.notify(
+        "Visual version applied. Undo restores your previous Markdown and ownership.",
+      );
+    } catch (error) {
+      panel.fail(`${error.message} Your Markdown is unchanged.`);
+    }
   }
   openPublishDialog(configure) {
     this.modal(

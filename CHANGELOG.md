@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.7
+
+- Add Ownership review for stale builder and component saves (#78, #120). Current Markdown, the proposed visual version and a unified diff are shown before anything can replace source changed after the form opened.
+- Make **Keep my Markdown** the focused default and Escape outcome. **Use visual version** rechecks the whole draft, refreshes a stale comparison instead of applying it, and replaces only the reviewed Block in one Undoable edit.
+- Mark Restorable Detachments in the Sections list and offer their saved builder/component version for explicit review. Applying preserves the current Seam and clears only that Detachment record; non-Restorable, malformed, missing and duplicate-identity records cannot restore.
+- Add unit and cross-browser-ready browser coverage for Restorable records, concurrent raw edits, stale review refresh, builder/component conflicts, Undo and safe refusal paths (#121).
+
 ## 1.9.6
 
 - Add a machine-local, content-free Publish journal before the first remote write (#99, #158). It records the exact target, change set id, Base/Result SHAs, byte counts and per-file outcomes without storing README, asset or workflow content.
