@@ -34,6 +34,22 @@ it.each([
 ])("rejects unsafe asset path %s", (path) =>
   expect(() => assetPath(path)).toThrow(),
 );
+it("uses the same visible-directory rules for local packages and publishing", () => {
+  const banner = { ...newBanner(), assetDirectory: "docs/media-v2" };
+  expect(
+    generatedAssets(banner, banner.assetDirectory).map((f) => f.path),
+  ).toEqual([
+    "docs/media-v2/banner-light.svg",
+    "docs/media-v2/banner-dark.svg",
+  ]);
+  expect(generatedAssets(banner, "docs/media.v2")[0].path).toBe(
+    "docs/media.v2/banner-light.svg",
+  );
+  expect(generatedAssets(banner, "docs/profile media")[0].path).toBe(
+    "docs/profile media/banner-light.svg",
+  );
+  expect(generatedAssets(banner, "")[0].path).toBe("banner-light.svg");
+});
 it("rewrites only exact owned source and accounts for nested README paths", () => {
   const banner = newBanner(),
     source = bannerMarkup(banner),
@@ -54,6 +70,11 @@ it("rewrites only exact owned source and accounts for nested README paths", () =
   expect(result.source).toContain("../assets/readme/banner-light.svg");
   expect(result.source).toContain("![Keep](assets/banner-light.svg)");
   expect(draft.markdown).not.toContain("../assets");
+  const rootAssets = rewriteOwnedBanner(draft, "", "docs/README.md");
+  expect(rootAssets.rewritten).toBe(true);
+  expect(rootAssets.source).toContain('srcset="../banner-dark.svg"');
+  expect(rootAssets.source).toContain('src="../banner-light.svg"');
+  expect(rootAssets.source).not.toContain('alt="../');
   draft.blocks[0].settings.markdown += "manual";
   draft.markdown = serializeBlocks(draft.blocks);
   expect(rewriteOwnedBanner(draft, "assets/readme").rewritten).toBe(false);
