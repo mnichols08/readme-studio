@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.20
+
+- Add a deterministic version-1 asset manifest for generated banner SVG packages, with stable ordering, byte sizes, media types, roles, content fingerprints and the exact exported Markdown references (#96, #152).
+- Validate visible relative package paths, reject traversal and duplicate destinations, and require every packaged file to appear in the exported references (#153).
+- Generate local downloads and optional reviewed GitHub publishing from the same normalized banner package while preserving README Source and keeping every remote write opt-in.
+
 ## 1.9.19
 
 - Add a live Banner Builder accessibility review for meaningful alt text and light/dark primary, accent/title and muted-metadata contrast, with concise screen-reader status updates (#95, #150).

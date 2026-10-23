@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.19.** Review meaningful image alt text, light/dark banner text contrast, and static reduced-motion-compatible previews while you work. Diagnostics remain local and advisory and never change README Source. [Banner Builder](docs/banners.md)
+**Version 1.9.20.** Download a deterministic, versioned asset manifest alongside generated banner SVGs. It records validated paths, byte sizes, content fingerprints, and the exact portable Markdown references without embedding asset source or publishing anything. [Generated assets](docs/assets.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

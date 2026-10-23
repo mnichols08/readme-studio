@@ -1,13 +1,13 @@
-import { bannerFiles, bannerMarkup } from "../banners/export.js";
-import { normalizeBanner } from "../banners/banner-model.js";
+import { bannerMarkup } from "../banners/export.js";
+import { bannerAssetPackage } from "../assets/manifest.js";
 import { serializeBlocks } from "../markdown/serialize.js";
 import { assetPath } from "./asset-path.js";
 export const MAX_ASSET_BYTES = 250_000;
 export function generatedAssets(settings, directory = "assets/readme") {
-  const banner = normalizeBanner(settings);
-  return bannerFiles(banner).map((file) => {
-    const path = assetPath(`${directory}/${file.name}`),
-      bytes = new TextEncoder().encode(file.source).length;
+  const { banner, files } = bannerAssetPackage(settings, directory);
+  return files.map((file) => {
+    const path = assetPath(file.path),
+      bytes = new TextEncoder().encode(file.content).length;
     if (bytes > MAX_ASSET_BYTES)
       throw new Error(
         "Generated SVG exceeds the 250 KB asset limit. Download and review it separately.",
@@ -15,7 +15,7 @@ export function generatedAssets(settings, directory = "assets/readme") {
     return {
       kind: "asset",
       path,
-      content: file.source,
+      content: file.content,
       banner,
       bytes,
       warning: bytes > 100_000 ? "Large SVG: more than 100 KB." : "",
@@ -62,10 +62,10 @@ export function rewriteOwnedBanner(draft, directory, readmePath = "README.md") {
     ...draft.metadata.bannerSettings,
     assetDirectory: directory,
   });
-  block.settings.markdown = markup.replaceAll(
-    `="${directory}/`,
-    `="${relative ? relative + "/" : ""}`,
-  );
+  const prefix = relative ? relative.replace(/\/+$/, "") + "/" : "";
+  block.settings.markdown = directory
+    ? markup.replaceAll(`="${directory}/`, `="${prefix}`)
+    : markup.replace(/\b(src|srcset)="/g, `$1="${prefix}`);
   return { source: serializeBlocks(blocks), rewritten: true };
 }
 // Reads each generated file's remote baseline. Writing goes through the

@@ -125,6 +125,47 @@ test("local theme-aware banners download safe SVG and insert portable markup", a
   await expect(page.locator('[data-banner="name"]')).toHaveValue("Ada 雪");
 });
 
+test("banner asset manifest is deterministic and matches exported references", async ({
+  page,
+}) => {
+  await start(page);
+  const editor = page.getByRole("textbox", {
+      name: "Markdown editor",
+      exact: true,
+    }),
+    before = await editor.inputValue();
+  await page
+    .getByRole("button", { name: "Banner Builder", exact: true })
+    .click();
+  await page.getByLabel("Filename base", { exact: true }).fill("profile-hero");
+  await page.getByLabel("Asset folder", { exact: true }).fill("docs/media");
+  await expect(page.locator("[data-banner-manifest]")).toHaveValue(
+    /readme-studio-asset-manifest/,
+  );
+  const download = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Download asset manifest", exact: true })
+    .click();
+  const asset = await download,
+    manifest = JSON.parse(await readFile(await asset.path(), "utf8"));
+  expect(asset.suggestedFilename()).toBe("readme-studio-assets.json");
+  expect(manifest).toMatchObject({
+    schemaVersion: 1,
+    type: "readme-studio-asset-manifest",
+    generator: { type: "banner", version: 1 },
+  });
+  expect(manifest.assets.map((item) => item.path)).toEqual([
+    "docs/media/profile-hero-dark.svg",
+    "docs/media/profile-hero-light.svg",
+  ]);
+  for (const item of manifest.assets) {
+    expect(item.fingerprint).toMatch(/^fnv1a32:[a-f0-9]{8}$/);
+    expect(manifest.references.markdown).toContain(item.path);
+  }
+  expect(JSON.stringify(manifest)).not.toContain("<svg");
+  await expect(editor).toHaveValue(before);
+});
+
 test("banner accessibility feedback covers alt, contrast and reduced-motion preview without editing source", async ({
   page,
 }) => {

@@ -5,7 +5,8 @@ import {
   bannerSizes,
   themePalette,
 } from "../banners/banner-model.js";
-import { bannerFiles, bannerMarkup } from "../banners/export.js";
+import { bannerMarkup } from "../banners/export.js";
+import { bannerAssetPackage } from "../assets/manifest.js";
 import { baseTheme } from "../themes/theme-model.js";
 import { derive, explicitOverride } from "../themes/theme-resolver.js";
 import { html } from "../markdown/serialize.js";
@@ -79,7 +80,7 @@ export class BannerBuilder extends HTMLElement {
       )
       .join(
         "",
-      )}</fieldset><aside><h2>Local banner preview</h2><section class="banner-accessibility" aria-label="Banner accessibility review"></section><p class="banner-accessibility-status sr-only" role="status" aria-live="polite" aria-atomic="true"></p><label>Preview mode<select data-banner-preview-mode aria-label="Banner preview mode"><option>light</option><option>dark</option></select></label><label>Preview width<select data-banner-preview-width aria-label="Banner preview width"><option value="100%">desktop</option><option value="320px">mobile</option></select></label><div class="banner-preview"></div><label>README picture markup<textarea data-banner-markup readonly rows="6"></textarea></label><label>SVG source<textarea data-banner-svg readonly rows="6"></textarea></label><div class="row-actions"><button data-banner-copy="markup">Copy README picture markup</button><button data-banner-copy="svg">Copy SVG source</button><button data-banner-download>Download SVG assets</button></div><div class="banner-files"></div><label>Banner preset name<input data-banner-preset-name value="My banner preset"></label><button data-save-banner-preset>Save reusable banner preset</button><button data-banner-save>Save banner settings</button><button data-banner-insert class="primary">Insert banner markup</button><p class="banner-status" role="status"></p></aside></div>`;
+      )}</fieldset><aside><h2>Local banner preview</h2><section class="banner-accessibility" aria-label="Banner accessibility review"></section><p class="banner-accessibility-status sr-only" role="status" aria-live="polite" aria-atomic="true"></p><label>Preview mode<select data-banner-preview-mode aria-label="Banner preview mode"><option>light</option><option>dark</option></select></label><label>Preview width<select data-banner-preview-width aria-label="Banner preview width"><option value="100%">desktop</option><option value="320px">mobile</option></select></label><div class="banner-preview"></div><label>README picture markup<textarea data-banner-markup readonly rows="6"></textarea></label><label>SVG source<textarea data-banner-svg readonly rows="6"></textarea></label><label>Asset manifest<textarea data-banner-manifest readonly rows="8"></textarea></label><div class="row-actions"><button data-banner-copy="markup">Copy README picture markup</button><button data-banner-copy="svg">Copy SVG source</button><button data-banner-download>Download SVG assets</button><button data-banner-manifest-download>Download asset manifest</button></div><div class="banner-files"></div><label>Banner preset name<input data-banner-preset-name value="My banner preset"></label><button data-save-banner-preset>Save reusable banner preset</button><button data-banner-save>Save banner settings</button><button data-banner-insert class="primary">Insert banner markup</button><p class="banner-status" role="status"></p></aside></div>`;
     for (const input of this.querySelectorAll("[data-banner]"))
       input.oninput = () => {
         this.value[input.dataset.banner] =
@@ -161,6 +162,14 @@ export class BannerBuilder extends HTMLElement {
             type: "image/svg+xml",
           });
     };
+    this.querySelector("[data-banner-manifest-download]").onclick = () => {
+      if (this.update())
+        this.emit("visual-download", {
+          content: this.package.manifestSource,
+          name: "readme-studio-assets.json",
+          type: "application/json",
+        });
+    };
     this.querySelector("[data-save-banner-preset]").onclick = () => {
       if (this.update())
         this.emit("save-reusable-visual", {
@@ -195,7 +204,8 @@ export class BannerBuilder extends HTMLElement {
       const value = normalizeBanner(this.value),
         key = JSON.stringify(value);
       if (key !== this.cacheKey) {
-        this.files = bannerFiles(value);
+        this.package = bannerAssetPackage(value);
+        this.files = this.package.files;
         this.cacheKey = key;
       }
       const mode = this.querySelector("[data-banner-preview-mode]").value,
@@ -214,6 +224,8 @@ export class BannerBuilder extends HTMLElement {
       ).value;
       this.querySelector("[data-banner-markup]").value = bannerMarkup(value);
       this.querySelector("[data-banner-svg]").value = file.source;
+      this.querySelector("[data-banner-manifest]").value =
+        this.package.manifestSource;
       this.querySelector(".banner-files").innerHTML = this.files
         .map(
           (f, i) =>
@@ -292,7 +304,7 @@ export class BannerBuilder extends HTMLElement {
   }
   controls(disabled) {
     this.querySelectorAll(
-      "[data-banner-save],[data-banner-insert],[data-banner-copy],[data-banner-download],[data-one-file]",
+      "[data-banner-save],[data-banner-insert],[data-banner-copy],[data-banner-download],[data-banner-manifest-download],[data-one-file]",
     ).forEach((b) => (b.disabled = disabled));
   }
   releaseUrls() {
