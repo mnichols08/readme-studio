@@ -6,7 +6,7 @@ Packs are ordinary versioned JSON files:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "type": "readme-studio-snippet-pack",
   "name": "My GitHub Profile Kit",
   "description": "Reusable source",
@@ -14,13 +14,16 @@ Packs are ordinary versioned JSON files:
   "homepage": "https://example.com",
   "license": "Optional license note",
   "snippets": [],
+  "extensions": [],
   "badgeCollections": []
 }
 ```
 
-Each snippet uses the version-1 component model described in [Components](components.md). The importer accepts up to 10 MB, 500 snippets and 500 badge collections, validates types/fields and rejects unsupported versions. Optional `badgeCollections` defaults to empty. Arbitrary Markdown/HTML is preserved as source; metadata is bounded plain text, URLs are validated, and no templates are evaluated as code. Pack license notes are user-provided descriptions, not a license verification service.
+Each snippet uses the version-1 component model described in [Components](components.md). New exports use pack version 2. Version-1 packs migrate in memory to version 2 without changing reusable source; the imported file is never rewritten. Future versions are rejected. The importer accepts up to 10 MB, 500 combined snippets and extension entries, 50 extension manifests and 500 badge collections. Optional `extensions` and `badgeCollections` default to empty. Arbitrary Markdown/HTML in ordinary snippets is preserved as source; metadata is bounded plain text, URLs are validated, and no template is evaluated as code. Pack license notes are user-provided descriptions, not a license verification service.
 
-Import a file or paste JSON, then Review snippet pack. Review shows name, metadata, counts, existing collisions and item source. Explicit Render item preview sanitizes Markdown; remote images contact their hosts. Four editable examples are included: Minimal Profile Kit, Open Source Kit, Terminal Kit and Developer Showcase Kit. They contain placeholders, not personal data or live provider configuration.
+Version-2 packs may contain declarative extension manifests. A manifest names an HTTPS publisher, declares only the inert capabilities `render-markdown`, `field-input` and `external-media`, and contains 1–100 normal component definitions. `render-markdown` is required; `field-input` is required when an entry exposes fields; and `external-media` is required for static remote URLs or URL fields, including ones whose default is empty. Script/module/eval/handler fields, event attributes, plain or entity-obfuscated executable URL schemes and active HTML such as `script`, `iframe`, `object`, `embed`, `form` or `style` are rejected recursively. README Studio renders an accepted entry through the existing component interpolator and sanitized Markdown preview; it does not import JavaScript, fetch a module, execute a hook or grant browser APIs.
+
+Import a file or paste JSON, then Review snippet pack. Before import, the trust review shows the file/paste provenance, claimed author, declared capabilities and every discovered external HTTP(S) URL. It also shows name, metadata, counts, existing collisions and item source. Import itself performs no network request and does not change the current draft. Explicit Render item preview sanitizes Markdown; remote images may contact their hosts. Four editable examples are included: Minimal Profile Kit, Open Source Kit, Terminal Kit and Developer Showcase Kit. They contain placeholders, not personal data or live provider configuration.
 
 The collision policy applies to all conflicts, including repeated entries inside a pack:
 

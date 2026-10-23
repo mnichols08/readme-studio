@@ -6,6 +6,8 @@ Markdown is untrusted input. The preview renders locally and sanitizes its HTML 
 
 Analysis and deterministic refactors inspect text; they do not execute it. Applying a refactor requires source review and an explicit action. Structured metadata is not executable code. Imported metadata is escaped before display; imported source follows the same preview sanitizer as typed source.
 
+Portable extension manifests are data, not plugins. Their allowlisted capabilities describe local Markdown interpolation, fields and optional external media; they do not grant network, storage, DOM or code-execution access. Recursive validation rejects executable fields and active markup before review. The import trust review names provenance, capabilities and external URLs; importing remains offline, while explicitly rendering remote media may contact its host.
+
 ## Generated assets and workflows
 
 Banner SVG comes from bounded, validated settings and escaped strings. The generator does not accept arbitrary SVG, external fonts, scripts or `foreignObject`. Generated-asset publishing independently regenerates the expected SVG on the server. Workflow generation validates paths, schedules and provider settings, uses secret-name placeholders and shows requested permissions. Explicit user-supplied commands are executable **when the workflow is run on GitHub**, not in Studio; inspect them before committing.

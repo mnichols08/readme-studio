@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.22.** Accessibility and large-document behavior have repeatable automated evidence for the Epic 10 keyboard, status, reflow, contrast, cross-browser and bounded-work contracts. Physical assistive-technology checks remain an explicit manual release step rather than a claim inferred from browser automation. [Accessibility acceptance](docs/accessibility-acceptance.md) · [Performance baseline](docs/performance.md)
+**Version 1.9.23.** Portable snippet packs now migrate safely to a version-2 format that can carry declarative, non-executing extension manifests. Every import exposes provenance, inert capabilities and external URLs before confirmation; hostile manifests are rejected and import remains offline. [Portable snippet packs](docs/snippet-packs.md) · [Security boundaries](docs/security.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
