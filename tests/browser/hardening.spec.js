@@ -356,6 +356,11 @@ for (const [width, height] of [
     ).toBeLessThanOrEqual(width);
     const event = page.waitForEvent("download");
     await page.locator(".workspace-tools [data-action=download]").click();
+    if (width <= 760)
+      await page
+        .locator("example-export-check")
+        .getByRole("button", { name: "Export current source anyway" })
+        .click();
     await event;
     await page.getByRole("button", { name: "Manage drafts" }).click();
     expect(

@@ -376,6 +376,14 @@ _Avoid_: Link Health (which checks remote URLs), Drift check, navigation repair
 A relative document link whose target cannot be identified exactly in its workspace/repository scope, whose requested anchor is absent, or whose target Source could not be checked within the byte budget. Advisory until the author edits Source or explicitly exports it unchanged.
 _Avoid_: Broken remote link, automatic fix
 
+**Example provenance**:
+The author-chosen status of one structured command or code example: Verified (with a local evidence note), User-confirmed or Placeholder. Source carries only an inert portable status marker and content fingerprint immediately before its fence; changing example text in a builder resets stale evidence to Placeholder, while a raw edit makes the claim stale at review. Studio never runs the example or infers its status, and unmarked imported/legacy fences remain unchanged but require review before copy/export.
+_Avoid_: Test result, execution record, automatic verification
+
+**Placeholder example**:
+A structured command or code sample intentionally marked as unfinished or illustrative. Copy/export requires an explicit unchanged-Source continuation while it remains in the document.
+_Avoid_: Failed command, unsafe code, verified example
+
 ## Language: safe GitHub publishing (Epic 08)
 
 ### Preflight

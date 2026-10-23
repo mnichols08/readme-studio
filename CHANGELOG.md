@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.14
+
+- Add explicit Verified, User-confirmed and Placeholder provenance to every structured documentation command/code field and Code Sample block (#88, #140). New fields default to Placeholder; Verified requires a bounded local note, edits reset stale claims, and existing/imported examples are never run or silently reclassified.
+- Export inert portable status comments with content fingerprints immediately before code fences while keeping verification notes in local block metadata. Copying builder output and README export preserve the exact marker and example source; raw content edits make older claims stale.
+- Inspect fenced examples and adjacent provenance markers across ordinary Markdown, blockquotes and lists before whole-document, form and block Copy or Export (#141). Placeholder, unclassified, stale, unbound, orphaned, duplicated, invalid or truncated results open a read-only review; continuing preserves exact Source and stale reviews fail closed.
+- Add source-inertness, invalid/bounded marker, stale review, keyboard focus, exact copy/download and cross-browser coverage.
+
 ## 1.9.13
 
 - Add a byte-bounded, local multi-document resolver for relative Markdown/HTML links and GitHub-style heading or exact-case explicit HTML anchors (#87, #138). Suite paths form a local namespace; validated repository-document targets are isolated by canonical repository and exact branch. Pathless local documents are named as not checked.

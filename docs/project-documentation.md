@@ -21,6 +21,8 @@ For a set of separate files such as `README.md`, `CONTRIBUTING.md`, `SECURITY.md
 
 Commands and syntax are literal fenced examples, never executed. Enter the actual commands and accepted flag values. Empty fields do not guess behavior.
 
+Every structured command or code field, including a Code Sample block, also has [example provenance](example-provenance.md): Verified, User-confirmed or Placeholder. New examples start as Placeholder, while Verified requires a local note describing the check or evidence. Editing example text resets an older claim to Placeholder. The exported inert marker survives copy/export; the private note does not. Existing and imported examples are never run or silently reclassified; unmarked fences are surfaced for explicit review.
+
 An API Endpoint section describes one endpoint. Duplicate it for another endpoint, then edit the independent settings. Parameter rows have name, location, required flag, type and description. Required defaults to unchecked and is explicitly controlled. Authentication guidance and examples should use placeholders such as `YOUR_API_TOKEN`, never real credentials. Request and response examples are fenced as HTTP text; their validity is not tested against a live service.
 
 ## Libraries and Rust crates

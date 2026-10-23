@@ -15,7 +15,7 @@ export function codeSample(s) {
   const fence = "`".repeat(
     Math.max(3, ...[...code.matchAll(/`+/g)].map((m) => m[0].length + 1)),
   );
-  const content = `${fence}${language}\n${code}\n${fence}`;
+  const content = `${s.marker ? `${s.marker}\n` : ""}${fence}${language}\n${code}\n${fence}`;
   return s.collapsed === true
     ? details({
         summary: s.title || "Code example",

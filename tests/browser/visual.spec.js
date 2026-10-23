@@ -190,8 +190,20 @@ test("callout, code, details and columns are available through the builder", asy
       .locator("builder-form")
       .getByLabel(field, { exact: true })
       .fill(value);
-    if (name === "Code Sample")
+    if (name === "Code Sample") {
+      await expect(page.getByLabel("Code source status")).toHaveValue(
+        "placeholder",
+      );
       await page.locator('[data-path="collapsed"]').check();
+      await page
+        .locator("builder-form")
+        .getByRole("button", { name: "Copy Markdown", exact: true })
+        .click();
+      await expect(page.locator("example-export-check")).toContainText(
+        "1 placeholder",
+      );
+      await page.getByRole("button", { name: "Close dialog" }).click();
+    }
     await page
       .locator("builder-form")
       .getByRole("button", { name: "Add to README", exact: true })
@@ -204,7 +216,16 @@ test("callout, code, details and columns are available through the builder", asy
   await expect(source).toHaveValue(/> \[!NOTE\]/);
   await expect(source).toHaveValue(/<details>/);
   await expect(source).toHaveValue(/console.log/);
+  await expect(source).toHaveValue(/readme-studio-example: placeholder/);
   await expect(source).toHaveValue(/Left column/);
+  await page
+    .locator(".block-row")
+    .filter({ hasText: "Code Sample" })
+    .getByRole("button", { name: /Copy/ })
+    .click();
+  await expect(page.locator("example-export-check")).toContainText(
+    "1 placeholder",
+  );
 });
 
 test("app color toggle synchronizes preview and picture sources without changing Markdown", async ({

@@ -6,6 +6,10 @@ import {
 } from "../documentation/sections.js";
 import { calloutStyles } from "../styling/blocks.js";
 import { explicitOverride } from "../themes/theme-resolver.js";
+import {
+  EXAMPLE_STATUSES,
+  readableExampleProvenance,
+} from "../documentation/example-provenance.js";
 import { html, serializeBlock } from "../markdown/serialize.js";
 import { blockTypes as sharedBlockTypes } from "../markdown/block-types.js";
 import { render } from "../markdown/render.js";
@@ -84,6 +88,7 @@ export function defaults(type) {
       code: "",
       collapsed: false,
       open: false,
+      exampleProvenance: { status: "placeholder", basis: "" },
     };
   if (type === "columns")
     return { leftTitle: "", leftBody: "", rightTitle: "", rightBody: "" };
@@ -167,8 +172,11 @@ export class BuilderForm extends HTMLElement {
           (!Array.isArray(s.items) || s.items.length > 200))
       )
         throw Error("Unsupported documentation settings.");
+      const codeFields = definition.fields.filter(
+        (field) => field.kind === "code",
+      );
       form =
-        '<p class="hint">Document verified project facts. Text areas accept Markdown; command fields generate code fences. Leave unknown details blank.</p>' +
+        '<p class="hint">Document project facts. Code and command examples need an explicit provenance status; Studio records the label but never runs them. Leave unknown details blank.</p>' +
         this.fields(
           [
             field("title", "Section heading"),
@@ -182,6 +190,26 @@ export class BuilderForm extends HTMLElement {
           ],
           s,
         );
+      form += codeFields
+        .map((field) => {
+          const provenance = readableExampleProvenance(
+            s.exampleProvenance?.[field.key],
+          ) || { status: "", basis: "" };
+          return `<fieldset class="example-provenance"><legend>${html(field.label)} provenance</legend><label>Status<select data-path="exampleProvenance.${field.key}.status" aria-label="${html(field.label)} status">${[
+            ["", "Unclassified"],
+            ["placeholder", "Placeholder"],
+            ["user-confirmed", "User-confirmed"],
+            ["verified", "Verified"],
+          ]
+            .map(
+              ([value, label]) =>
+                `<option value="${value}" ${provenance.status === value ? "selected" : ""}>${label}</option>`,
+            )
+            .join(
+              "",
+            )}</select></label><label>Verification note or evidence<textarea data-path="exampleProvenance.${field.key}.basis" aria-label="${html(field.label)} verification note or evidence" rows="2">${html(provenance.basis)}</textarea></label></fieldset>`;
+        })
+        .join("");
       if (definition.guidance)
         form += `<p class="hint">${html(definition.guidance)}</p>`;
       if (definition.rowFields)
@@ -224,7 +252,25 @@ export class BuilderForm extends HTMLElement {
           ],
           s,
         ) +
-        `<label class="check"><input type="checkbox" data-path="collapsed" ${s.collapsed ? "checked" : ""}> Wrap in collapsible details</label><label class="check"><input type="checkbox" data-path="open" ${s.open ? "checked" : ""}> Initially open</label>`;
+        (() => {
+          const provenance = readableExampleProvenance(s.exampleProvenance) || {
+            status: "",
+            basis: "",
+          };
+          return `<fieldset class="example-provenance"><legend>Code source provenance</legend><label>Status<select data-path="exampleProvenance.status" aria-label="Code source status">${[
+            ["", "Unclassified"],
+            ["placeholder", "Placeholder"],
+            ["user-confirmed", "User-confirmed"],
+            ["verified", "Verified"],
+          ]
+            .map(
+              ([value, label]) =>
+                `<option value="${value}" ${provenance.status === value ? "selected" : ""}>${label}</option>`,
+            )
+            .join(
+              "",
+            )}</select></label><label>Verification note or evidence<textarea data-path="exampleProvenance.basis" aria-label="Code source verification note or evidence" rows="2">${html(provenance.basis)}</textarea></label></fieldset><label class="check"><input type="checkbox" data-path="collapsed" ${s.collapsed ? "checked" : ""}> Wrap in collapsible details</label><label class="check"><input type="checkbox" data-path="open" ${s.open ? "checked" : ""}> Initially open</label>`;
+        })();
     else if (type === "columns")
       form =
         '<p class="hint">Tables may scroll on mobile. Keep both columns short. Text is escaped; Markdown inside cells is not interpreted.</p>' +
@@ -366,9 +412,55 @@ export class BuilderForm extends HTMLElement {
       if (p) {
         const keys = p.split(".");
         let obj = s;
-        keys.slice(0, -1).forEach((k) => (obj = obj[k]));
+        keys.slice(0, -1).forEach((k, index) => {
+          const arrayPath = /^\d+$/.test(keys[index + 1]);
+          if (
+            !obj[k] ||
+            typeof obj[k] !== "object" ||
+            (Array.isArray(obj[k]) && !arrayPath)
+          )
+            obj[k] = {};
+          obj = obj[k];
+        });
         obj[keys.at(-1)] =
           e.target.type === "checkbox" ? e.target.checked : e.target.value;
+        const documentationCode = documentationSections[type]?.fields.find(
+          (item) => item.kind === "code" && item.key === p,
+        );
+        if (documentationCode || (type === "code" && p === "code")) {
+          if (documentationCode) {
+            if (
+              !s.exampleProvenance ||
+              typeof s.exampleProvenance !== "object" ||
+              Array.isArray(s.exampleProvenance)
+            )
+              s.exampleProvenance = {};
+            s.exampleProvenance[p] = { status: "placeholder", basis: "" };
+            this.querySelector(
+              `[data-path="exampleProvenance.${p}.status"]`,
+            ).value = "placeholder";
+            this.querySelector(
+              `[data-path="exampleProvenance.${p}.basis"]`,
+            ).value = "";
+          } else {
+            s.exampleProvenance = { status: "placeholder", basis: "" };
+            this.querySelector('[data-path="exampleProvenance.status"]').value =
+              "placeholder";
+            this.querySelector('[data-path="exampleProvenance.basis"]').value =
+              "";
+          }
+        } else if (p.endsWith(".basis")) {
+          const provenance =
+            keys.length === 2
+              ? s.exampleProvenance
+              : s.exampleProvenance?.[keys[1]];
+          if (provenance && !EXAMPLE_STATUSES.includes(provenance.status)) {
+            provenance.status = "placeholder";
+            const statusPath = p.replace(/\.basis$/, ".status");
+            this.querySelector(`[data-path="${statusPath}"]`).value =
+              "placeholder";
+          }
+        }
         if (
           obj._theme?.derived &&
           Object.hasOwn(obj._theme.derived, keys.at(-1))

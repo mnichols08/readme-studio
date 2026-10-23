@@ -1,6 +1,11 @@
 import { projectSections } from "./project-types.js";
 import { safeUrl } from "../markdown/url-safety.js";
 import { mdText } from "../styling/presentation.js";
+import {
+  EXAMPLE_STATUSES,
+  exampleMarker,
+  validateExampleProvenance,
+} from "./example-provenance.js";
 
 const f = (key, label, kind = "markdown") => ({ key, label, kind });
 export const documentationSections = {
@@ -177,11 +182,22 @@ export const emptyEnvironmentRow = () => ({
 export function documentationDefaults(type) {
   const definition = documentationSections[type];
   if (!definition) throw Error("Unknown documentation section.");
+  const codeFields = definition.fields.filter((field) => field.kind === "code");
   return {
     version: 1,
     title: definition.name,
     ...Object.fromEntries(definition.fields.map((field) => [field.key, ""])),
     ...(definition.rows || definition.rowFields ? { items: [] } : {}),
+    ...(codeFields.length
+      ? {
+          exampleProvenance: Object.fromEntries(
+            codeFields.map((field) => [
+              field.key,
+              { status: "placeholder", basis: "" },
+            ]),
+          ),
+        }
+      : {}),
   };
 }
 export function documentationType(title) {
@@ -331,7 +347,16 @@ export function serializeDocumentation(type, settings) {
       field.kind === "link"
         ? `[${mdText(field.label)}](${value.replace(/[()\s<>]/g, (character) => encodeURIComponent(character).replace(/\(/g, "%28").replace(/\)/g, "%29"))})`
         : field.kind === "code"
-          ? fence(value, language)
+          ? (() => {
+              const provenance = settings.exampleProvenance?.[field.key];
+              const shaped =
+                provenance &&
+                typeof provenance === "object" &&
+                !Array.isArray(provenance) &&
+                EXAMPLE_STATUSES.includes(provenance.status) &&
+                typeof provenance.basis === "string";
+              return `${shaped ? exampleMarker(validateExampleProvenance(provenance).status, value) + "\n" : ""}${fence(value, language)}`;
+            })()
           : field.kind === "list"
             ? value
                 .split(/\r?\n/)

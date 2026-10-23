@@ -34,6 +34,7 @@ import {
   documentationProfile,
 } from "../documentation/project-types.js";
 import { planDocumentationSuiteDrafts } from "../documentation/suites.js";
+import { inspectExampleMarkers } from "../documentation/example-provenance.js";
 import { saveProjectDialog, openProjectDialog } from "../studio-projects/ui.js";
 import { bindDialogDismissal } from "./dialog-dismissal.js";
 import { installWorkspace } from "../workspace/ui.js";
@@ -57,6 +58,7 @@ import "./snippet-pack-dialog.js";
 import { importPack } from "../snippets/pack-schema.js";
 import "./widget-hub.js";
 import "./component-library.js";
+import "./example-export-check.js";
 import {
   validateComponents,
   usedComponent,
@@ -841,7 +843,16 @@ export class AppShell extends HTMLElement {
     this.addEventListener("open-badge-studio", () =>
       this.openBadges(this.selectedBlock),
     );
-    this.addEventListener("copy-markup", (e) => this.copy(e.detail));
+    this.addEventListener("copy-markup", (e) => {
+      const source = e.detail;
+      this.exampleOutputCheck({
+        action: "copy",
+        proceed: () => this.copy(source),
+        source,
+        snapshot: source,
+        currentSnapshot: () => serializeBlock(e.target.value),
+      });
+    });
     this.querySelector("#draft-select").onchange = (e) =>
       this.load(e.target.value);
     this.querySelector("#preview-size").onchange = (e) => {
@@ -1823,6 +1834,36 @@ export class AppShell extends HTMLElement {
     });
     panel.querySelector("[data-export], h1").focus();
   }
+  exampleOutputCheck({
+    action,
+    proceed,
+    source = this.store.draft.markdown,
+    snapshot = draftSnapshot(this.store.draft),
+    currentSnapshot = () => draftSnapshot(this.store.draft),
+  }) {
+    const report = inspectExampleMarkers(source);
+    if (
+      !report.issues.length &&
+      !report.truncatedMarkers &&
+      !report.truncatedSource
+    ) {
+      proceed();
+      return;
+    }
+    this.modal("<example-export-check></example-export-check>");
+    const panel = this.querySelector("example-export-check");
+    panel.configure({ report, action, snapshot });
+    panel.addEventListener("example-export-continue", ({ detail }) => {
+      if (detail.snapshot !== currentSnapshot()) {
+        panel.querySelector("[data-status]").textContent =
+          "The source changed. Close this review and try again.";
+        return;
+      }
+      this.closeDialog();
+      proceed();
+    });
+    panel.querySelector("h1").focus();
+  }
 
   saveCollections(items) {
     try {
@@ -2449,7 +2490,20 @@ export class AppShell extends HTMLElement {
       return;
     }
     if (action === "copy") {
-      this.copy(serializeBlock(blocks[i]));
+      const id = blocks[i].id;
+      const source = serializeBlock(blocks[i]);
+      this.exampleOutputCheck({
+        action: "copy",
+        proceed: () => this.copy(source),
+        source,
+        snapshot: source,
+        currentSnapshot: () => {
+          const current = this.store.draft.blocks.find(
+            (item) => item.id === id,
+          );
+          return current ? serializeBlock(current) : "";
+        },
+      });
       return;
     }
     if (action === "duplicate")
@@ -3134,15 +3188,22 @@ export class AppShell extends HTMLElement {
         break;
       case "copy": {
         const run = () => this.copy(this.store.draft.markdown);
-        if (!this.unsavedSectionGuard(action, run)) run();
+        const review = () =>
+          this.exampleOutputCheck({ action: "copy", proceed: run });
+        if (!this.unsavedSectionGuard(action, review)) review();
         break;
       }
       case "download": {
-        const run = () =>
+        const exportCurrent = () =>
           this.documentLinkCheck({
             exportCurrent: true,
             exportAction: () =>
               this.download(this.store.draft.markdown, "README.md"),
+          });
+        const run = () =>
+          this.exampleOutputCheck({
+            action: "export",
+            proceed: exportCurrent,
           });
         if (!this.unsavedSectionGuard(action, run)) run();
         break;

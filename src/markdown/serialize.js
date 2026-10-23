@@ -3,6 +3,11 @@ import { callout, details, codeSample, columns } from "../styling/blocks.js";
 import { present, divider } from "../styling/presentation.js";
 import { serializeShowcase } from "../projects/serialize-project.js";
 import { safeUrl } from "./url-safety.js";
+import {
+  EXAMPLE_STATUSES,
+  exampleMarker,
+  validateExampleProvenance,
+} from "../documentation/example-provenance.js";
 export { safeUrl } from "./url-safety.js";
 export const html = (value = "") =>
   String(value).replace(
@@ -127,7 +132,20 @@ function serializeContent({ type, settings: s }) {
     case "details":
       return details(s);
     case "code":
-      return codeSample(s);
+      return codeSample({
+        ...s,
+        marker:
+          s.exampleProvenance &&
+          typeof s.exampleProvenance === "object" &&
+          !Array.isArray(s.exampleProvenance) &&
+          EXAMPLE_STATUSES.includes(s.exampleProvenance.status) &&
+          typeof s.exampleProvenance.basis === "string"
+            ? exampleMarker(
+                validateExampleProvenance(s.exampleProvenance).status,
+                s.code,
+              )
+            : "",
+      });
     case "columns":
       return columns(s);
     case "hero":
