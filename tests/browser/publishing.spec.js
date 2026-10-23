@@ -25,9 +25,16 @@ async function setup(
     // Simulate a commit request whose response is lost. "written" updates
     // the mocked remote first; "not-written" drops the request outcome only.
     ambiguousOutcome = null,
+    pullRequests = [],
+    pullRequestAmbiguous = false,
+    pullRequestStatus = null,
+    pullRequestDuplicate = null,
+    pullRequestsDelay = 0,
+    pullRequestStatusDelay = 0,
   } = {},
 ) {
   const writes = [],
+    prWrites = [],
     ops = [];
   let connected = false,
     ambiguousUsed = false,
@@ -70,6 +77,7 @@ async function setup(
             branch: "main",
             visibility: "public",
             writable,
+            pullRequestsWritable: true,
           },
         ],
       };
@@ -100,6 +108,47 @@ async function setup(
         ...route.request().postDataJSON(),
         branch: route.request().postDataJSON().newBranch,
       };
+    if (op === "pull-requests") {
+      if (pullRequestsDelay)
+        await new Promise((resolve) => setTimeout(resolve, pullRequestsDelay));
+      data = { pullRequests };
+    }
+    if (op === "pull-request-check") {
+      const input = route.request().postDataJSON(),
+        selected = pullRequests.find((pull) => pull.number === input.number);
+      data = { ...selected, mergeable: true };
+    }
+    if (op === "pull-request-status") {
+      if (pullRequestStatusDelay)
+        await new Promise((resolve) =>
+          setTimeout(resolve, pullRequestStatusDelay),
+        );
+      data = { found: pullRequestStatus };
+    }
+    if (op === "pull-request") {
+      const input = route.request().postDataJSON();
+      prWrites.push(input);
+      if (pullRequestAmbiguous) return route.abort("failed");
+      if (pullRequestDuplicate) {
+        status = 409;
+        data = {
+          error:
+            "An open pull request already exists. No duplicate was created.",
+          pullRequest: pullRequestDuplicate,
+        };
+      } else
+        data = {
+          number: 42,
+          title: input.title,
+          url: "https://github.com/octocat/octocat/pull/42",
+          draft: true,
+          head: input.head,
+          headSha: input.headSha,
+          base: input.base,
+          baseSha: input.baseSha,
+          mergeable: null,
+        };
+    }
     if (op === "read") {
       reads++;
       data = {
@@ -197,7 +246,7 @@ async function setup(
   await d.getByRole("button", { name: "Check authorization" }).click();
   await d.getByLabel("Target repository").selectOption("octocat/octocat");
   if (load) await d.getByRole("button", { name: "Load remote README" }).click();
-  return { d, writes, ops, access };
+  return { d, writes, prWrites, ops, access };
 }
 for (const exists of [true, false])
   test(`explicit review before ${exists ? "updating" : "creating"} README; source stays unchanged`, async ({
@@ -581,6 +630,260 @@ test("branch creation is explicit and does not commit a README", async ({
   await expect(d.locator("[data-status]")).toContainText("created");
   expect(writes).toHaveLength(0);
   await expect(d.getByLabel("Prepared Markdown")).not.toBeVisible();
+});
+
+test("selects and rechecks a compatible existing pull request before updating it", async ({
+  page,
+}) => {
+  const selected = {
+      number: 7,
+      title: "Improve profile docs",
+      url: "https://github.com/octocat/octocat/pull/7",
+      draft: true,
+      head: "docs/readme",
+      headSha: sha,
+      base: "main",
+      baseSha: sha,
+      mergeable: null,
+    },
+    { d, writes, ops } = await setup(page, {
+      load: false,
+      pullRequests: [selected],
+    });
+  await d
+    .getByText("Update an existing documentation pull request", { exact: true })
+    .click();
+  await d
+    .getByRole("button", { name: "Find compatible pull requests" })
+    .click();
+  await d.getByLabel("Compatible pull request").selectOption("7");
+  await d
+    .getByRole("button", { name: "Use selected pull request head" })
+    .click();
+  await expect(d.getByLabel("Target branch")).toHaveValue("docs/readme");
+  await d.getByRole("button", { name: "Load remote README" }).click();
+  await expect(d.locator("[data-selected-pr]")).toContainText("PR #7");
+  await d.getByLabel(approval).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await expect(
+    d.getByRole("link", { name: "View updated pull request #7" }),
+  ).toBeVisible();
+  expect(ops.indexOf("pull-request-check")).toBeLessThan(
+    ops.lastIndexOf("commit"),
+  );
+  expect(writes).toHaveLength(1);
+});
+
+test("discards a delayed compatible-PR response after the target changes", async ({
+  page,
+}) => {
+  const { d } = await setup(page, {
+    load: false,
+    pullRequestsDelay: 250,
+    pullRequests: [
+      {
+        number: 7,
+        title: "Old target PR",
+        url: "https://github.com/octocat/octocat/pull/7",
+        draft: true,
+        head: "docs/readme",
+        headSha: sha,
+        base: "main",
+        baseSha: sha,
+      },
+    ],
+  });
+  await d
+    .getByText("Update an existing documentation pull request", { exact: true })
+    .click();
+  await d
+    .getByRole("button", { name: "Find compatible pull requests" })
+    .click();
+  await d.getByLabel("Target branch").fill("other");
+  await expect(d.locator("[data-status]")).toContainText(
+    "Target changed while finding pull requests",
+  );
+  await expect(d.locator("[data-pr-picker]")).toBeEmpty();
+});
+
+test("creates a draft PR only after the new branch commit and exact PR review", async ({
+  page,
+}) => {
+  const { d, writes, prWrites } = await setup(page);
+  await d.getByText("Publish on a new branch instead", { exact: true }).click();
+  await d.getByLabel("New branch name").fill("readme-studio/review");
+  await d.getByLabel(/I confirm creating this branch/).check();
+  await d.getByRole("button", { name: "Create branch for review" }).click();
+  await d.getByRole("button", { name: "Load remote README" }).click();
+  await d.getByLabel(approval).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await d
+    .getByText("Create a reviewed draft pull request", { exact: true })
+    .click();
+  await expect(
+    d.getByRole("button", { name: "Create draft pull request" }),
+  ).toBeDisabled();
+  const prApproval = d.getByLabel(/I reviewed this exact title/),
+    prSubmit = d.getByRole("button", { name: "Create draft pull request" });
+  await prApproval.check();
+  await d.getByLabel("Pull request title").fill("Improve profile README");
+  await expect(prApproval).not.toBeChecked();
+  await expect(prSubmit).toBeDisabled();
+  await prApproval.check();
+  await d.getByLabel("Pull request notes").fill("Reviewed exact changes.");
+  await expect(prApproval).not.toBeChecked();
+  await expect(prSubmit).toBeDisabled();
+  await prApproval.check();
+  await d.getByRole("button", { name: "Create draft pull request" }).click();
+  await expect(d.getByRole("link", { name: "#42" })).toBeVisible();
+  expect(writes).toHaveLength(1);
+  expect(prWrites).toEqual([
+    expect.objectContaining({
+      repository: "octocat/octocat",
+      head: "readme-studio/review",
+      base: "main",
+      headSha: next,
+      baseSha: sha,
+      confirmed: true,
+    }),
+  ]);
+});
+
+test("a lost draft-PR response is reconciled without a blind retry", async ({
+  page,
+}) => {
+  const found = {
+      number: 42,
+      title: "Update README",
+      url: "https://github.com/octocat/octocat/pull/42",
+      draft: true,
+      head: "readme-studio/review",
+      headSha: next,
+      base: "main",
+      baseSha: sha,
+      mergeable: null,
+    },
+    { d, prWrites } = await setup(page, {
+      pullRequestAmbiguous: true,
+      pullRequestStatus: found,
+    });
+  await d.getByText("Publish on a new branch instead", { exact: true }).click();
+  await d.getByLabel("New branch name").fill("readme-studio/review");
+  await d.getByLabel(/I confirm creating this branch/).check();
+  await d.getByRole("button", { name: "Create branch for review" }).click();
+  await d.getByRole("button", { name: "Load remote README" }).click();
+  await d.getByLabel(approval).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await d
+    .getByText("Create a reviewed draft pull request", { exact: true })
+    .click();
+  await d.getByLabel(/I reviewed this exact title/).check();
+  await d.getByRole("button", { name: "Create draft pull request" }).click();
+  await expect(d.locator("[data-pr-journal]")).toContainText("unknown");
+  expect(prWrites).toHaveLength(1);
+  await d
+    .locator("[data-pr-journal]")
+    .getByRole("button", { name: "Reconcile with GitHub" })
+    .click();
+  await expect(d.locator("[data-pr-journal]")).toContainText(
+    "View pull request #42",
+  );
+  expect(prWrites).toHaveLength(1);
+});
+
+test("a reconciled no-match needs download and confirmation before recovery can clear", async ({
+  page,
+}) => {
+  const { d, prWrites } = await setup(page, {
+    pullRequestAmbiguous: true,
+    pullRequestStatusDelay: 250,
+  });
+  await d.getByText("Publish on a new branch instead", { exact: true }).click();
+  await d.getByLabel("New branch name").fill("readme-studio/review");
+  await d.getByLabel(/I confirm creating this branch/).check();
+  await d.getByRole("button", { name: "Create branch for review" }).click();
+  await d.getByRole("button", { name: "Load remote README" }).click();
+  await d.getByLabel(approval).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await d
+    .getByText("Create a reviewed draft pull request", { exact: true })
+    .click();
+  await d.getByLabel(/I reviewed this exact title/).check();
+  await d.getByRole("button", { name: "Create draft pull request" }).click();
+  const reconcile = d
+    .locator("[data-pr-journal]")
+    .getByRole("button", { name: "Reconcile with GitHub" });
+  await reconcile.click();
+  const originalJournal = await page.evaluate(() => {
+    const key = "readme-studio-pull-request-journal-v1",
+      raw = localStorage.getItem(key),
+      replacement = JSON.parse(raw);
+    replacement.head = "another-branch";
+    localStorage.setItem(key, JSON.stringify(replacement));
+    return raw;
+  });
+  await expect(d.locator("[data-status]")).toContainText(
+    "changed in another tab while reconciling",
+  );
+  await expect(d.getByText("another-branch", { exact: false })).toBeVisible();
+  await page.evaluate((raw) => {
+    localStorage.setItem("readme-studio-pull-request-journal-v1", raw);
+  }, originalJournal);
+  await reconcile.click();
+  const clear = d.getByRole("button", { name: "Clear unmatched recovery" }),
+    confirm = d.getByLabel(/I checked GitHub/);
+  await expect(clear).toBeDisabled();
+  await expect(confirm).toBeDisabled();
+  const download = page.waitForEvent("download");
+  await d.getByRole("button", { name: "Download unmatched recovery" }).click();
+  expect((await download).suggestedFilename()).toBe(
+    "readme-studio-unmatched-pull-request-recovery.json",
+  );
+  await confirm.check();
+  await clear.click();
+  await expect(d.locator("[data-pr-journal]")).toBeEmpty();
+  await expect(d.locator("[data-status]")).toContainText(
+    "No remote request was retried",
+  );
+  expect(prWrites).toHaveLength(1);
+});
+
+test("reports a non-draft duplicate as existing instead of newly created", async ({
+  page,
+}) => {
+  const duplicate = {
+      number: 9,
+      title: "Existing README update",
+      url: "https://github.com/octocat/octocat/pull/9",
+      draft: false,
+      head: "readme-studio/review",
+      headSha: next,
+      base: "main",
+      baseSha: sha,
+    },
+    { d, prWrites } = await setup(page, {
+      pullRequestDuplicate: duplicate,
+    });
+  await d.getByText("Publish on a new branch instead", { exact: true }).click();
+  await d.getByLabel("New branch name").fill("readme-studio/review");
+  await d.getByLabel(/I confirm creating this branch/).check();
+  await d.getByRole("button", { name: "Create branch for review" }).click();
+  await d.getByRole("button", { name: "Load remote README" }).click();
+  await d.getByLabel(approval).check();
+  await d.getByRole("button", { name: "Confirm and publish README" }).click();
+  await d
+    .getByText("Create a reviewed draft pull request", { exact: true })
+    .click();
+  await d.getByLabel(/I reviewed this exact title/).check();
+  await d.getByRole("button", { name: "Create draft pull request" }).click();
+  await expect(d.locator("[data-status]")).toContainText(
+    "Existing pull request #9 found",
+  );
+  await expect(d.locator("[data-pr-result]")).toContainText(
+    "No duplicate was created",
+  );
+  await expect(d.locator("[data-pr-result]")).not.toContainText("draft");
+  expect(prWrites).toHaveLength(1);
 });
 
 // Opens the review with the generated banner assets in the change set.

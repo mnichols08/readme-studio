@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.26
+
+- Add explicit same-repository documentation-PR discovery and selection, with exact head recheck, stale/closed/conflicting PR refusal and no unreviewed file-write path (#195, #196, #216–#219).
+- Add reviewed draft-PR creation after a separately approved branch commit, enforcing optional least-privilege Pull requests permission, exact head/base SHAs and duplicate prevention (#186).
+- Add a content-free PR operation journal and exact reconciliation across all PR states so uncertain responses are never blindly retried; denied permissions and branch changes preserve local exports and source (#197, #220, #221).
+
 ## 1.9.25
 
 - Add local audience perspectives for end users, recruiters, contributors and maintainers using evidence and caveats rather than fabricated quality scores (#192, #210, #211).

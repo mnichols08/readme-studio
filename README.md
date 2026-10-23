@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.25.** Audience review uses local heading evidence to show end-user, recruiter, contributor and maintainer perspectives without scoring the author. It also offers project-specific first-visit checks and conservative section-order proposals behind an exact diff and explicit approval. [Audience review](docs/audience-review.md) · [Privacy](docs/privacy.md)
+**Version 1.9.26.** Optional GitHub publishing can update an explicitly selected same-repository documentation PR or create a separately reviewed draft PR after an approved branch commit. Exact head/base checks, duplicate prevention and a content-free recovery journal prevent silent or blind remote retries. [GitHub publishing](docs/github-publishing.md#branch-and-pull-request-review) · [Privacy](docs/privacy.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

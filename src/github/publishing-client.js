@@ -12,6 +12,7 @@ export class PublishingClient {
       throw new Error(
         "You are offline. Download your README or reconnect to publish.",
       );
+    const remoteWrite = ["commit", "pull-request"].includes(operation);
     let response;
     try {
       response = await this.fetchImpl(`/api/publishing/${operation}`, {
@@ -30,11 +31,11 @@ export class PublishingClient {
     } catch {
       throw Object.assign(
         new Error(
-          operation === "commit"
-            ? "The publishing response was lost. Do not retry yet; reconcile the Publish journal with GitHub first."
+          remoteWrite
+            ? `The ${operation === "commit" ? "publishing" : "pull request"} response was lost. Do not retry yet; reconcile its recovery journal with GitHub first.`
             : "Publishing service unavailable. Your local draft and download are safe.",
         ),
-        operation === "commit" ? { ambiguous: true } : {},
+        remoteWrite ? { ambiguous: true } : {},
       );
     }
     let value;
@@ -43,11 +44,11 @@ export class PublishingClient {
     } catch {
       throw Object.assign(
         new Error(
-          operation === "commit"
-            ? "The publishing response was unreadable. Do not retry yet; reconcile the Publish journal with GitHub first."
+          remoteWrite
+            ? `The ${operation === "commit" ? "publishing" : "pull request"} response was unreadable. Do not retry yet; reconcile its recovery journal with GitHub first.`
             : "Publishing is not configured on this static deployment. Use Download README.",
         ),
-        operation === "commit" ? { ambiguous: true } : {},
+        remoteWrite ? { ambiguous: true } : {},
       );
     }
     if (!response.ok)
@@ -61,6 +62,7 @@ export class PublishingClient {
           preflight: value.preflight,
           ambiguous: value.ambiguous === true,
           alreadyApplied: value.alreadyApplied === true,
+          pullRequest: value.pullRequest,
         },
       );
     if (value.csrf) this.csrf = value.csrf;

@@ -30,6 +30,13 @@ import {
   startPublishJournal,
   updatePublishJournal,
 } from "../publishing/journal.js";
+import {
+  clearPullRequestJournal,
+  completePullRequestJournal,
+  rawPullRequestJournal,
+  readPullRequestJournal,
+  startPullRequestJournal,
+} from "../publishing/pull-request.js";
 import { PublishingClient } from "../github/publishing-client.js";
 import { html } from "../markdown/serialize.js";
 import { target } from "../publishing/validation.js";
@@ -68,7 +75,7 @@ const CHECK_STATUS = {
 export class PublishDialog extends HTMLElement {
   connectedCallback() {
     this.client = new PublishingClient();
-    this.innerHTML = `<h1>Publish to GitHub</h1><p>Optional publishing. Your README source stays unchanged. Every write requires a source review and confirmation.</p><p role="status" data-status>Checking connection…</p><section data-auth></section><section data-target></section><section data-preflight aria-labelledby="publish-preflight-heading"></section><section data-review></section><section data-journal></section><section data-history></section><button data-download>Download README fallback</button>`;
+    this.innerHTML = `<h1>Publish to GitHub</h1><p>Optional publishing. Your README source stays unchanged. Every write requires a source review and confirmation.</p><p role="status" data-status>Checking connection…</p><section data-auth></section><section data-target></section><section data-preflight aria-labelledby="publish-preflight-heading"></section><section data-review></section><section data-journal></section><section data-pr-journal></section><section data-history></section><button data-download>Download README fallback</button>`;
     this.querySelector("[data-download]").onclick = () =>
       this.emit("publish-download", {
         content: this.source,
@@ -185,7 +192,7 @@ export class PublishDialog extends HTMLElement {
     const { repositories } = await this.client.request("repositories", {});
     this.repositories = repositories;
     const area = this.querySelector("[data-target]");
-    area.innerHTML = `<h2>Choose target</h2><p>Suggested profile repository: ${html(this.auth.identity.login)}/${html(this.auth.identity.login)}. Confirm your own selection. If missing, <a href="https://github.com/new" target="_blank" rel="noopener noreferrer">create it on GitHub</a> and install the app for it.</p><label>Target repository<select data-repo><option value="">Select repository</option>${repositories.map((r) => `<option value="${html(r.repository)}">${html(r.repository)} · ${html(r.visibility)} · ${(this.kind === "workflow" ? r.workflowsWritable : r.writable) ? "write access" : "read only"} · default ${html(r.branch)}</option>`).join("")}</select></label><label>Target branch<input data-branch autocomplete="off"></label><label>${this.kind === "workflow" ? "Workflow path" : "README path"}<input data-path value="${html(this.workflowPath || "README.md")}" ${this.kind === "workflow" ? "readonly" : ""} autocomplete="off"></label><fieldset data-assets-options ${this.kind !== "workflow" && this.draftSnapshot?.metadata?.bannerSettings ? "" : "hidden"}><legend>Generated banner assets</legend><label class="check"><input type="checkbox" data-include-assets> Include generated banner SVG files in this publishing plan</label><label>Asset directory<input data-asset-directory value="assets/readme"></label><label class="check"><input type="checkbox" data-rewrite-banner> Update only Studio-owned banner references in the prepared README</label></fieldset><button data-load>Load remote ${this.kind === "workflow" ? "workflow" : "README"}</button>`;
+    area.innerHTML = `<h2>Choose target</h2><p>Suggested profile repository: ${html(this.auth.identity.login)}/${html(this.auth.identity.login)}. Confirm your own selection. If missing, <a href="https://github.com/new" target="_blank" rel="noopener noreferrer">create it on GitHub</a> and install the app for it.</p><label>Target repository<select data-repo><option value="">Select repository</option>${repositories.map((r) => `<option value="${html(r.repository)}">${html(r.repository)} · ${html(r.visibility)} · ${(this.kind === "workflow" ? r.workflowsWritable : r.writable) ? "write access" : "read only"} · default ${html(r.branch)}</option>`).join("")}</select></label><label>Target branch<input data-branch autocomplete="off"></label><label>${this.kind === "workflow" ? "Workflow path" : "README path"}<input data-path value="${html(this.workflowPath || "README.md")}" ${this.kind === "workflow" ? "readonly" : ""} autocomplete="off"></label><details data-existing-pr><summary>Update an existing documentation pull request</summary><p>Only open pull requests whose head and base are in this same repository are offered. Selection never writes; the exact PR head is checked again before publishing.</p><button data-find-prs>Find compatible pull requests</button><div data-pr-picker></div></details><fieldset data-assets-options ${this.kind !== "workflow" && this.draftSnapshot?.metadata?.bannerSettings ? "" : "hidden"}><legend>Generated banner assets</legend><label class="check"><input type="checkbox" data-include-assets> Include generated banner SVG files in this publishing plan</label><label>Asset directory<input data-asset-directory value="assets/readme"></label><label class="check"><input type="checkbox" data-rewrite-banner> Update only Studio-owned banner references in the prepared README</label></fieldset><button data-load>Load remote ${this.kind === "workflow" ? "workflow" : "README"}</button>`;
     const destination =
       this.kind === "workflow"
         ? null
@@ -248,6 +255,8 @@ export class PublishDialog extends HTMLElement {
         );
         this.querySelector("[data-message]")?.focus();
       });
+    area.querySelector("[data-find-prs]").onclick = () =>
+      this.run(() => this.findPullRequests());
     this.status(
       repositories.length
         ? "Select a repository and branch."
@@ -261,6 +270,58 @@ export class PublishDialog extends HTMLElement {
       path: this.querySelector("[data-path]").value,
       ...(this.kind ? { kind: this.kind } : {}),
     });
+  }
+  async findPullRequests() {
+    const raw = this.rawTarget(),
+      repository = raw.repository,
+      branch =
+        raw.branch ||
+        this.repositories.find((row) => row.repository === repository)?.branch,
+      generation = this.changeSetGeneration || 0,
+      requestedTarget = JSON.stringify({ repository, branch });
+    target({ repository, branch, path: "README.md" });
+    const { pullRequests } = await this.client.request("pull-requests", {
+        repository,
+        branch,
+      }),
+      picker = this.querySelector("[data-pr-picker]");
+    const current = this.rawTarget(),
+      currentBranch =
+        current.branch ||
+        this.repositories.find((row) => row.repository === current.repository)
+          ?.branch;
+    if (
+      !picker?.isConnected ||
+      generation !== (this.changeSetGeneration || 0) ||
+      requestedTarget !==
+        JSON.stringify({
+          repository: current.repository,
+          branch: currentBranch,
+        })
+    )
+      throw new Error(
+        "Target changed while finding pull requests. Search the current target again.",
+      );
+    if (!pullRequests.length) {
+      picker.innerHTML =
+        "<p>No compatible open same-repository pull requests were found. Nothing changed.</p>";
+      return;
+    }
+    picker.innerHTML = `<label>Compatible pull request<select data-pr-select><option value="">Choose a pull request</option>${pullRequests.map((pull) => `<option value="${pull.number}">#${pull.number} · ${html(pull.title)} · ${html(pull.head)} into ${html(pull.base)}${pull.draft ? " · draft" : ""}</option>`).join("")}</select></label><button data-use-pr>Use selected pull request head</button>`;
+    picker.querySelector("[data-use-pr]").onclick = () => {
+      const number = Number(picker.querySelector("[data-pr-select]").value),
+        selected = pullRequests.find((pull) => pull.number === number);
+      if (!selected) {
+        this.status("Choose a compatible pull request first.");
+        return;
+      }
+      this.querySelector("[data-branch]").value = selected.head;
+      this.invalidate();
+      this.selectedPullRequest = selected;
+      this.status(
+        `Selected PR #${selected.number}. Load and review its exact head before publishing.`,
+      );
+    };
   }
   rawTarget() {
     return {
@@ -345,6 +406,8 @@ export class PublishDialog extends HTMLElement {
     this.clearChangeSet();
     this.staleRemote = false;
     this.preflight = null;
+    this.selectedPullRequest = null;
+    this.querySelector("[data-pr-picker]")?.replaceChildren();
     this.preflightView();
     this.querySelector("[data-review]").replaceChildren();
     this.status("Target changed. Load the remote README again.");
@@ -429,7 +492,7 @@ export class PublishDialog extends HTMLElement {
       noun = this.kind === "workflow" ? "workflow" : "README",
       language = this.kind === "workflow" ? "YAML" : "Markdown";
     this.querySelector("[data-review]").innerHTML =
-      `<h2>Review ${b.sha ? "updated file" : "New file"}</h2><section data-change-set aria-labelledby="publish-change-set-heading"><h3 id="publish-change-set-heading">Change set</h3><p data-change-set-target>${html(b.repository)} · branch ${html(b.branch)} · base commit <code>${html(b.commitSha || "unknown")}</code></p><p>Not atomic: each file is a separate commit, generated assets first and the ${noun} last. Nothing is deleted, and every update names its Base SHA, so a file that changed on GitHub is never overwritten.${this.assetRows?.length ? ` ${this.rewriteApplied ? "Owned banner paths updated in prepared source." : "No banner source rewrite applied."}` : ""}</p><ol class="change-set-entries">${this.changeFiles
+      `<h2>Review ${b.sha ? "updated file" : "New file"}</h2>${this.selectedPullRequest ? `<p data-selected-pr>Updating selected PR #${this.selectedPullRequest.number}: ${html(this.selectedPullRequest.head)} into ${html(this.selectedPullRequest.base)}. Its exact head and mergeability will be checked again before any file write.</p>` : ""}<section data-change-set aria-labelledby="publish-change-set-heading"><h3 id="publish-change-set-heading">Change set</h3><p data-change-set-target>${html(b.repository)} · branch ${html(b.branch)} · base commit <code>${html(b.commitSha || "unknown")}</code></p><p>Not atomic: each file is a separate commit, generated assets first and the ${noun} last. Nothing is deleted, and every update names its Base SHA, so a file that changed on GitHub is never overwritten.${this.assetRows?.length ? ` ${this.rewriteApplied ? "Owned banner paths updated in prepared source." : "No banner source rewrite applied."}` : ""}</p><ol class="change-set-entries">${this.changeFiles
         .map(
           (f, i) =>
             `<li data-entry="${html(f.path)}"><dl class="change-set-facts" data-entry-facts></dl><details data-entry-diff="${i}" ${f.kind === "asset" ? "" : "open data-primary-diff"}><summary>Diff for ${html(f.path)}</summary>${f.kind === "asset" ? `<p>${html(f.warning || "")} ${this.source.includes(f.path.split("/").at(-1)) ? "" : "Warning: asset appears unreferenced by this README."}</p>` : `<p>${diff.added} added / ${diff.removed} removed lines in changed region. Sections: ${html(diff.sections.join(", ") || "body content")}.</p>`}${sourceDiffMarkup(
@@ -577,6 +640,19 @@ export class PublishDialog extends HTMLElement {
       throw new Error(
         "The change set changed while it was being verified. Nothing was written; approve it again.",
       );
+    if (this.selectedPullRequest) {
+      if (this.baseline.commitSha !== this.selectedPullRequest.headSha)
+        throw new Error(
+          "The selected pull request head does not match this loaded review. Select and load it again.",
+        );
+      await this.client.request("pull-request-check", {
+        repository: this.baseline.repository,
+        number: this.selectedPullRequest.number,
+        head: this.selectedPullRequest.head,
+        base: this.selectedPullRequest.base,
+        headSha: this.selectedPullRequest.headSha,
+      });
+    }
     savePublishCheckpoint(this.draftId, this.originalSource);
     startPublishJournal(cs);
     this.retrySessionChangeSetId = cs.id;
@@ -587,6 +663,7 @@ export class PublishDialog extends HTMLElement {
       changeSetContents(this.changeFiles),
       (op, data) => this.client.request(op, data),
       {
+        expectedBranchSha: this.selectedPullRequest?.headSha,
         beforeWrite: (entry) =>
           updatePublishJournal(cs.id, entry.path, "pending"),
         afterWrite: (entry, status, result) =>
@@ -698,13 +775,35 @@ export class PublishDialog extends HTMLElement {
       link.rel = "noopener noreferrer";
       this.querySelector("[data-result]").append(link);
     }
-    if (this.branchBase) {
+    if (this.selectedPullRequest) {
       const link = document.createElement("a");
-      link.href = `${repo}/compare/${encodeURIComponent(this.branchBase)}...${encodeURIComponent(result.branch)}?expand=1`;
-      link.textContent = "Prepare pull request on GitHub";
+      link.href = this.selectedPullRequest.url;
+      link.textContent = `View updated pull request #${this.selectedPullRequest.number}`;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       this.querySelector("[data-result]").append(link);
+    } else if (this.branchBase) {
+      const allowed = this.repositories?.find(
+        (row) => row.repository === result.repository,
+      )?.pullRequestsWritable;
+      this.querySelector("[data-result]").insertAdjacentHTML(
+        "beforeend",
+        allowed
+          ? `<details data-create-pr><summary>Create a reviewed draft pull request</summary><p>Target: ${html(result.branch)} at <code>${html(result.commitSha)}</code> into ${html(this.branchBase)} at <code>${html(this.branchBaseSha)}</code>. GitHub will reject this if either exact branch head changed or a matching open PR already exists.</p><label>Pull request title<input data-pr-title maxlength="256" value="Update README"></label><label>Pull request notes<textarea data-pr-body rows="5">Prepared and reviewed with README Studio.</textarea></label><label class="check"><input type="checkbox" data-confirm-pr> I reviewed this exact title, notes, head, base, and both SHAs. Create a draft PR.</label><button data-submit-pr disabled>Create draft pull request</button><div data-pr-result></div></details>`
+          : "<p>Creating a draft PR here requires Pull requests: read and write permission for the GitHub App. The reviewed branch commit is safe; use GitHub to open the PR or reconnect after changing app permissions.</p>",
+      );
+      const confirm = this.querySelector("[data-confirm-pr]"),
+        submit = this.querySelector("[data-submit-pr]");
+      if (confirm && submit) {
+        confirm.onchange = () => (submit.disabled = !confirm.checked);
+        const withdraw = () => {
+          confirm.checked = false;
+          submit.disabled = true;
+        };
+        this.querySelector("[data-pr-title]").oninput = withdraw;
+        this.querySelector("[data-pr-body]").oninput = withdraw;
+        submit.onclick = () => this.run(() => this.createPullRequest(result));
+      }
     }
     try {
       recordPublish(result, previous);
@@ -746,6 +845,169 @@ export class PublishDialog extends HTMLElement {
       area.textContent = e.message;
     }
     this.journalView();
+    this.pullRequestJournalView();
+  }
+  pullRequestJournalView() {
+    const area = this.querySelector("[data-pr-journal]");
+    if (!area) return;
+    let journal;
+    try {
+      journal = readPullRequestJournal();
+    } catch (error) {
+      area.innerHTML = `<h2>Pull request recovery needs attention</h2><p role="alert">${html(error.message)}</p><button data-pr-journal-download>Download original recovery journal</button><button data-pr-journal-clear disabled>Clear downloaded recovery journal</button>`;
+      const download = area.querySelector("[data-pr-journal-download]"),
+        clear = area.querySelector("[data-pr-journal-clear]");
+      download.onclick = () => {
+        this.emit("publish-download", {
+          content: rawPullRequestJournal() || "",
+          name: "readme-studio-pull-request-recovery.json",
+          type: "application/json",
+        });
+        clear.disabled = false;
+      };
+      clear.onclick = () => {
+        clearPullRequestJournal();
+        this.pullRequestJournalView();
+        this.status("Downloaded pull request recovery journal cleared.");
+      };
+      return;
+    }
+    if (!journal) {
+      area.replaceChildren();
+      return;
+    }
+    const raw = rawPullRequestJournal(),
+      unmatched =
+        typeof this.prReconciledNoMatch === "string" &&
+        raw === this.prReconciledNoMatch;
+    area.innerHTML = `<h2>Pull request recovery</h2><p>${html(journal.repository)} · ${html(journal.head)} into ${html(journal.base)} · ${html(journal.status)}. Do not create another PR until this exact operation is reconciled.</p>${journal.status === "created" ? `<p><a href="${html(journal.url)}" target="_blank" rel="noopener noreferrer">View pull request #${journal.number}</a></p><button data-clear-pr-journal>Clear settled recovery</button>` : `<button data-reconcile-pr>Reconcile with GitHub</button>${unmatched ? '<p>No exact match was observed. Before clearing, inspect GitHub for this head and base and download the recovery record.</p><button data-download-unmatched-pr>Download unmatched recovery</button><label class="check"><input type="checkbox" data-confirm-unmatched-pr disabled> I checked GitHub and understand that clearing permits a fresh reviewed attempt.</label><button data-clear-unmatched-pr disabled>Clear unmatched recovery</button>' : ""}`}`;
+    area
+      .querySelector("[data-reconcile-pr]")
+      ?.addEventListener("click", () =>
+        this.run(() => this.reconcilePullRequest()),
+      );
+    area
+      .querySelector("[data-clear-pr-journal]")
+      ?.addEventListener("click", () => {
+        clearPullRequestJournal();
+        this.pullRequestJournalView();
+        this.status("Settled pull request recovery cleared.");
+      });
+    const download = area.querySelector("[data-download-unmatched-pr]"),
+      confirm = area.querySelector("[data-confirm-unmatched-pr]"),
+      clear = area.querySelector("[data-clear-unmatched-pr]");
+    if (download && confirm && clear) {
+      download.onclick = () => {
+        if (rawPullRequestJournal() !== this.prReconciledNoMatch) {
+          this.prReconciledNoMatch = false;
+          this.pullRequestJournalView();
+          this.status(
+            "Pull request recovery changed in another tab. Reconcile this exact recovery before clearing it.",
+          );
+          return;
+        }
+        this.emit("publish-download", {
+          content: this.prReconciledNoMatch,
+          name: "readme-studio-unmatched-pull-request-recovery.json",
+          type: "application/json",
+        });
+        confirm.disabled = false;
+      };
+      confirm.onchange = () => (clear.disabled = !confirm.checked);
+      clear.onclick = () => {
+        if (rawPullRequestJournal() !== this.prReconciledNoMatch) {
+          this.prReconciledNoMatch = false;
+          this.pullRequestJournalView();
+          this.status(
+            "Pull request recovery changed in another tab. It was not cleared; reconcile it first.",
+          );
+          return;
+        }
+        clearPullRequestJournal();
+        this.prReconciledNoMatch = false;
+        this.pullRequestJournalView();
+        this.status(
+          "Downloaded unmatched recovery cleared. No remote request was retried; review fresh before another attempt.",
+        );
+      };
+    }
+  }
+  async createPullRequest(result) {
+    const details = this.querySelector("[data-create-pr]"),
+      input = {
+        repository: result.repository,
+        head: result.branch,
+        base: this.branchBase,
+        headSha: result.commitSha,
+        baseSha: this.branchBaseSha,
+        title: details.querySelector("[data-pr-title]").value,
+        body: details.querySelector("[data-pr-body]").value,
+        confirmed: details.querySelector("[data-confirm-pr]").checked,
+      },
+      journal = startPullRequestJournal(input);
+    this.prReconciledNoMatch = false;
+    this.pullRequestJournalView();
+    let created;
+    let alreadyExists = false;
+    try {
+      created = await this.client.request("pull-request", input);
+    } catch (error) {
+      if (error.pullRequest) {
+        created = error.pullRequest;
+        alreadyExists = true;
+      } else {
+        if (!error.ambiguous) clearPullRequestJournal();
+        this.pullRequestJournalView();
+        throw error;
+      }
+    }
+    if (alreadyExists) {
+      clearPullRequestJournal();
+      this.pullRequestJournalView();
+      details.querySelector("[data-pr-result]").innerHTML =
+        `<p>An existing ${created.draft ? "draft " : ""}pull request <a href="${html(created.url)}" target="_blank" rel="noopener noreferrer">#${created.number}</a> already covers this head and base. No duplicate was created.</p>`;
+      this.status(
+        `Existing pull request #${created.number} found. No duplicate was created; local source is unchanged.`,
+      );
+      return;
+    }
+    completePullRequestJournal(journal, created);
+    details.querySelector("[data-pr-result]").innerHTML =
+      `<p>Draft pull request <a href="${html(created.url)}" target="_blank" rel="noopener noreferrer">#${created.number}</a> is ready for GitHub review and CI.</p>`;
+    clearPullRequestJournal();
+    this.pullRequestJournalView();
+    this.status(
+      `Draft pull request #${created.number} created. Local source is unchanged.`,
+    );
+  }
+  async reconcilePullRequest() {
+    const raw = rawPullRequestJournal(),
+      journal = readPullRequestJournal();
+    if (!journal)
+      throw new Error("There is no pull request operation to reconcile.");
+    const { found } = await this.client.request("pull-request-status", journal);
+    if (rawPullRequestJournal() !== raw) {
+      this.prReconciledNoMatch = false;
+      this.pullRequestJournalView();
+      this.status(
+        "Pull request recovery changed in another tab while reconciling. No result was applied; reconcile the current recovery.",
+      );
+      return;
+    }
+    if (found) {
+      this.prReconciledNoMatch = false;
+      completePullRequestJournal(journal, found);
+      this.pullRequestJournalView();
+      this.status(
+        `Reconciliation found pull request #${found.number}. No duplicate was created.`,
+      );
+      return;
+    }
+    this.prReconciledNoMatch = raw;
+    this.pullRequestJournalView();
+    this.status(
+      "Reconciliation found no pull request with the exact reviewed title, repository, head, base, SHAs, and creation time. Nothing was retried; check GitHub and reconcile again before clearing recovery.",
+    );
   }
   journalView() {
     const area = this.querySelector("[data-journal]");
@@ -1030,6 +1292,7 @@ export class PublishDialog extends HTMLElement {
       confirmed: true,
     });
     this.branchBase = this.baseline.branch;
+    this.branchBaseSha = this.baseline.commitSha;
     this.querySelector("[data-branch]").value = result.branch;
     this.invalidate();
     this.status(
