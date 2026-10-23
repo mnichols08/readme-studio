@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.10
+
+- Add explicit, local Audit snapshots for the successful results already on screen (#82, #128). Capture makes no request and stores only canonical repositories, observation revisions/times, states, project-type identity, structured check coverage and finding identities—never README source, evidence prose or decisions.
+- Keep snapshots in the separate `readme-studio:audit-snapshots:v1` key with five per account, 20 total, 1,000 repositories and 60 findings per snapshot entry, 20 unavailable URLs per repository and a two-million-character envelope. Another account is never evicted; deletion, rejected-write safety and damaged-data recovery are explicit.
+- Compare two captures as Added, Resolved or Unknown only when both observations are safely comparable (#129). Repositories must have been assessed twice and re-read under the same rules and project type; history and link findings additionally require their respective checks in both captures.
+- Add cross-browser capture/diff/delete coverage and stale, partial-check, retention and recovery unit coverage. The interface explicitly says snapshots are not live monitoring.
+
 ## 1.9.9
 
 - Persist Manual project types per canonical repository and continue applying them after reloads, account switches and README revisions (#81, #126).

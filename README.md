@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.9.** Manual project types and README-revision Dismissals now persist locally per canonical repository, with explicit reset and non-destructive recovery. [Repository auditing](docs/repository-auditing.md#project-types-111) · [Storage decision](docs/adr/epic64-02-audit-decisions-use-a-new-key-and-never-rewrite-the-attention-key.md)
+**Version 1.9.10.** Explicit Audit snapshots copy current on-screen results into bounded local history and compare later observations conservatively as Added, Resolved or Unknown—without polling or background monitoring. [Audit snapshot history](docs/repository-auditing.md#audit-snapshot-history-1910) · [Storage decision](docs/adr/epic64-04-audit-snapshots-record-on-screen-results-in-a-separate-bounded-key.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -22,7 +22,7 @@ Guided start asks whether you want to write a profile README, write a repository
 - Compose sections, badges and collections, project showcases, components and reusable snippets.
 - Coordinate themes, generate local light/dark SVG banners, and configure attributed external widget embeds.
 - Import public GitHub data, review refreshes, analyze compatibility and apply explicit, undoable refactors.
-- Audit selected public repositories with advisory expectations for 14 project types, review an evidence-backed [Improvement plan](docs/repository-auditing.md#improvement-plans) for each, then choose the next README from the attention queue.
+- Audit selected public repositories with advisory expectations for 14 project types, review an evidence-backed [Improvement plan](docs/repository-auditing.md#improvement-plans) for each, optionally compare explicit [Audit snapshots](docs/repository-auditing.md#audit-snapshot-history-1910), then choose the next README from the attention queue.
 - Analyze declared dependencies in repository manifests with explicit consent, including bounded monorepo discovery that maps Workspace members and Nested projects ([Stack Intelligence](docs/stack-intelligence.md)). Every declaration shows where and when it was observed and a named confidence basis, with uncertain and Stale results labelled ([Provenance, confidence and staleness](docs/stack-intelligence.md#provenance-confidence-and-staleness)).
 - Record read-only evidence snapshots of a repository's branch head, README, manifests and linked files, then check what changed since a pinned Baseline.
 - Check for stale scripts, missing files, broken links and anchors, and outdated config keys without running repository code or changing your Markdown.

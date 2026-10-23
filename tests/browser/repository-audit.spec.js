@@ -37,6 +37,68 @@ test.beforeEach(async ({ page }) => {
   await page.route("https://img.shields.io/**", (route) => route.abort());
 });
 
+test("captures explicit local audit snapshots and compares only fresh observations", async ({
+  page,
+}) => {
+  let version = 1;
+  await page.route("https://api.github.com/**", (route) => {
+    const url = route.request().url();
+    if (url.includes("/users/"))
+      return route.fulfill({ json: [metadata("snapshots")] });
+    const text =
+      version === 1
+        ? "# Tool\n\nTODO: replace this placeholder with project documentation."
+        : "# Tool\n\nThis template provides a minimal setup to get React working in Vite with official plugins.";
+    return route.fulfill({
+      json: { ...file(text), sha: (version === 1 ? "a" : "b").repeat(40) },
+    });
+  });
+  await open(page);
+  const history = page.locator("audit-snapshot-history");
+  await expect(history).toContainText("does not fetch, re-audit, monitor");
+  await page
+    .getByRole("button", { name: "Select all filtered repositories" })
+    .click();
+  await page
+    .getByRole("button", { name: "Audit selected", exact: true })
+    .click();
+  await history
+    .getByRole("button", { name: "Capture current audit results" })
+    .click();
+  await expect(history.getByRole("status")).toContainText(
+    "Captured 1 audit results locally",
+  );
+
+  version = 2;
+  await page.getByLabel("Fetch fresh README content").check();
+  await page
+    .getByRole("button", { name: "Audit selected", exact: true })
+    .click();
+  await history
+    .getByRole("button", { name: "Capture current audit results" })
+    .click();
+  await history
+    .getByRole("button", { name: "Capture current audit results" })
+    .click();
+  await history.getByRole("button", { name: "Compare snapshots" }).click();
+  await expect(history).toContainText("Added (1)");
+  await expect(history).toContainText("Replace Vite starter text");
+  await expect(history).toContainText("Resolved (1)");
+  await expect(history).toContainText("Review TODO text");
+  await expect(history).toContainText("This is not live monitoring");
+
+  const deleteSnapshot = history.getByRole("button", {
+    name: /Delete audit snapshot from/,
+  });
+  await deleteSnapshot.first().click();
+  await expect(deleteSnapshot).toHaveCount(2);
+  await expect(deleteSnapshot.first()).toBeFocused();
+  await expect(history.locator("[data-diff]")).toBeEmpty();
+  await expect(history.getByRole("status")).toContainText(
+    "Current audit results are unchanged",
+  );
+});
+
 test("selected audit distinguishes states, reuses cache and improves exact source in a new draft", async ({
   page,
 }) => {
