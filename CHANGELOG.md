@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.28
+
+- Add versioned localized document metadata with manual locale selection, explicit repository paths, source-edition links, collision refusal, exact Markdown preservation, and backup/project round trips (#201, #228, #229).
+- Add bounded exact-revision translation review that distinguishes changed, added, removed, reordered, unchanged, and ambiguous source sections; acknowledgement updates metadata only and rejects stale reviews (#202, #230, #231).
+- Add an eight-language fixture corpus and a local uncertainty UI that keeps structural checks available while labeling unsupported English wording heuristics Unknown for non-English editions (#188, #203, #232, #233).
+
 ## 1.9.27
 
 - Add optional, skippable Profile, CLI, Library, API, and Game writing lessons that distinguish observed, not-detected, and unknown heading evidence and open the real editor without inserting text (#198, #222, #223).

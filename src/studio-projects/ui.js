@@ -6,6 +6,7 @@ import {
   projectFilename,
 } from "./model.js";
 import { restoreWorkspace, uniqueName } from "../state/workspace-backup.js";
+import { validateLocalizationGraph } from "../localization/graph.js";
 
 export function saveProjectDialog(app) {
   app.modal(
@@ -90,6 +91,7 @@ export function openProjectDialog(app) {
                   "merge",
                 )
               : { ...app.data, drafts: [...app.data.drafts, draft] };
+          validateLocalizationGraph(next.drafts);
           if (review.querySelector("[data-project-settings]")?.checked)
             next.settings = result.settings;
         } catch (error) {

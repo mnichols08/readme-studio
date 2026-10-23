@@ -28,6 +28,8 @@ import {
 import { validateDraft, withoutDetachedCopies } from "./drafts.js";
 import { validateActivity } from "../workspace/commands.js";
 import { validateGuide, recoverGuide } from "../workspace/guide.js";
+import { validateLocalization } from "../localization/metadata.js";
+import { validateLocalizationGraph } from "../localization/graph.js";
 import {
   validateWorksets,
   mergeWorksets,
@@ -85,6 +87,11 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
   let active;
   for (const original of data.drafts) {
     const d = validateDraft(original, { preserveBlockIds: preserveIds });
+    const workspaceDocument = d.metadata?.workspaceDocument;
+    if (workspaceDocument && Object.hasOwn(workspaceDocument, "localization"))
+      workspaceDocument.localization = validateLocalization(
+        workspaceDocument.localization,
+      );
     d.name = uniqueName(d.name, drafts);
     if (
       preserveIds &&
@@ -99,6 +106,17 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     drafts.push(d);
     if (!active && original.id === data.active) active = d.id;
   }
+  for (const draft of drafts) {
+    const localization = draft.metadata?.workspaceDocument?.localization;
+    if (
+      typeof localization?.sourceDocumentId === "string" &&
+      documentIds.has(localization.sourceDocumentId)
+    )
+      localization.sourceDocumentId = documentIds.get(
+        localization.sourceDocumentId,
+      );
+  }
+  validateLocalizationGraph(drafts);
   return {
     version: 1,
     drafts,
@@ -164,7 +182,7 @@ export function restoreWorkspace(current, backup, mode) {
     );
   // A merge opens the backup's own active draft: restoring is how an author
   // gets back to that work, and their other drafts stay under Current draft.
-  return {
+  const result = {
     ...current,
     drafts,
     active: incoming.active,
@@ -193,6 +211,8 @@ export function restoreWorkspace(current, backup, mode) {
       ],
     }),
   };
+  validateLocalizationGraph(result.drafts);
+  return result;
 }
 export function recoverWorkspace(raw) {
   try {
@@ -207,28 +227,53 @@ export function recoverWorkspace(raw) {
         });
         // Keep the stored ID so recovered snapshots can follow their document.
         if (typeof d.id === "string" && d.id) draft.id = d.id;
+        const document = draft.metadata?.workspaceDocument;
+        if (document && Object.hasOwn(document, "localization")) {
+          try {
+            document.localization = validateLocalization(document.localization);
+          } catch {
+            delete document.localization;
+          }
+        }
         drafts.push(draft);
       } catch {
         /* Keep unreadable originals in the recovery download. */
       }
     }
-    return drafts.length
-      ? validateWorkspace({
-          ...data,
-          drafts,
-          badgeCollections: recoverCollections(data.badgeCollections),
-          visualLibrary: recoverVisualLibrary(data.visualLibrary),
-          componentLibrary: recoverComponents(data.componentLibrary),
-          sharedComponents: recoverShared(data.sharedComponents),
-          reviewBatch: recoverBatch(data.reviewBatch),
-          guide: recoverGuide(data.guide),
-          repositoryWorksets: recoverWorksets(data.repositoryWorksets),
-          evidenceSnapshots: recoverSnapshots(
-            data.evidenceSnapshots,
-            new Map(drafts.map((d) => [d.id, d.id])),
-          ),
-        })
-      : null;
+    if (!drafts.length) return null;
+    // Recovery favors readable Markdown. Keep the original raw download as
+    // evidence, then rebuild optional mappings oldest-first so an unrelated
+    // later mapping is never discarded for an earlier conflict.
+    const localizations = drafts.map(
+      (draft) => draft.metadata?.workspaceDocument?.localization,
+    );
+    for (const draft of drafts)
+      if (draft.metadata?.workspaceDocument)
+        delete draft.metadata.workspaceDocument.localization;
+    localizations.forEach((localization, index) => {
+      if (!localization) return;
+      drafts[index].metadata.workspaceDocument.localization = localization;
+      try {
+        validateLocalizationGraph(drafts);
+      } catch {
+        delete drafts[index].metadata.workspaceDocument.localization;
+      }
+    });
+    return validateWorkspace({
+      ...data,
+      drafts,
+      badgeCollections: recoverCollections(data.badgeCollections),
+      visualLibrary: recoverVisualLibrary(data.visualLibrary),
+      componentLibrary: recoverComponents(data.componentLibrary),
+      sharedComponents: recoverShared(data.sharedComponents),
+      reviewBatch: recoverBatch(data.reviewBatch),
+      guide: recoverGuide(data.guide),
+      repositoryWorksets: recoverWorksets(data.repositoryWorksets),
+      evidenceSnapshots: recoverSnapshots(
+        data.evidenceSnapshots,
+        new Map(drafts.map((d) => [d.id, d.id])),
+      ),
+    });
   } catch {
     return null;
   }

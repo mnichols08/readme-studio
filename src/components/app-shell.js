@@ -126,6 +126,7 @@ import {
 } from "../state/workspace-backup.js";
 import { safeFilename } from "../state/download.js";
 import { unsavedSectionPrompt } from "../workspace/unsaved-section.js";
+import { validateLocalizationGraph } from "../localization/graph.js";
 import { contextForBlock } from "../markdown/source-context.js";
 import {
   detachedSummary,
@@ -524,6 +525,56 @@ export class AppShell extends HTMLElement {
     this.addEventListener("learning-download", (e) =>
       this.download(e.detail.content, e.detail.name, "text/markdown"),
     );
+    this.addEventListener("translation-review-accept", (e) => {
+      const detail = e.detail;
+      const draft = this.data.drafts.find((item) => item.id === detail.draftId);
+      const source = this.data.drafts.find(
+        (item) => item.id === detail.sourceId,
+      );
+      if (
+        draft !== this.store.draft ||
+        draft?.markdown !== detail.draftSource ||
+        source?.markdown !== detail.sourceMarkdown ||
+        JSON.stringify(draft?.metadata?.workspaceDocument?.localization) !==
+          detail.previousLocalization
+      ) {
+        this.notify(
+          "A source, translation, or language setting changed. Reopen Translation review; nothing was marked reviewed.",
+        );
+        return;
+      }
+      const persistedDrafts = this.data.drafts.map((item) =>
+        item.id === draft.id
+          ? {
+              ...item,
+              metadata: {
+                ...item.metadata,
+                workspaceDocument: {
+                  ...item.metadata.workspaceDocument,
+                  localization: structuredClone(detail.localization),
+                },
+              },
+            }
+          : item,
+      );
+      try {
+        saveDrafts({ ...this.data, drafts: persistedDrafts });
+      } catch {
+        this.querySelector("[data-translation-status]").textContent =
+          "The reviewed revision could not be saved. Nothing changed; export your workspace before retrying.";
+        return;
+      }
+      this.store.checkpoint();
+      this.store.draft.metadata.workspaceDocument.localization =
+        structuredClone(detail.localization);
+      this.store.emit("metadata");
+      this.saveFailedNow(false);
+      this.querySelector(".save-status").textContent = "Saved locally";
+      this.closeDialog(this.editor.input);
+      this.notify(
+        "Current source revision marked reviewed locally. Markdown is unchanged and nothing was published.",
+      );
+    });
     this.addEventListener("markdown-change", (e) => {
       // Raw edits detach only the Blocks they touch; announce each new
       // Detachment record politely without moving focus.
@@ -1753,6 +1804,7 @@ export class AppShell extends HTMLElement {
   }
   async documents() {
     await import("./workspace-documents.js");
+    const { localizationCollision } = await import("../localization/model.js");
     this.modal("<workspace-documents></workspace-documents>");
     const panel = this.querySelector("workspace-documents");
     panel.configure(this.data.drafts, this.data.active);
@@ -1771,6 +1823,16 @@ export class AppShell extends HTMLElement {
     });
     panel.addEventListener("document-settings", ({ detail }) => {
       if (detail.id !== this.store.draft.id) return;
+      const collision = localizationCollision(
+        this.data.drafts,
+        detail.id,
+        detail.settings,
+      );
+      if (collision) {
+        panel.querySelector("[data-status]").textContent =
+          `${collision} Nothing was saved.`;
+        return;
+      }
       this.store.checkpoint();
       this.store.draft.metadata.workspaceDocument = detail.settings;
       this.store.emit("metadata");
@@ -2960,6 +3022,12 @@ export class AppShell extends HTMLElement {
     }
     const d = newDraft(uniqueName(name, this.data.drafts), blocks);
     d.metadata = metadata;
+    try {
+      validateLocalizationGraph([...this.data.drafts, d]);
+    } catch (error) {
+      this.notify(`${error.message} Nothing was saved.`, "warning");
+      return;
+    }
     this.data.drafts.push(d);
     this.load(d.id);
     return d;

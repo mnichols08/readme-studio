@@ -10,6 +10,7 @@ import { documentSegments } from "./source-context.js";
 import { isRelativeUrl, validSourceContext } from "./resolve-urls.js";
 import { duplicateWarnings } from "./merge.js";
 import { contextResolver } from "../state/import-plan.js";
+import { validateLocalization } from "../localization/metadata.js";
 export function analyzeDraft(draft, core) {
   const analysis = analyze(draft.markdown),
     warnings = duplicateWarnings(draft.markdown, contextResolver(draft));
@@ -53,6 +54,25 @@ export function analyzeDraft(draft, core) {
       );
   }
   analysis.detail = analyzeDocument(draft.markdown, { core });
+  let localization = null;
+  try {
+    localization = validateLocalization(
+      draft.metadata?.workspaceDocument?.localization,
+    );
+  } catch {
+    // Import validation reports malformed metadata; Health remains available.
+  }
+  if (localization?.locale && localization.locale !== "en") {
+    analysis.detail.issues = analysis.detail.issues.filter(
+      (issue) => issue.ruleId !== "image-alt-quality",
+    );
+    analysis.languageAwareness = {
+      locale: localization.locale,
+      status: "unknown",
+      detail:
+        "English wording and conventional-section heuristics are Unknown for this language and are not shown. Structural, link, media and source checks remain available.",
+    };
+  }
   analysis.detail.compatibility = analyzeCompatibility(analysis.detail);
   return { analysis, warnings: [...new Set(warnings)] };
 }
