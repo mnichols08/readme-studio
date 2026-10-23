@@ -102,9 +102,9 @@ describe("ownership review", () => {
 
     const restorable = draft([detached()], { detachments: [record()] });
     const plan = ownershipReviewForRecord(restorable, "record-1");
-    expect(() => applyOwnershipReview(draft([]), plan)).toThrow(
-      "changed again",
-    );
+    expect(() =>
+      applyOwnershipReview(draft([], { detachments: [record()] }), plan),
+    ).toThrow("changed again");
   });
 
   it("refuses malformed visual copies and duplicate restored identities", () => {
@@ -125,5 +125,48 @@ describe("ownership review", () => {
     expect(() => applyOwnershipReview(duplicate, plan)).toThrow(
       "conflicts with another section identity",
     );
+  });
+
+  it("refuses ambiguous Detachment record identities without removing either record", () => {
+    const d = draft([detached()], {
+      detachments: [
+        record(),
+        { ...record(hero("Other visual copy")), blockId: "custom-2" },
+      ],
+    });
+    expect(() => ownershipReviewForRecord(d, "record-1")).toThrow(
+      "duplicate identity",
+    );
+    expect(d.metadata.detachments).toHaveLength(2);
+  });
+
+  it.each([
+    ["an unknown builder", { ...hero(), type: "surprise" }],
+    ["a shared copy", { ...hero(), sharedComponent: "shared-1" }],
+    ["a generated copy", { ...hero(), githubGenerated: true }],
+    ["a profile copy", { ...hero(), profileIntro: true }],
+  ])("refuses %s in untrusted Restorable metadata", (_label, previous) => {
+    const d = draft([detached()], { detachments: [record(previous)] });
+    expect(() => ownershipReviewForRecord(d, "record-1")).toThrow(
+      "invalid visual version",
+    );
+  });
+
+  it("refuses a record removed or mutated while its review is open", () => {
+    const original = record();
+    const d = draft([detached()], { detachments: [original] });
+    const plan = ownershipReviewForRecord(d, "record-1");
+
+    expect(() =>
+      applyOwnershipReview(draft(d.blocks, { detachments: [] }), plan),
+    ).toThrow("no longer available");
+    expect(() =>
+      applyOwnershipReview(
+        draft(d.blocks, {
+          detachments: [record(hero("Mutated visual copy"))],
+        }),
+        plan,
+      ),
+    ).toThrow("changed while Ownership review was open");
   });
 });
