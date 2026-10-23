@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.22
+
+- Certify edit, audit, import, export and optional publishing keyboard/focus/status contracts for Story #103 and tasks #166/#167, with a documented manual assistive-technology acceptance protocol and explicit limits on automated evidence.
+- Certify bounded large-document behavior for Story #104 and tasks #168/#169: 100 KB–1 MB analysis/round-trip smoke coverage, measured 100/250 KB browser journeys, latest-only Worker scheduling, cancellation/termination, bounded results/history and exact-source persistence.
+- Certify branded Chrome, Playwright Chromium, Firefox and WebKit coverage for Story #105 and tasks #170/#171, including 320 CSS-pixel zoom-equivalent reflow, light/dark contrast assertions, reduced motion, focus visibility and release CI across all engines.
+
 ## 1.9.21
 
 - Certify evidence-scoped optional writing across Story #100 and tasks #160/#161: prompts limit factual support to approved Original, notes and selected context; a fail-safe local response check names the provenance and flags every statement not found within one approved source, including contradictions and cross-source recombinations; proposals remain inert until exact diff approval.

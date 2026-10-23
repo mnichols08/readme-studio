@@ -63,6 +63,29 @@ jobs:
         with:
           name: browser-test-results-${{ matrix.engine }}-${{ matrix.shard }}
           path: test-results/
+  chrome:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    env:
+      INCLUDE_CHROME: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Chrome browser tests
+        run: npx playwright test --project=chrome --shard=${{ matrix.shard }}/2
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: chrome-test-results-${{ matrix.shard }}
+          path: test-results/
   rust:
     runs-on: ubuntu-latest
     steps:

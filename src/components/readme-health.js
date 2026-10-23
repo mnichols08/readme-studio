@@ -43,6 +43,7 @@ export class ReadmeHealth extends HTMLElement {
           this.dataset.engine = data.engine?.engine || "JavaScript";
           this.engineStatus = data.engine;
           this.display(data.result.analysis);
+          this.completedSource = this.analyzedSource;
           const warnings = data.result.warnings;
           if (navigator.onLine === false)
             warnings.push(
@@ -96,6 +97,7 @@ export class ReadmeHealth extends HTMLElement {
         this.analyzedSource = draft.markdown;
         this.dataset.engine = "JavaScript";
         this.display(analyzeDraft(draft).analysis);
+        this.completedSource = this.analyzedSource;
         this.insertAdjacentHTML(
           "beforeend",
           '<p role="status">Worker unavailable. Analysis completed locally with JavaScript; large documents may pause briefly.</p>',
@@ -113,6 +115,7 @@ export class ReadmeHealth extends HTMLElement {
     try {
       this.analyzedSource = markdown;
       this.display({ ...analyze(markdown), detail: analyzeDocument(markdown) });
+      this.completedSource = this.analyzedSource;
     } catch {
       this.failure();
     }
