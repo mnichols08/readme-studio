@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 const STATUSES = new Set(["required", "pending", "passed", "failed"]);
 const present = (value, limit) =>
   typeof value === "string" && value.trim().length > 0 && value.length <= limit;
@@ -10,10 +12,18 @@ const strictIsoTime = (value) => {
   }
 };
 
-export function validateAcceptanceMatrix(value) {
+export function getAcceptanceMatrixPath(root, release) {
+  return resolve(root, `docs/releases/${release}-acceptance.json`);
+}
+
+export function validateAcceptanceMatrix(value, context = {}) {
   if (!value || value.schemaVersion !== 1 || typeof value.release !== "string")
     throw new Error(
       "Acceptance matrix must use schema version 1 and name a release.",
+    );
+  if (context.expectedRelease && value.release !== context.expectedRelease)
+    throw new Error(
+      `Acceptance matrix release ${value.release} does not match expected release ${context.expectedRelease}.`,
     );
   if (!Array.isArray(value.gates) || !value.gates.length)
     throw new Error("Acceptance matrix must contain gates.");

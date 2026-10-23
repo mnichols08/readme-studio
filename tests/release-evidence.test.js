@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createReleaseEvidence,
+  getAcceptanceMatrixPath,
   validateAcceptanceMatrix,
 } from "../scripts/release-evidence-lib.mjs";
 
@@ -28,6 +29,15 @@ const matrix = {
 };
 
 describe("release evidence", () => {
+  it("selects the acceptance matrix for the requested release", () => {
+    expect(getAcceptanceMatrixPath("/workspace", "1.9.28")).toMatch(
+      /docs[\\/]releases[\\/]1\.9\.28-acceptance\.json$/,
+    );
+    expect(getAcceptanceMatrixPath("/workspace", "1.9.29")).toMatch(
+      /docs[\\/]releases[\\/]1\.9\.29-acceptance\.json$/,
+    );
+  });
+
   it("validates distinct gates and requires honest manual evidence", () => {
     expect(validateAcceptanceMatrix(matrix)).toEqual(matrix);
     expect(() =>
@@ -69,6 +79,15 @@ describe("release evidence", () => {
         ],
       }),
     ).toThrow(/manual evidence/i);
+  });
+
+  it("rejects an acceptance matrix for a different release", () => {
+    expect(() =>
+      validateAcceptanceMatrix(matrix, { expectedRelease: "1.9.28" }),
+    ).toThrow(/1\.9\.24.*1\.9\.28/i);
+    expect(
+      validateAcceptanceMatrix(matrix, { expectedRelease: "1.9.24" }),
+    ).toEqual(matrix);
   });
 
   it("creates a commit-bound artifact without converting pending manual gates", () => {

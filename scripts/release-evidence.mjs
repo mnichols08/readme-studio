@@ -2,15 +2,20 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   createReleaseEvidence,
+  getAcceptanceMatrixPath,
   validateAcceptanceMatrix,
 } from "./release-evidence-lib.mjs";
 
 const root = resolve(import.meta.dirname, "..");
-const matrixPath = resolve(root, "docs/releases/1.9.24-acceptance.json");
+const { version: release } = JSON.parse(
+  await readFile(resolve(root, "package.json"), "utf8"),
+);
+const matrixPath = getAcceptanceMatrixPath(root, release);
 const outputDirectory = resolve(root, "release-evidence");
 const outputPath = resolve(outputDirectory, "release-evidence.json");
 const matrix = validateAcceptanceMatrix(
   JSON.parse(await readFile(matrixPath, "utf8")),
+  { expectedRelease: release },
 );
 const server = process.env.GITHUB_SERVER_URL;
 const repository = process.env.GITHUB_REPOSITORY;
