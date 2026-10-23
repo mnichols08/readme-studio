@@ -48,9 +48,9 @@ Filters combine: High/Medium/Low, missing only, active only, archived exclude/in
 Each item also has an [Improvement plan](repository-auditing.md#improvement-plans) disclosure with the evidence behind each Recommendation. The queue and plans read the same key topic subset from each project type.
 
 - **Skip** in a plan never changes the queue.
-- **Dismiss for this session** in a plan removes that gap or finding from the item's reasons and from the eligibility check. If nothing else needs attention, the item leaves the queue and focus returns to the queue heading. The count line adds **· N recommendations dismissed**. **Restore** in the plan (also available from Audit results) brings it back.
+- **Dismiss for this README revision** persists that decision on this device and removes the gap or finding from the item's reasons and eligibility check while the same README revision is current. If nothing else needs attention, the item leaves the queue and focus returns to the queue heading. The count line adds **· N recommendations dismissed**. A newly fetched README revision makes the dismissal stale; **Restore** in the plan (also available from Audit results) removes the saved dismissal explicitly.
 - A missing, stub or minimal README cannot be dismissed, so High attention is never dropped silently. Use **Mark intentionally minimal** in the item or the plan instead.
-- A dismissal applies only to the README revision it was made against. Plan dismissals currently last for this tab session and are not saved in this browser.
+- A dismissal applies only to the README revision it was made against. It survives reloads on this device; after a fresh audit observes a different README revision, the saved dismissal is shown as stale and no longer hides the Recommendation.
 
 The type dropdown remains in **Audit results**. Changing it updates queue evidence from cached facts without another request.
 
@@ -60,9 +60,9 @@ Decisions are local to this browser and scoped to canonical owner/repository nam
 
 Changes can only be detected after fetching them. **Fetch fresh README content** rechecks completed audits; loading the repository list again refreshes activity metadata after the session cache expires. Queue order is recalculated on interaction/view refresh, not through background polling. Existing rate limits, five-minute cache behavior and partial failures still apply.
 
-Preferences use the separate `readme-studio:attention:v1` storage key, capped at 5,000 decisions. They contain only repository identifiers, revision markers, decision kinds and expiry times. They are not included in Studio project or all-drafts workspace exports. Clearing this browser's data removes them.
+New decisions use the separate `readme-studio:audit-decisions:v1` storage key, capped at 5,000 repositories and 100 dismissals per repository. It contains only canonical repository identifiers, project type IDs, revision markers, finding identities, decision kinds and expiry times. While that key is absent, valid `readme-studio:attention:v1` preferences are converted in memory and copied into the new key on the first successful decision write; the legacy bytes are never changed or deleted. Decisions are not included in Studio project or all-drafts workspace exports. Clearing this browser's data removes them.
 
-Malformed/future-version preferences are left untouched. Queue review and source opening still work. Download attention recovery data before explicitly confirming a reset of those settings; draft storage is unaffected. If a save fails, the queue says the decision was not applied and keeps the candidate visible. No successful persistence is claimed when browser storage is unavailable or full.
+Malformed/future-version decisions, including malformed legacy attention data before migration, are left untouched and block new writes. Queue review and source opening still work. Download the named recovery data before explicitly starting fresh in the new key; legacy data and draft storage are unaffected. If a save fails, the queue says the decision was not applied and keeps the candidate visible. No successful persistence is claimed when browser storage is unavailable or full.
 
 ## Verification
 
