@@ -48,7 +48,8 @@ function linkTarget(value, sourcePath) {
   const hash = value.indexOf("#");
   const beforeHash = hash < 0 ? value : value.slice(0, hash);
   const anchor = hash < 0 ? "" : decoded(value.slice(hash + 1));
-  if (value.startsWith("#")) return { targetPath: sourcePath, anchor };
+  if (value.startsWith("#"))
+    return { targetPath: sourcePath, anchor, sameDocument: true };
   if (!isRelativeUrl(value)) return null;
   const query = beforeHash.indexOf("?");
   const relativePath = query < 0 ? beforeHash : beforeHash.slice(0, query);
@@ -58,6 +59,7 @@ function linkTarget(value, sourcePath) {
       ? resolveRelativePath(relativePath, directory)
       : sourcePath,
     anchor,
+    sameDocument: !relativePath,
   };
 }
 
@@ -127,8 +129,9 @@ export function checkDocumentLinks(drafts, { sourceId = null } = {}) {
       }
       if (!target) continue;
       checked++;
-      const matches =
-        indexed.get(locationKey(source.scope, target.targetPath)) || [];
+      const matches = target.sameDocument
+        ? [draft]
+        : indexed.get(locationKey(source.scope, target.targetPath)) || [];
       if (!matches.length) {
         issue({
           sourceId: draft.id,

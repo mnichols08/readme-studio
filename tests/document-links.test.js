@@ -94,6 +94,20 @@ describe("cross-document navigation", () => {
     });
   });
 
+  it("keeps fragment-only links bound to their source despite duplicate paths", () => {
+    const source = draftDocument(
+      "README.md",
+      "# Home\n\n[Here](#home) [Qualified](README.md#home)",
+    );
+    const duplicate = draftDocument("README.md", "# Other");
+    const report = checkDocumentLinks([source, duplicate]);
+    expect(report.issues).toHaveLength(1);
+    expect(report.issues[0]).toMatchObject({
+      value: "README.md#home",
+      kind: "ambiguous-document",
+    });
+  });
+
   it("scopes paths to a repository and branch", () => {
     const source = repositoryDocument(
       "example/one",
