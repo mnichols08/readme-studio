@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.4
+
+- Add a reviewed change-set manifest before every GitHub publish (#98, #156). The review identifies the exact owner, repository, branch and checked head commit, then lists every README, asset and workflow write with its action, path, Base SHA, Result SHA and unified diff.
+- Require explicit approval of the exact manifest before publishing (#157). Changing Markdown, generated files, the target or any reviewed input withdraws approval; closing and reopening the dialog also starts unapproved.
+- Have the client reject tampered, duplicated or incomplete manifests, then re-read every existing file immediately before writing and refuse stale, missing or unexpectedly present files. For each submitted write, the publishing server independently validates its expected Base SHA and recomputes its Result SHA.
+- Keep writes non-destructive: no force updates, deletes or ref rewrites, and no automatic retry after partial failure. A partial result identifies which files were written and requires a fresh review against GitHub's new state.
+- Add unit and browser coverage for exact manifests, changed targets, stale reviews, tampering, offline and partial-failure cases, plus updated publishing, architecture and security documentation.
+
 ## 1.9.3
 
 - Add an evidence-backed Improvement plan to every assessed repository in the audit and README Attention Queue (#80, #124). Each Recommendation comes from one observed finding, cites the README revision and observation/check time, explains project-type applicability and never invents replacement content, commands, links or facts.

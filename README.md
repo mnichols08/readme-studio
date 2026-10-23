@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.3.** Repository audits now turn observed findings into bounded, evidence-backed Improvement plans with project-type applicability, descriptive ordering, and explicit session-only Skip or Dismiss choices. [Improvement plans](docs/repository-auditing.md#improvement-plans) · [README Attention Queue](docs/readme-attention-queue.md)
+**Version 1.9.4.** GitHub publishing now presents an immutable, reviewable change-set manifest with the exact target commit, per-file Base and Result SHAs, diffs, and explicit approval before any write. [Change-set review](docs/github-publishing.md#change-set-review) · [Publishing security](docs/security.md#optional-github-publishing-service)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
