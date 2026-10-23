@@ -508,6 +508,22 @@ export function installWorkspace(app) {
         });
       return true;
     }
+    if (action === "learning-studio") {
+      app.modal(
+        '<h1>Learning studio</h1><p data-learning-loading role="status">Loading local learning tools…</p>',
+      );
+      const loading = app.querySelector("[data-learning-loading]");
+      import("../learning/dialog.js")
+        .then(({ openLearningStudio }) => {
+          if (loading.isConnected && app.dialog.open) openLearningStudio(app);
+        })
+        .catch(() => {
+          if (loading.isConnected)
+            loading.textContent =
+              "Learning tools could not load. Your source and checklist progress are unchanged; reload and try again.";
+        });
+      return true;
+    }
     const event = activityEntry(action);
     if (event) {
       app.data.activity = validateActivity([
