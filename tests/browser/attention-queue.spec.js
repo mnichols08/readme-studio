@@ -334,7 +334,7 @@ test("damaged and unwritable attention storage stays visible and does not lose d
   await expect(queue).toContainText("start fresh");
   await queue
     .getByLabel(
-      "I want to start fresh without changing the damaged source data",
+      "I want to start fresh without changing the damaged legacy attention data",
     )
     .check();
   await queue
@@ -546,11 +546,20 @@ test("saved project type and dismissal survive reload for the same README revisi
   await page
     .getByRole("button", { name: "Load repositories", exact: true })
     .click();
+  await auditPanel
+    .getByRole("button", { name: "Audit results", exact: true })
+    .click();
+  const reloadedType = page.getByLabel("Project type for example/saved", {
+    exact: true,
+  });
+  await expect(reloadedType).toHaveValue("web-app");
+  await reloadedType.selectOption("api");
   await scan(page);
 
-  await expect(
-    page.getByLabel("Project type for example/saved", { exact: true }),
-  ).toHaveValue("web-app");
+  await expect(reloadedType).toHaveValue("api");
+  await auditPanel
+    .getByRole("button", { name: "README Attention Queue", exact: true })
+    .click();
   await queue.locator("improvement-plan summary").click();
   await expect(queue.locator("improvement-plan")).toContainText(
     "Dismissed for this README revision (1)",
@@ -567,7 +576,7 @@ test("saved project type and dismissal survive reload for the same README revisi
   const type = page.getByLabel("Project type for example/saved", {
     exact: true,
   });
-  await expect(type).toHaveValue("web-app");
+  await expect(type).toHaveValue("api");
   await expect(auditPanel).toContainText(
     "Manual override saved on this device for this repository",
   );

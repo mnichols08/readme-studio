@@ -237,7 +237,11 @@ export class ReadmeAttentionQueue extends HTMLElement {
       this.preferences.source === "legacy"
         ? "legacy attention"
         : "audit decision";
-    target.innerHTML = `<p role="alert">${h(this.preferences.error)}</p>${this.preferences.raw !== null ? `<button data-recovery>Download ${label} recovery data</button>` : ""}<label><input type="checkbox" data-confirm-reset> I want to start fresh without changing the damaged source data</label><button data-reset-storage>Start fresh with audit decisions</button>`;
+    const confirmation =
+      this.preferences.source === "legacy"
+        ? "I want to start fresh without changing the damaged legacy attention data"
+        : "I want to discard only the damaged audit decisions";
+    target.innerHTML = `<p role="alert">${h(this.preferences.error)}</p>${this.preferences.raw !== null ? `<button data-recovery>Download ${label} recovery data</button>` : ""}<label><input type="checkbox" data-confirm-reset> ${confirmation}</label><button data-reset-storage>Start fresh with audit decisions</button>`;
     const download = target.querySelector("[data-recovery]");
     if (download)
       download.onclick = () =>
@@ -256,15 +260,18 @@ export class ReadmeAttentionQueue extends HTMLElement {
         );
     target.querySelector("[data-reset-storage]").onclick = () => {
       if (!target.querySelector("[data-confirm-reset]").checked) {
-        this.status("Confirm discarding the damaged attention settings first.");
+        this.status("Confirm starting fresh with audit decisions first.");
         return;
       }
       try {
+        const legacy = this.preferences.source === "legacy";
         this.preferences.reset();
         this.draw();
         this.changed();
         this.status(
-          "Audit decisions reset. Damaged source data and drafts are unchanged.",
+          legacy
+            ? "Audit decisions reset. Damaged legacy attention data and drafts are unchanged."
+            : "Damaged audit decisions reset. Drafts are unchanged.",
         );
       } catch (error) {
         this.status(error.message);
