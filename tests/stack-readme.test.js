@@ -182,12 +182,58 @@ describe("exact source review", () => {
     el.configure(node({ scripts: { test: "test" } }), draft);
     return { el, draft };
   };
+  const selectAndConfirm = (el, index = 0) => {
+    const choice = el.querySelector(`[data-choice="${index}"]`);
+    choice.checked = true;
+    choice.dispatchEvent(new Event("change", { bubbles: true }));
+    const confirmation = el.querySelector(`[data-confirm="${index}"]`);
+    confirmation.checked = true;
+    confirmation.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  it("requires a per-item Confirmation before reviewing a selected command", () => {
+    const { el } = setup();
+    const index = el.suggestions.findIndex(
+      (suggestion) => suggestion.id === "package.json:test",
+    );
+    el.querySelector(`[data-choice="${index}"]`).checked = true;
+
+    el.preview();
+
+    expect(el.plan).toBeNull();
+    expect(el.querySelector("[data-status]").textContent).toContain(
+      "Confirm each selected suggestion",
+    );
+  });
+  it("enables exact review only while every selected item is confirmed", () => {
+    const { el } = setup();
+    const index = el.suggestions.findIndex(
+      (suggestion) => suggestion.id === "package.json:test",
+    );
+    const choice = el.querySelector(`[data-choice="${index}"]`);
+    const confirmation = el.querySelector(`[data-confirm="${index}"]`);
+    const source = el.querySelector(`[data-source="${index}"]`);
+    const preview = el.querySelector("[data-preview]");
+
+    expect(preview.disabled).toBe(true);
+    choice.checked = true;
+    choice.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(confirmation.disabled).toBe(false);
+    expect(preview.disabled).toBe(true);
+    confirmation.checked = true;
+    confirmation.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(preview.disabled).toBe(false);
+
+    source.value += "\nReviewed locally.";
+    source.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(confirmation.checked).toBe(false);
+    expect(preview.disabled).toBe(true);
+  });
   it("starts unselected and requires exact approval after reviewing source", () => {
     const { el, draft } = setup();
     expect(el.selection()).toEqual([]);
-    el.preview();
+    expect(el.querySelector("[data-preview]").disabled).toBe(true);
     expect(el.canApply()).toBe(false);
-    el.querySelector('[data-choice="0"]').checked = true;
+    selectAndConfirm(el);
     el.preview();
     expect(el.canApply()).toBe(false);
     el.querySelector("[data-approve]").checked = true;
@@ -201,9 +247,15 @@ describe("exact source review", () => {
   });
   it("keeps edited suggestion HTML inert in the review UI", () => {
     const { el } = setup();
-    el.querySelector('[data-choice="0"]').checked = true;
+    selectAndConfirm(el);
     el.querySelector('[data-source="0"]').value =
       "<script>globalThis.evil=true</script>";
+    el.querySelector('[data-source="0"]').dispatchEvent(
+      new Event("input", { bubbles: true }),
+    );
+    const confirmation = el.querySelector('[data-confirm="0"]');
+    confirmation.checked = true;
+    confirmation.dispatchEvent(new Event("change", { bubbles: true }));
     el.preview();
     expect(el.querySelector("script")).toBeNull();
     expect(el.plan.markdown).toContain("<script>");
@@ -212,7 +264,7 @@ describe("exact source review", () => {
   it("refuses stale builder/source synchronization instead of replacing source", () => {
     const { el } = setup();
     el.draft.markdown = "# Original";
-    el.querySelector('[data-choice="0"]').checked = true;
+    selectAndConfirm(el);
     el.preview();
     expect(el.plan).toBeNull();
     expect(el.querySelector("[data-status]").textContent).toContain("differ");

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.11
+
+- Complete the evidence-to-documentation workflow by requiring an explicit per-item Confirmation for every selected Command suggestion and Technology claim before exact-diff review is available (#85, #134).
+- Clear an item's Confirmation whenever its editable Markdown changes, while retaining the separate whole-diff approval and stale-draft refusal. Nothing is selected or confirmed automatically.
+- Keep Provenance and Confidence basis visible during review but out of inserted Custom Markdown blocks, draft metadata, backups and portable projects. Existing source and owned blocks remain unchanged; Undo restores the prior draft.
+- Add hallucination, confirmation-invalidation, inert-Markdown, stale-source, mobile and cross-browser coverage (#135). Suggested commands remain fixed, evidence-bounded documentation text and are never executed.
+
 ## 1.9.10
 
 - Add explicit, local Audit snapshots for the successful results already on screen (#82, #128). Capture makes no request and stores only canonical repositories, observation revisions/times, states, project-type identity, structured check coverage and finding identities—never README source, evidence prose or decisions.

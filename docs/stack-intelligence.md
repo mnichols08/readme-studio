@@ -116,6 +116,6 @@ Pure adapters live in src/stack-intelligence/manifests.js, the bounded declarati
 
 [Stack DNA](stack-dna.md) adds a curated technology summary above repository dependency results. Exact ecosystem/package mappings produce categories; unknown packages remain explicit. Existing primary-language metadata and explicit package.json engine declarations provide labeled language/runtime evidence without additional requests. Categories are separate from dependency kinds and developer proficiency.
 
-## Stack-to-README (1.3.3)
+## Stack-to-README (1.9.11)
 
-[Stack-to-README](stack-to-readme.md) offers evidence-backed suggestions from each expanded result. Allowlisted manager/package identifiers and test/build script presence stay in session evidence; script bodies are discarded. Nothing is inserted until individual selection, source review and explicit diff approval. Existing source and builder blocks remain intact.
+[Stack-to-README](stack-to-readme.md) offers evidence-backed suggestions from each expanded result. Allowlisted manager/package identifiers and test/build script presence stay in session evidence; script bodies are discarded. Nothing is inserted until individual selection, per-item Confirmation, source review and explicit whole-diff approval. Editing an item clears its Confirmation. Existing source and builder blocks remain intact, and Provenance stays in the review rather than the draft.

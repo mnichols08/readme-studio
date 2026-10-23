@@ -78,6 +78,16 @@ test("reviewed suggestions preserve blocks, source, undo and reload at mobile wi
   await review
     .getByRole("checkbox", { name: "Testing command", exact: true })
     .check();
+  const testing = review
+    .getByRole("checkbox", { name: "Testing command", exact: true })
+    .locator("xpath=ancestor::section");
+  const confirmation = testing.getByLabel(
+    "I confirm this suggestion is true for this repository.",
+  );
+  await expect(
+    review.getByRole("button", { name: "Review exact diff" }),
+  ).toBeDisabled();
+  await confirmation.check();
   await review.getByRole("button", { name: "Review exact diff" }).click();
   const apply = review.getByRole("button", {
     name: "Append reviewed suggestions",
@@ -92,7 +102,9 @@ test("reviewed suggestions preserve blocks, source, undo and reload at mobile wi
   await review
     .getByLabel("Testing command Markdown", { exact: true })
     .fill("## Testing\n\nReviewed command: `pnpm run test`");
+  await expect(confirmation).not.toBeChecked();
   await expect(review.locator("[data-review]")).toBeHidden();
+  await confirmation.check();
   await review.getByRole("button", { name: "Review exact diff" }).click();
   await review
     .getByLabel("I reviewed this exact change and each selected suggestion")
@@ -135,6 +147,14 @@ test("stale draft cannot be overwritten and escape discards review", async ({
   const review = page.locator("stack-readme-review");
   await review
     .getByRole("checkbox", { name: "Detected stack section", exact: true })
+    .check();
+  await review
+    .getByRole("checkbox", {
+      name: "Detected stack section",
+      exact: true,
+    })
+    .locator("xpath=ancestor::section")
+    .getByLabel("I confirm this suggestion is true for this repository.")
     .check();
   await review.getByRole("button", { name: "Review exact diff" }).click();
   await review

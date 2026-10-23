@@ -17,17 +17,41 @@ export class StackReadmeReview extends HTMLElement {
       <p>Detected technology is repository evidence, not proficiency. Select each suggestion you want, review its evidence, and edit its Markdown. Nothing is selected automatically. Commands are text only; Studio never runs them.</p>
       ${record.status === "partial" ? '<p class="hint">Partial scan: suggestions cover only successfully read manifests.</p>' : ""}
       <p>Observed: ${h(new Date(record.observedAt ?? record.checkedAt).toLocaleString())}; branch: ${h(record.ref || "unknown")}. These session results may be outdated.</p>
-      <div data-items>${this.suggestions.map((item, index) => `<section><label><input type="checkbox" data-choice="${index}"> ${h(item.title)}</label><p>${h(item.caveat)}</p><ul>${item.evidence.map((e) => `<li>${h(e)}</li>`).join("")}</ul><label>${h(item.title)} Markdown<textarea data-source="${index}" rows="3"></textarea></label></section>`).join("")}</div>
+      <div data-items>${this.suggestions.map((item, index) => `<section><label><input type="checkbox" data-choice="${index}"> ${h(item.title)}</label><p>${h(item.caveat)}</p><ul>${item.evidence.map((e) => `<li>${h(e)}</li>`).join("")}</ul><label>${h(item.title)} Markdown<textarea data-source="${index}" rows="3"></textarea></label><label><input type="checkbox" data-confirm="${index}" disabled> I confirm this suggestion is true for this repository.</label></section>`).join("")}</div>
       ${this.suggestions.length ? "" : "<p>No suggestions are available from this scan.</p>"}
       <p>Selected content is appended to the current draft. Existing sections are not replaced or deduplicated; review repeated headings before applying.</p>
-      <button data-preview ${this.suggestions.length ? "" : "disabled"}>Review exact diff</button>
+      <button data-preview disabled>Review exact diff</button>
       <div data-review hidden>${sourceDiffMarkup()}<label><input type="checkbox" data-approve> I reviewed this exact change and each selected suggestion</label><button data-apply disabled>Append reviewed suggestions</button></div>
       <p role="status" data-status></p>`;
     this.querySelectorAll("[data-source]").forEach((el) => {
       el.value = this.suggestions[Number(el.dataset.source)].markdown;
     });
-    this.querySelector("[data-items]").oninput = () => this.invalidate();
-    this.querySelector("[data-items]").onchange = () => this.invalidate();
+    this.querySelectorAll("[data-choice]").forEach((choice) => {
+      choice.onchange = () => {
+        const confirmation = this.querySelector(
+          `[data-confirm="${choice.dataset.choice}"]`,
+        );
+        confirmation.disabled = !choice.checked;
+        if (!choice.checked) confirmation.checked = false;
+        this.invalidate();
+        this.updatePreviewAvailability();
+      };
+    });
+    this.querySelectorAll("[data-source]").forEach((source) => {
+      source.oninput = () => {
+        this.querySelector(
+          `[data-confirm="${source.dataset.source}"]`,
+        ).checked = false;
+        this.invalidate();
+        this.updatePreviewAvailability();
+      };
+    });
+    this.querySelectorAll("[data-confirm]").forEach((confirmation) => {
+      confirmation.onchange = () => {
+        this.invalidate();
+        this.updatePreviewAvailability();
+      };
+    });
     this.querySelector("[data-preview]").onclick = () => this.preview();
     this.querySelector("[data-approve]").onchange = () => {
       this.querySelector("[data-apply]").disabled = !this.canApply();
@@ -48,6 +72,16 @@ export class StackReadmeReview extends HTMLElement {
       markdown: this.querySelector(`[data-source="${el.dataset.choice}"]`)
         .value,
     }));
+  }
+  updatePreviewAvailability() {
+    const selected = [...this.querySelectorAll("[data-choice]:checked")];
+    this.querySelector("[data-preview]").disabled =
+      !selected.length ||
+      selected.some(
+        (choice) =>
+          !this.querySelector(`[data-confirm="${choice.dataset.choice}"]`)
+            .checked,
+      );
   }
   invalidate() {
     this.plan = null;
@@ -70,6 +104,17 @@ export class StackReadmeReview extends HTMLElement {
     if (!selected.length || selected.some((item) => !item.markdown.trim())) {
       this.querySelector("[data-status]").textContent =
         "Select at least one suggestion. Selected Markdown must not be empty.";
+      return;
+    }
+    if (
+      [...this.querySelectorAll("[data-choice]:checked")].some(
+        (choice) =>
+          !this.querySelector(`[data-confirm="${choice.dataset.choice}"]`)
+            .checked,
+      )
+    ) {
+      this.querySelector("[data-status]").textContent =
+        "Confirm each selected suggestion before reviewing the exact diff.";
       return;
     }
     const blocks = [
