@@ -494,6 +494,16 @@ export function createPublishingService({
             );
           const t = await authorizeTarget(s, input, "write");
           const current = await read(s, t);
+          // A retry whose Result SHA is already remote must never create a
+          // second commit. The client reconciles this as written.
+          if (current.sha === input.resultSha && current.sha !== input.sha)
+            throw Object.assign(
+              fail(
+                409,
+                `${t.path} already has the reviewed Result SHA. No duplicate write was made; reconcile the Publish journal.`,
+              ),
+              { remote: current, alreadyApplied: true },
+            );
           // A create requires the file to be absent; an update requires the
           // Base SHA. There is no force, delete or ref-rewrite path.
           if (current.sha !== input.sha)
@@ -506,17 +516,33 @@ export function createPublishingService({
               ),
               { remote: current },
             );
-          const result = await github(
-            s,
-            `/repos/${t.repository}/contents/${encodedPath(t.path)}`,
-            "PUT",
-            {
-              message: input.message,
-              content: Buffer.from(input.content, "utf8").toString("base64"),
-              branch: t.branch,
-              ...(input.sha ? { sha: input.sha } : {}),
-            },
-          );
+          let result;
+          try {
+            result = await github(
+              s,
+              `/repos/${t.repository}/contents/${encodedPath(t.path)}`,
+              "PUT",
+              {
+                message: input.message,
+                content: Buffer.from(input.content, "utf8").toString("base64"),
+                branch: t.branch,
+                ...(input.sha ? { sha: input.sha } : {}),
+              },
+            );
+            if (
+              !/^[a-f0-9]{40,64}$/.test(result?.commit?.sha || "") ||
+              result?.content?.sha !== input.resultSha
+            )
+              throw fail(
+                502,
+                "GitHub returned an unreadable write response. Reconcile the Publish journal before retrying.",
+              );
+          } catch (error) {
+            // A 5xx or lost response after sending PUT cannot prove whether
+            // GitHub committed the content. Never invite a blind retry.
+            if (error.status >= 500) error.ambiguous = true;
+            throw error;
+          }
           return reply({
             commitSha: result.commit.sha,
             sha: result.content.sha,
@@ -536,6 +562,8 @@ export function createPublishingService({
             : "Publishing could not complete. Your local draft is safe.",
           ...(e.remote ? { remote: e.remote } : {}),
           ...(e.preflight ? { preflight: e.preflight } : {}),
+          ...(e.ambiguous ? { ambiguous: true } : {}),
+          ...(e.alreadyApplied ? { alreadyApplied: true } : {}),
         },
         Number.isInteger(e.status) && e.status >= 400 && e.status < 600
           ? e.status

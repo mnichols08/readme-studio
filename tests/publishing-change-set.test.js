@@ -348,6 +348,73 @@ describe("executeChangeSet", () => {
       ["README.md", "not attempted"],
     ]);
   });
+  it("marks a lost write response unknown and exposes lifecycle events", async () => {
+    const { files, cs } = await plan(),
+      events = [];
+    const outcome = await executeChangeSet(
+      cs,
+      changeSetContents(files),
+      async () => {
+        throw Object.assign(new Error("response lost"), { ambiguous: true });
+      },
+      {
+        beforeWrite: (entry) => events.push([entry.path, "pending"]),
+        afterWrite: (entry, status) => events.push([entry.path, status]),
+      },
+    );
+    expect(outcome.complete).toBe(false);
+    expect(outcome.results[0]).toMatchObject({
+      path: "assets/readme/new.svg",
+      status: "unknown",
+    });
+    expect(events).toEqual([
+      ["assets/readme/new.svg", "pending"],
+      ["assets/readme/new.svg", "unknown"],
+    ]);
+  });
+  it("retries only explicitly reconciled paths", async () => {
+    const { files, cs } = await plan(),
+      paths = new Set(["assets/readme/old.svg", "README.md"]),
+      requests = [];
+    const outcome = await executeChangeSet(
+      cs,
+      changeSetContents(files),
+      async (_, data) => {
+        requests.push(data.path);
+        return { commitSha: "c".repeat(40) };
+      },
+      { onlyPaths: paths },
+    );
+    expect(requests).toEqual(["assets/readme/old.svg", "README.md"]);
+    expect(outcome.results.map((result) => result.status)).toEqual([
+      "already written",
+      "no write",
+      "written",
+      "written",
+    ]);
+  });
+  it("stops for reconciliation when the response arrived but its journal update failed", async () => {
+    const { files, cs } = await plan(),
+      request = vi.fn(async () => ({ commitSha: "c".repeat(40) }));
+    const outcome = await executeChangeSet(
+      cs,
+      changeSetContents(files),
+      request,
+      {
+        afterWrite: () => {
+          throw new Error("journal full");
+        },
+      },
+    );
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(outcome.complete).toBe(false);
+    expect(outcome.results[0]).toMatchObject({
+      status: "unknown",
+      error: "journal full",
+    });
+    expect(outcome.failure.error.ambiguous).toBe(true);
+    expect(outcome.failure.error.recoveryReason).toBe("journal");
+  });
   it("refuses before any write when content no longer matches the review", async () => {
     const { files, cs } = await plan();
     const contents = changeSetContents(files);

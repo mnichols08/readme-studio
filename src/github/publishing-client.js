@@ -28,16 +28,26 @@ export class PublishingClient {
         signal: AbortSignal.timeout(25000),
       });
     } catch {
-      throw new Error(
-        "Publishing service unavailable. Your local draft and download are safe.",
+      throw Object.assign(
+        new Error(
+          operation === "commit"
+            ? "The publishing response was lost. Do not retry yet; reconcile the Publish journal with GitHub first."
+            : "Publishing service unavailable. Your local draft and download are safe.",
+        ),
+        operation === "commit" ? { ambiguous: true } : {},
       );
     }
     let value;
     try {
       value = await response.json();
     } catch {
-      throw new Error(
-        "Publishing is not configured on this static deployment. Use Download README.",
+      throw Object.assign(
+        new Error(
+          operation === "commit"
+            ? "The publishing response was unreadable. Do not retry yet; reconcile the Publish journal with GitHub first."
+            : "Publishing is not configured on this static deployment. Use Download README.",
+        ),
+        operation === "commit" ? { ambiguous: true } : {},
       );
     }
     if (!response.ok)
@@ -49,6 +59,8 @@ export class PublishingClient {
           status: response.status,
           remote: value.remote,
           preflight: value.preflight,
+          ambiguous: value.ambiguous === true,
+          alreadyApplied: value.alreadyApplied === true,
         },
       );
     if (value.csrf) this.csrf = value.csrf;

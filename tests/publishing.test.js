@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { target, writeInput } from "../src/publishing/validation.js";
 import { publishDiff } from "../src/publishing/diff.js";
+import { PublishingClient } from "../src/github/publishing-client.js";
 const t = { repository: "octocat/octocat", branch: "main", path: "README.md" },
   reviewed = { resultSha: "d".repeat(40), changeSetId: "c".repeat(64) };
 describe("publishing boundaries", () => {
@@ -70,5 +71,22 @@ describe("publishing boundaries", () => {
     expect(result.text).toContain("+🦀");
     expect(result.added).toBe(1);
     expect(publishDiff(before, before).text).toBe("No source changes.");
+  });
+});
+describe("publishing client write outcomes", () => {
+  it("marks a lost commit response ambiguous but an offline refusal definitive", async () => {
+    const lost = new PublishingClient({
+      fetchImpl: async () => {
+        throw new Error("lost");
+      },
+      online: () => true,
+    });
+    await expect(lost.request("commit", {})).rejects.toMatchObject({
+      ambiguous: true,
+    });
+    const offline = new PublishingClient({ online: () => false });
+    await expect(offline.request("commit", {})).rejects.not.toMatchObject({
+      ambiguous: true,
+    });
   });
 });

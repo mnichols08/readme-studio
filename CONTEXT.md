@@ -398,7 +398,7 @@ _Avoid_: Conflict (reserved for merge sections), out of date, race
 
 ### Recovery
 
-_Publish attempts run since story #98: files are written in order and the attempt stops at the first failure, leaving later files `not attempted`. Ambiguous writes, the `unknown` and `not written` outcomes, Reconciliation and the Publish journal are planned for story #99; not implemented yet._
+_Publish attempts write files in order and stop at the first failure, leaving later files `not attempted`. Since story #99, an Ambiguous write is `unknown` until explicit Reconciliation; only a `not written` outcome can be retried, and it needs a new approval._
 
 **Publish attempt**:
 The execution of one approved Change set, writing its File changes one at a time. Can end complete, partial (some files written, the rest not attempted) or with an Ambiguous write.

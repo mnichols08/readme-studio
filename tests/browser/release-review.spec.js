@@ -45,3 +45,78 @@ for (const [name, component, filename] of [
     await expect(trigger).toBeFocused();
   });
 }
+
+async function openSample(page) {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Explore the sample profile" })
+    .click();
+}
+
+test("a delayed publishing chunk restores the dialog label and content focus", async ({
+  page,
+}) => {
+  let releaseChunk;
+  await page.route("**/src/components/publish-dialog.js*", async (route) => {
+    await new Promise((resolve) => {
+      releaseChunk = resolve;
+    });
+    await route.continue();
+  });
+  await page.route("**/api/publishing/session", (route) =>
+    route.fulfill({ json: { configured: false } }),
+  );
+  await openSample(page);
+
+  await page.getByRole("button", { name: "Publish to GitHub" }).click();
+  await expect(page.getByText("Loading publishing tools…")).toBeVisible();
+  await expect.poll(() => Boolean(releaseChunk)).toBe(true);
+  releaseChunk();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toHaveAttribute("aria-label", "Publish to GitHub");
+  await expect(
+    page.getByRole("button", { name: "Download README fallback" }),
+  ).toBeFocused();
+});
+
+test("closing a publishing dialog before its chunk loads leaves it closed", async ({
+  page,
+}) => {
+  let releaseChunk;
+  await page.route("**/src/components/publish-dialog.js*", async (route) => {
+    await new Promise((resolve) => {
+      releaseChunk = resolve;
+    });
+    await route.continue();
+  });
+  await page.route("**/api/publishing/session", (route) =>
+    route.fulfill({ json: { configured: false } }),
+  );
+  await openSample(page);
+  const trigger = page.getByRole("button", { name: "Publish to GitHub" });
+
+  await trigger.click();
+  await expect(page.getByText("Loading publishing tools…")).toBeVisible();
+  await expect.poll(() => Boolean(releaseChunk)).toBe(true);
+  await page.keyboard.press("Escape");
+  releaseChunk();
+
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+});
+
+test("a failed publishing chunk reports a visible load error", async ({
+  page,
+}) => {
+  await page.route("**/src/components/publish-dialog.js*", (route) =>
+    route.abort("failed"),
+  );
+  await openSample(page);
+
+  await page.getByRole("button", { name: "Publish to GitHub" }).click();
+
+  await expect(page.getByRole("alert")).toHaveText(
+    "Publishing tools could not be loaded. Close this dialog and try again.",
+  );
+});
