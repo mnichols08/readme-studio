@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.15.** Save bounded, named repository worksets for focused maintenance, see which matching documents are available locally, and review portable workset imports before saving them. Worksets contain repository identifiers only and never contact GitHub or retain credentials. [Repository worksets](docs/repository-worksets.md) · [Safety decision](docs/adr/epic67-01-worksets-store-repository-identities-not-credentials.md)
+**Version 1.9.16.** Review a bounded queue of repository READMEs locally, stage common changes per target, inspect every before/after diff, and explicitly choose recipients before apply. Excluded documents remain byte-for-byte unchanged, and publishing stays a separate single-document review. [Batch review](docs/batch-review.md) · [Cross-README updates](docs/cross-readme-updates.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
