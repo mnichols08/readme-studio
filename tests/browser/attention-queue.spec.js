@@ -385,6 +385,9 @@ test("a failed pre-audit type save remains visible after scan completion", async
   await type.selectOption("web-app");
   await page.evaluate(() => {
     const original = Storage.prototype.setItem;
+    window.restoreAuditDecisionStorage = () => {
+      Storage.prototype.setItem = original;
+    };
     Storage.prototype.setItem = function (key, value) {
       if (key === "readme-studio:audit-decisions:v1")
         throw new DOMException("Quota", "QuotaExceededError");
@@ -402,6 +405,17 @@ test("a failed pre-audit type save remains visible after scan completion", async
     "Your decision was not applied",
   );
   await expect(type).toHaveValue("auto");
+  await page.evaluate(() => window.restoreAuditDecisionStorage());
+  await type.selectOption("api");
+  await page
+    .getByRole("button", { name: "Audit selected", exact: true })
+    .click();
+  await expect(auditPanel.locator("[data-status]")).toContainText(
+    "Audit complete",
+  );
+  await expect(auditPanel.locator("[data-status]")).not.toContainText(
+    "Your decision was not applied",
+  );
 });
 
 test("improvement plans explain evidence, move focus after Skip and Dismiss, and drop dismissed gaps from the queue at 320px", async ({
@@ -546,6 +560,58 @@ test("dismissing every key gap removes the item from the queue and the plan says
   const rowPlan = page.locator("repository-audit tbody improvement-plan");
   await rowPlan.locator("summary").click();
   await expect(rowPlan).toContainText("Dismissed for this README revision (2)");
+});
+
+test("reset clears a pending pre-audit type as well as the saved type", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      "readme-studio:audit-decisions:v1",
+      JSON.stringify({
+        version: 1,
+        repositories: [
+          {
+            repository: "example/reset-type",
+            projectType: {
+              id: "web-app",
+              observedRevision: `sha:${"a".repeat(40)}`,
+            },
+            dismissals: [],
+          },
+        ],
+      }),
+    ),
+  );
+  await page.route("https://api.github.com/**", (route) =>
+    route.fulfill({
+      json: route.request().url().includes("/users/")
+        ? [repo("reset-type")]
+        : file(basic),
+    }),
+  );
+  await audit(page);
+  const auditPanel = page.locator("repository-audit");
+  await auditPanel
+    .getByRole("button", { name: "Audit results", exact: true })
+    .click();
+  const type = page.getByLabel("Project type for example/reset-type", {
+    exact: true,
+  });
+  await expect(type).toHaveValue("web-app");
+  await type.selectOption("api");
+  await auditPanel
+    .getByRole("button", {
+      name: "Reset saved audit decisions for example/reset-type",
+    })
+    .click();
+
+  await scan(page);
+
+  await expect(type).toHaveValue("auto");
+  await expect(auditPanel.locator("[data-status]")).not.toContainText(
+    "before saving a project type",
+  );
 });
 
 test("saved project type and dismissal survive reload for the same README revision", async ({

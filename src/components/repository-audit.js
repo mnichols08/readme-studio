@@ -230,6 +230,7 @@ export class RepositoryAudit extends HTMLElement {
           this.state.typeOverrides.get(key),
           readmeRevision(record),
         );
+        this.decisionError = "";
         this.pendingTypeOverrides.delete(key);
       } catch (error) {
         this.pendingTypeOverrides.delete(key);
@@ -257,6 +258,7 @@ export class RepositoryAudit extends HTMLElement {
               choice,
               readmeRevision(record),
             );
+            this.decisionError = "";
             this.state.typeOverrides.set(key, choice);
           } else {
             this.pendingTypeOverrides.add(key);
@@ -279,6 +281,7 @@ export class RepositoryAudit extends HTMLElement {
       };
       cell.querySelector("[data-reset-audit]").onclick = () => {
         try {
+          this.pendingTypeOverrides.delete(key);
           this.preferences.resetAudit(repo.full_name);
           this.state.typeOverrides.delete(key);
           this.state.dismissed.delete(key);
@@ -427,7 +430,6 @@ export class RepositoryAudit extends HTMLElement {
       this.list();
     }
     this.busy = true;
-    this.decisionError = "";
     this.controller = new AbortController();
     this.controls();
     this.status("Loading public owned repositories…");
@@ -467,6 +469,7 @@ export class RepositoryAudit extends HTMLElement {
   }
   async scan() {
     if (this.busy || !this.selected().length) return;
+    this.decisionError = "";
     const selected = this.selected(),
       total = selected.length,
       fresh = this.querySelector("[data-fresh]").checked,
