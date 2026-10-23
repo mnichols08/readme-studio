@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-async function suggestions(page) {
+async function suggestions(page, { python = false } = {}) {
   await page.route("https://api.github.com/**", async (route) => {
     const url = route.request().url();
     if (url.includes("/users/"))
@@ -36,7 +36,38 @@ async function suggestions(page) {
         },
       });
     }
-    return route.fulfill({ json: [{ type: "file", path: "package.json" }] });
+    if (url.includes("pyproject.toml")) {
+      const source = '[project]\nname="sample"';
+      return route.fulfill({
+        json: {
+          type: "file",
+          path: "pyproject.toml",
+          size: Buffer.byteLength(source),
+          encoding: "base64",
+          content: Buffer.from(source).toString("base64"),
+          sha: "b".repeat(40),
+        },
+      });
+    }
+    if (url.includes("requirements.txt")) {
+      const source = "requests>=2";
+      return route.fulfill({
+        json: {
+          type: "file",
+          path: "requirements.txt",
+          size: Buffer.byteLength(source),
+          encoding: "base64",
+          content: Buffer.from(source).toString("base64"),
+          sha: "c".repeat(40),
+        },
+      });
+    }
+    return route.fulfill({
+      json: (python
+        ? ["pyproject.toml", "requirements.txt"]
+        : ["package.json"]
+      ).map((path) => ({ type: "file", path })),
+    });
   });
   await page.goto("/");
   await page
@@ -78,6 +109,20 @@ test("reviewed suggestions preserve blocks, source, undo and reload at mobile wi
   await review
     .getByRole("checkbox", { name: "Testing command", exact: true })
     .check();
+  const confirmation = review.getByLabel(
+    "I confirm Testing command is true for this repository.",
+  );
+  const testing = confirmation.locator("xpath=ancestor::section");
+  await expect(testing.locator("[data-provenance]")).toContainText(
+    /Testing command.*Manifest package\.json.*section scripts\.test.*Repository example\/app.*Project boundary: Repository root.*on main/,
+  );
+  await expect(testing.locator("[data-blob] .sr-only")).toHaveText(
+    "SHA " + "a".repeat(40),
+  );
+  await expect(
+    review.getByRole("button", { name: "Review exact diff" }),
+  ).toBeDisabled();
+  await confirmation.check();
   await review.getByRole("button", { name: "Review exact diff" }).click();
   const apply = review.getByRole("button", {
     name: "Append reviewed suggestions",
@@ -92,7 +137,9 @@ test("reviewed suggestions preserve blocks, source, undo and reload at mobile wi
   await review
     .getByLabel("Testing command Markdown", { exact: true })
     .fill("## Testing\n\nReviewed command: `pnpm run test`");
+  await expect(confirmation).not.toBeChecked();
   await expect(review.locator("[data-review]")).toBeHidden();
+  await confirmation.check();
   await review.getByRole("button", { name: "Review exact diff" }).click();
   await review
     .getByLabel("I reviewed this exact change and each selected suggestion")
@@ -136,6 +183,9 @@ test("stale draft cannot be overwritten and escape discards review", async ({
   await review
     .getByRole("checkbox", { name: "Detected stack section", exact: true })
     .check();
+  await review
+    .getByLabel("I confirm Detected stack section is true for this repository.")
+    .check();
   await review.getByRole("button", { name: "Review exact diff" }).click();
   await review
     .getByLabel("I reviewed this exact change and each selected suggestion")
@@ -173,9 +223,8 @@ test("technologies with only uncertain evidence are offered separately with thei
   await expect(
     stack.getByLabel("Detected stack section Markdown", { exact: true }),
   ).toHaveValue("## Detected stack\n\n- Core: JavaScript · React");
-  await expect(stack).toContainText(
-    "React: package.json · dependencies · basis: explicit",
-  );
+  await expect(stack).toContainText("React: Manifest package.json");
+  await expect(stack).toContainText("section dependencies · basis: explicit");
   await expect(stack).not.toContainText("Vue:");
   await expect(
     review.getByRole("checkbox", { name: "Vue badge", exact: true }),
@@ -187,7 +236,7 @@ test("technologies with only uncertain evidence are offered separately with thei
     }),
   });
   await expect(uncertain).toContainText(
-    "Vue: package.json · peerDependencies · basis: conditional",
+    "Vue: Manifest package.json · section peerDependencies · basis: conditional",
   );
   await expect(uncertain).toContainText(
     "every declaration of Vue is conditional or ambiguous",
@@ -198,4 +247,30 @@ test("technologies with only uncertain evidence are offered separately with thei
       exact: true,
     }),
   ).not.toBeChecked();
+});
+
+test("duplicate Python suggestion titles have Manifest-specific accessible names", async ({
+  page,
+}) => {
+  await suggestions(page, { python: true });
+  const review = page.locator("stack-readme-review");
+  for (const manifest of ["pyproject.toml", "requirements.txt"]) {
+    await expect(
+      review.getByRole("checkbox", {
+        name: `Python package manager suggestion — ${manifest}`,
+        exact: true,
+      }),
+    ).toHaveCount(1);
+    await expect(
+      review.getByLabel(
+        `I confirm Python package manager suggestion — ${manifest} is true for this repository.`,
+      ),
+    ).toHaveCount(1);
+    await expect(
+      review.getByLabel(
+        `Python package manager suggestion — ${manifest} Markdown`,
+        { exact: true },
+      ),
+    ).toHaveCount(1);
+  }
 });

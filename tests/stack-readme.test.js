@@ -5,17 +5,24 @@ import { readmeSuggestions } from "../src/stack-intelligence/readme-suggestions.
 import { createBlock, serializeBlocks } from "../src/markdown/serialize.js";
 import "../src/components/stack-readme-review.js";
 
+const OBSERVED_AT = Date.parse("2026-10-22T12:00:00Z");
 const record = (...sources) => {
-  const manifests = sources.map(([path, source]) =>
-    analyzeManifest(path, source),
-  );
+  const manifests = sources.map(([path, source]) => ({
+    ...analyzeManifest(path, source),
+    sha: "a".repeat(40),
+    project: "",
+  }));
   return {
     repository: "example/app",
     status: "read",
     ref: "main",
-    checkedAt: 0,
+    observedAt: OBSERVED_AT,
+    checkedAt: OBSERVED_AT,
     manifests,
-    dependencies: normalizeDependencies("example/app", manifests),
+    dependencies: normalizeDependencies("example/app", manifests, {
+      branch: "main",
+      observedAt: OBSERVED_AT,
+    }),
   };
 };
 const node = (data) => record(["package.json", JSON.stringify(data)]);
@@ -182,12 +189,112 @@ describe("exact source review", () => {
     el.configure(node({ scripts: { test: "test" } }), draft);
     return { el, draft };
   };
+  const selectAndConfirm = (el, index = 0) => {
+    const choice = el.querySelector(`[data-choice="${index}"]`);
+    choice.checked = true;
+    choice.dispatchEvent(new Event("change", { bubbles: true }));
+    const confirmation = el.querySelector(`[data-confirm="${index}"]`);
+    confirmation.checked = true;
+    confirmation.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  it("requires a per-item Confirmation before reviewing a selected command", () => {
+    const { el } = setup();
+    const index = el.suggestions.findIndex(
+      (suggestion) => suggestion.id === "package.json:test",
+    );
+    el.querySelector(`[data-choice="${index}"]`).checked = true;
+
+    el.preview();
+
+    expect(el.plan).toBeNull();
+    expect(el.querySelector("[data-status]").textContent).toContain(
+      "Confirm each selected suggestion",
+    );
+  });
+  it("names each Confirmation and shows its full review-only Provenance", () => {
+    const { el, draft } = setup();
+    const index = el.suggestions.findIndex(
+      (suggestion) => suggestion.id === "package.json:test",
+    );
+    const confirmation = el.querySelector(`[data-confirm="${index}"]`);
+    const item = confirmation.closest("section");
+
+    expect(confirmation.parentElement.textContent).toContain(
+      "I confirm Testing command is true for this repository.",
+    );
+    expect(item.textContent).toContain("example/app");
+    expect(item.textContent).toContain("Repository root");
+    expect(item.textContent).toContain("package.json");
+    expect(item.textContent).toContain("scripts.test");
+    expect(item.textContent).toContain("main");
+    expect(item.textContent).toContain(new Date(OBSERVED_AT).toLocaleString());
+    expect(item.querySelector("[data-blob] .sr-only").textContent).toBe(
+      "SHA " + "a".repeat(40),
+    );
+    expect(JSON.stringify(draft)).not.toContain("a".repeat(40));
+  });
+  it("disambiguates every review control when two Manifests produce the same title", () => {
+    const el = document.createElement("stack-readme-review");
+    const blocks = [createBlock("custom", { markdown: "# Python" })];
+    el.configure(
+      record(
+        ["pyproject.toml", '[project]\nname="sample"'],
+        ["requirements.txt", "requests>=2"],
+      ),
+      {
+        id: "python-draft",
+        name: "Python",
+        blocks,
+        markdown: serializeBlocks(blocks),
+        metadata: {},
+      },
+    );
+
+    const labels = [...el.querySelectorAll("label")].map((label) =>
+      label.textContent.trim(),
+    );
+    for (const manifest of ["pyproject.toml", "requirements.txt"]) {
+      expect(labels).toContain(
+        `Python package manager suggestion — ${manifest}`,
+      );
+      expect(labels).toContain(
+        `Python package manager suggestion — ${manifest} Markdown`,
+      );
+      expect(labels).toContain(
+        `I confirm Python package manager suggestion — ${manifest} is true for this repository.`,
+      );
+    }
+  });
+  it("enables exact review only while every selected item is confirmed", () => {
+    const { el } = setup();
+    const index = el.suggestions.findIndex(
+      (suggestion) => suggestion.id === "package.json:test",
+    );
+    const choice = el.querySelector(`[data-choice="${index}"]`);
+    const confirmation = el.querySelector(`[data-confirm="${index}"]`);
+    const source = el.querySelector(`[data-source="${index}"]`);
+    const preview = el.querySelector("[data-preview]");
+
+    expect(preview.disabled).toBe(true);
+    choice.checked = true;
+    choice.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(confirmation.disabled).toBe(false);
+    expect(preview.disabled).toBe(true);
+    confirmation.checked = true;
+    confirmation.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(preview.disabled).toBe(false);
+
+    source.value += "\nReviewed locally.";
+    source.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(confirmation.checked).toBe(false);
+    expect(preview.disabled).toBe(true);
+  });
   it("starts unselected and requires exact approval after reviewing source", () => {
     const { el, draft } = setup();
     expect(el.selection()).toEqual([]);
-    el.preview();
+    expect(el.querySelector("[data-preview]").disabled).toBe(true);
     expect(el.canApply()).toBe(false);
-    el.querySelector('[data-choice="0"]').checked = true;
+    selectAndConfirm(el);
     el.preview();
     expect(el.canApply()).toBe(false);
     el.querySelector("[data-approve]").checked = true;
@@ -201,9 +308,15 @@ describe("exact source review", () => {
   });
   it("keeps edited suggestion HTML inert in the review UI", () => {
     const { el } = setup();
-    el.querySelector('[data-choice="0"]').checked = true;
+    selectAndConfirm(el);
     el.querySelector('[data-source="0"]').value =
       "<script>globalThis.evil=true</script>";
+    el.querySelector('[data-source="0"]').dispatchEvent(
+      new Event("input", { bubbles: true }),
+    );
+    const confirmation = el.querySelector('[data-confirm="0"]');
+    confirmation.checked = true;
+    confirmation.dispatchEvent(new Event("change", { bubbles: true }));
     el.preview();
     expect(el.querySelector("script")).toBeNull();
     expect(el.plan.markdown).toContain("<script>");
@@ -212,7 +325,7 @@ describe("exact source review", () => {
   it("refuses stale builder/source synchronization instead of replacing source", () => {
     const { el } = setup();
     el.draft.markdown = "# Original";
-    el.querySelector('[data-choice="0"]').checked = true;
+    selectAndConfirm(el);
     el.preview();
     expect(el.plan).toBeNull();
     expect(el.querySelector("[data-status]").textContent).toContain("differ");

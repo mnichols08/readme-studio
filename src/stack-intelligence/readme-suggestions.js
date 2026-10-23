@@ -5,8 +5,30 @@ const code = (text) => `\n\n\`\`\`sh\n${text}\n\`\`\``;
 export function readmeSuggestions(record) {
   if (!record || record.status === "failed") return [];
   const suggestions = [];
-  const add = (id, title, markdown, evidence, caveat) =>
-    suggestions.push({ id, title, markdown, evidence, caveat });
+  const reviewProvenance = (item = {}) => ({
+    repository: item.repository || record.repository || "",
+    branch: item.branch || record.ref || "",
+    project: item.project || "",
+    manifest: item.manifest || "",
+    blobSha: item.blobSha || "",
+    section: item.section || "",
+    line: Number.isSafeInteger(item.line) && item.line > 0 ? item.line : null,
+    observedAt: Number.isFinite(item.observedAt)
+      ? item.observedAt
+      : (record.observedAt ?? record.checkedAt ?? null),
+    basis: item.basis || "",
+    source: item.source || "",
+    claim: item.claim || "",
+  });
+  const add = (id, title, markdown, evidence, caveat, provenance = []) =>
+    suggestions.push({
+      id,
+      title,
+      markdown,
+      evidence,
+      caveat,
+      provenance: provenance.map(reviewProvenance).slice(0, 100),
+    });
   const dna = stackDNA([record]);
   const known = dna.technologies.filter((t) => t.category !== "Unknown");
   // A technology whose every declaration is conditional or ambiguous is shown,
@@ -34,6 +56,15 @@ export function readmeSuggestions(record) {
         t.evidence.map((e) => `${t.name}: ${e.source}${basis(e)}`),
       )
       .slice(0, 100);
+  const provenance = (technologies) =>
+    technologies
+      .flatMap((technology) =>
+        technology.evidence.map((item) => ({
+          ...item,
+          claim: technology.name,
+        })),
+      )
+      .slice(0, 100);
   if (certain.length) {
     add(
       "stack",
@@ -44,6 +75,7 @@ export function readmeSuggestions(record) {
         (uncertain.length
           ? " Technologies with only uncertain evidence are left out and offered separately."
           : ""),
+      provenance(certain),
     );
     for (const t of certain)
       add(
@@ -56,6 +88,7 @@ export function readmeSuggestions(record) {
         }),
         t.evidence.map((e) => e.source + basis(e)),
         "Optional presentation. Rendering this badge contacts Shields.io; it does not certify skill.",
+        t.evidence.map((item) => ({ ...item, claim: t.name })),
       );
   }
   if (uncertain.length)
@@ -65,6 +98,7 @@ export function readmeSuggestions(record) {
       section("Possibly in the stack", uncertain),
       evidence(uncertain),
       `Only uncertain evidence: every declaration of ${uncertain.map((t) => t.name).join(", ")} is conditional or ambiguous, so it may not be active in every build or install. It is not part of the Detected stack section and no badge is suggested. Select it only after confirming it applies.`,
+      provenance(uncertain),
     );
   // Commands, managers and package links come from root Manifests only: a
   // command for a Workspace member or Nested project would need its own
@@ -73,13 +107,36 @@ export function readmeSuggestions(record) {
     const { readme = {} } = manifest;
     // `file` is the registry name; older records only carry `path`.
     const path = manifest.file || manifest.path;
-    const suggest = (
-      key,
-      title,
-      source,
-      evidence,
-      caveat = "Conventional command, not verified against this repository. Review prerequisites, working directory and safety before documenting or running it.",
-    ) => add(`${path}:${key}`, title, source, [`${path}: ${evidence}`], caveat);
+    const manifestProvenance = (section, basis = "") => [
+      {
+        repository: record.repository,
+        branch: record.ref,
+        project: manifest.project,
+        manifest: manifest.path,
+        blobSha: manifest.sha,
+        section,
+        observedAt: record.observedAt ?? record.checkedAt,
+        basis,
+      },
+    ];
+    const suggest = (key, title, source, evidence, options = {}) => {
+      const {
+        caveat = "Conventional command, not verified against this repository. Review prerequisites, working directory and safety before documenting or running it.",
+        section = "manifest presence",
+        basis = "",
+      } = options;
+      add(
+        `${path}:${key}`,
+        title,
+        source,
+        [`${path}: ${evidence}`],
+        caveat,
+        manifestProvenance(section, basis).map((item) => ({
+          ...item,
+          claim: title,
+        })),
+      );
+    };
     if (path === "package.json") {
       const manager = readme.packageManager || "npm";
       suggest(
@@ -89,7 +146,14 @@ export function readmeSuggestions(record) {
         readme.packageManager
           ? "packageManager declaration"
           : "package.json; npm is a suggested fallback, not detected",
-        "Confirm the manager/version against repository instructions and lockfiles; lockfiles were not read.",
+        {
+          caveat:
+            "Confirm the manager/version against repository instructions and lockfiles; lockfiles were not read.",
+          section: readme.packageManager
+            ? "packageManager"
+            : "manifest presence",
+          basis: readme.packageManager ? "explicit" : "",
+        },
       );
       suggest(
         "install",
@@ -105,7 +169,12 @@ export function readmeSuggestions(record) {
             `## ${key === "test" ? "Testing" : "Build"}` +
               code(`${manager} run ${key}`),
             `scripts.${key} declared`,
-            "Script body was not retained, inspected for safety or executed. Review the script and any lifecycle hooks before running it.",
+            {
+              caveat:
+                "Script body was not retained, inspected for safety or executed. Review the script and any lifecycle hooks before running it.",
+              section: `scripts.${key}`,
+              basis: "explicit",
+            },
           );
       if (readme.packageName)
         suggest(
@@ -113,7 +182,12 @@ export function readmeSuggestions(record) {
           "npm package link",
           `[Package on npm](https://www.npmjs.com/package/${encodeURIComponent(readme.packageName)})`,
           "name declaration",
-          "Package identity is declared; publication, ownership and availability are not verified.",
+          {
+            caveat:
+              "Package identity is declared; publication, ownership and availability are not verified.",
+            section: "name",
+            basis: "explicit",
+          },
         );
     } else if (path === "Cargo.toml") {
       suggest(
@@ -142,7 +216,12 @@ export function readmeSuggestions(record) {
           "Crate links",
           `[crates.io](https://crates.io/crates/${encodeURIComponent(readme.packageName)}) · [docs.rs](https://docs.rs/${encodeURIComponent(readme.packageName)})`,
           "package.name declaration",
-          "Publication, ownership and documentation availability are not verified.",
+          {
+            caveat:
+              "Publication, ownership and documentation availability are not verified.",
+            section: "package.name",
+            basis: "explicit",
+          },
         );
     } else if (path === "pyproject.toml" || path === "requirements.txt") {
       suggest(
@@ -150,7 +229,10 @@ export function readmeSuggestions(record) {
         "Python package manager suggestion",
         "Package manager suggestion: pip.",
         "Python manifest present",
-        "pip is a convention, not a detected manager. Confirm Poetry/uv or other repository-specific workflows first.",
+        {
+          caveat:
+            "pip is a convention, not a detected manager. Confirm Poetry/uv or other repository-specific workflows first.",
+        },
       );
       suggest(
         "install",
@@ -160,7 +242,10 @@ export function readmeSuggestions(record) {
             `python -m pip install ${path === "requirements.txt" ? "-r requirements.txt" : "."}`,
           ),
         "Python manifest present",
-        "Use an appropriate virtual environment. A pyproject may be non-installable; inspect build configuration and repository instructions first.",
+        {
+          caveat:
+            "Use an appropriate virtual environment. A pyproject may be non-installable; inspect build configuration and repository instructions first.",
+        },
       );
       if (readme.packageName)
         suggest(
@@ -168,7 +253,12 @@ export function readmeSuggestions(record) {
           "Python package link",
           `[Package on PyPI](https://pypi.org/project/${encodeURIComponent(readme.packageName)}/)`,
           "project/package name declaration",
-          "Publication, ownership and availability are not verified.",
+          {
+            caveat: "Publication, ownership and availability are not verified.",
+            section:
+              path === "pyproject.toml" ? "project.name" : "manifest presence",
+            basis: path === "pyproject.toml" ? "explicit" : "",
+          },
         );
     } else if (path === "go.mod") {
       suggest(
@@ -191,17 +281,23 @@ export function readmeSuggestions(record) {
         );
     }
   }
-  if (
-    (record.dependencies || []).some(
-      (d) => d.ecosystem === "python" && d.name === "pytest" && !d.project,
-    )
-  )
+  const pytest = (record.dependencies || []).find(
+    (dependency) =>
+      dependency.ecosystem === "python" &&
+      dependency.name === "pytest" &&
+      !dependency.project,
+  );
+  if (pytest)
     add(
       "python:test",
       "Python testing command",
       "## Testing" + code("python -m pytest"),
       ["pytest direct dependency declaration"],
       "Confirm test paths, environment and repository-specific options. Not executed or verified.",
+      (pytest.evidence || []).map((item) => ({
+        ...item,
+        claim: "Python testing command",
+      })),
     );
   return suggestions;
 }
