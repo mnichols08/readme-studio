@@ -41,6 +41,7 @@ export const commandGroups = {
   ],
   Save: [
     ["documents", "Workspace documents"],
+    ["repository-worksets", "Repository worksets"],
     ["save-project", "Save Studio project"],
     ["open-project", "Open Studio project"],
     ["drafts", "Manage drafts"],

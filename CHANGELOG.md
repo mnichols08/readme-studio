@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.15
+
+- Add named, opt-in repository worksets under Save for grouping up to 100 canonical repository identities per set, with at most 50 sets in a workspace (#89, #142).
+- Resolve each workset against current document targets at view time, list every matching local document, and show missing repositories explicitly without fetching or changing source.
+- Add reviewed, 250 KB-bounded portable workset export/import with a version-1 allowlisted schema, legacy version-0 migration, deterministic duplicate-name handling and no credential fields (#143).
+- Include worksets in all-drafts backup, recovery and explicit merge/replace restore while leaving Studio projects, README exports and GitHub publishing unchanged. Add unit and minimum-width browser coverage for bounds, migrations, missing repositories, exact portability and zero network requests.
+
 ## 1.9.14
 
 - Add explicit Verified, User-confirmed and Placeholder provenance to every structured documentation command/code field and Code Sample block (#88, #140). New fields default to Placeholder; Verified requires a bounded local note, edits reset stale claims, and existing/imported examples are never run or silently reclassified.

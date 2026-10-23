@@ -39,6 +39,12 @@ import { saveProjectDialog, openProjectDialog } from "../studio-projects/ui.js";
 import { bindDialogDismissal } from "./dialog-dismissal.js";
 import { installWorkspace } from "../workspace/ui.js";
 import { validateGuide } from "../workspace/guide.js";
+import {
+  saveWorkset,
+  removeWorkset,
+  importWorksets,
+  validateWorksets,
+} from "../workspace/repository-worksets.js";
 import "./workflow-builder.js";
 import "./refactor-dialog.js";
 import "./compatibility-lab.js";
@@ -176,6 +182,9 @@ export class AppShell extends HTMLElement {
       preview: "1012",
       ...this.data.settings,
     };
+    this.data.repositoryWorksets = validateWorksets(
+      this.data.repositoryWorksets,
+    );
     if (this.data.settings.themePreferenceVersion !== 1) {
       this.data.settings.theme =
         this.data.settings.theme === "dark" ? "dark" : "system";
@@ -1712,6 +1721,81 @@ export class AppShell extends HTMLElement {
     });
   }
 
+  async repositoryWorksets() {
+    await import("./repository-worksets.js");
+    this.modal("<repository-worksets></repository-worksets>");
+    const panel = this.querySelector("repository-worksets");
+    const configure = () =>
+      panel.configure({
+        library: this.data.repositoryWorksets,
+        drafts: this.data.drafts,
+      });
+    const persist = (library, message, focus) => {
+      if (this.storageBlocked)
+        throw Error(
+          "Storage recovery is active. Export worksets before closing or restore workspace storage before saving them.",
+        );
+      saveDrafts({ ...this.data, repositoryWorksets: library });
+      this.data.repositoryWorksets = library;
+      configure();
+      panel.status(message);
+      panel.querySelector(focus)?.focus();
+    };
+    configure();
+    panel.addEventListener("workset-save", ({ detail }) => {
+      try {
+        const library = saveWorkset(this.data.repositoryWorksets, detail);
+        persist(
+          library,
+          "Workset saved only in this browser.",
+          "[data-selected]",
+        );
+      } catch (error) {
+        panel.status(`Could not save workset: ${error.message}`);
+      }
+    });
+    panel.addEventListener("workset-delete", ({ detail }) => {
+      try {
+        const library = removeWorkset(this.data.repositoryWorksets, detail);
+        persist(
+          library,
+          "Workset deleted. Documents and Markdown were unchanged.",
+          library.items.length ? "[data-selected]" : "[data-name]",
+        );
+      } catch (error) {
+        panel.status(`Could not delete workset: ${error.message}`);
+      }
+    });
+    panel.addEventListener("workset-open", ({ detail }) => {
+      if (!this.data.drafts.some((draft) => draft.id === detail)) {
+        panel.status("That local document is no longer available.");
+        return;
+      }
+      this.load(detail);
+      this.closeDialog(this.querySelector("#draft-select"));
+      this.notify(`Opened ${this.store.draft.name}.`);
+    });
+    panel.addEventListener("workset-export", ({ detail }) =>
+      this.download(
+        JSON.stringify(detail, null, 2),
+        "readme-studio-repository-worksets.json",
+        "application/json",
+      ),
+    );
+    panel.addEventListener("workset-import", ({ detail }) => {
+      try {
+        const library = importWorksets(this.data.repositoryWorksets, detail);
+        persist(
+          library,
+          "Reviewed worksets imported locally. No repositories were contacted.",
+          "[data-selected]",
+        );
+      } catch (error) {
+        panel.status(`Could not import worksets: ${error.message}`);
+      }
+    });
+  }
+
   documentationSuiteSnapshot() {
     return JSON.stringify({
       active: this.data.active,
@@ -2985,7 +3069,7 @@ export class AppShell extends HTMLElement {
         if (ticket !== generation || !input.isConnected) return;
         const snapshot = JSON.stringify(this.data);
         this.querySelector("#restore-status").textContent =
-          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.badgeCollections.items.length} badge collections · ${backup.visualLibrary.themes.length} themes · ${backup.visualLibrary.banners.length} banner presets · ${backup.visualLibrary.bundles.length} visual bundles · ${backup.componentLibrary.snippets.length} reusable snippets · ${backup.sharedComponents.items.length} shared components · ${backup.evidenceSnapshots.items.length} evidence snapshots`;
+          `${backup.drafts.length} drafts · backup version ${backup.version}${backup.createdAt ? ` · created ${backup.createdAt}` : ""} · ${backup.repositoryWorksets.items.length} repository worksets · ${backup.badgeCollections.items.length} badge collections · ${backup.visualLibrary.themes.length} themes · ${backup.visualLibrary.banners.length} banner presets · ${backup.visualLibrary.bundles.length} visual bundles · ${backup.componentLibrary.snippets.length} reusable snippets · ${backup.sharedComponents.items.length} shared components · ${backup.evidenceSnapshots.items.length} evidence snapshots`;
         this.querySelector("#restore-review").innerHTML =
           '<label>Restore mode<select id="restore-mode" aria-label="Restore mode"><option value="merge">Merge with local drafts</option><option value="replace">Replace local drafts</option></select></label><label class="check"><input id="restore-confirm" type="checkbox"> I confirm replacing local drafts, collections, or original recovery data</label><button id="apply-restore" class="primary">Restore backup</button>';
         this.querySelector("#restore-mode").focus();
@@ -3148,6 +3232,9 @@ export class AppShell extends HTMLElement {
         break;
       case "documents":
         this.documents();
+        break;
+      case "repository-worksets":
+        this.repositoryWorksets();
         break;
       case "evidence-snapshots":
         this.evidenceSnapshots();
