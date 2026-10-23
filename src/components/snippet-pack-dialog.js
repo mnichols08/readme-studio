@@ -7,6 +7,8 @@ import {
   packChoices,
   packCollisions,
   choiceMarkdown,
+  packItems,
+  packTrustReview,
 } from "../snippets/pack-schema.js";
 import { examplePacks } from "../snippets/example-packs.js";
 export class SnippetPackDialog extends HTMLElement {
@@ -48,10 +50,15 @@ export class SnippetPackDialog extends HTMLElement {
     this.querySelector("[data-backup-snippets]").onclick = () =>
       this.export(true);
     this.querySelector("[data-review-pack]").onclick = () =>
-      this.review(this.querySelector("[data-pack-json]").value);
+      this.review(this.querySelector("[data-pack-json]").value, {
+        source: "Pasted JSON",
+      });
     this.querySelector("[data-load-example]").onclick = () =>
       this.review(
         examplePacks[Number(this.querySelector("[data-example-pack]").value)],
+        {
+          source: `Bundled example: ${examplePacks[Number(this.querySelector("[data-example-pack]").value)].name}`,
+        },
       );
     this.querySelector("[data-pack-json]").oninput = () => {
       this.pending = null;
@@ -66,7 +73,7 @@ export class SnippetPackDialog extends HTMLElement {
         const text = await file.text();
         if (!this.isConnected) return;
         this.querySelector("[data-pack-json]").value = text;
-        this.review(text);
+        this.review(text, { source: file.name });
       } catch (error) {
         this.status(error.message);
       }
@@ -102,26 +109,20 @@ export class SnippetPackDialog extends HTMLElement {
       this.status(e.message);
     }
   }
-  review(input) {
+  review(input, provenance = {}) {
     this.pending = null;
     const area = this.querySelector(".pack-review");
     try {
       const pack = validatePack(input);
       this.pending = pack;
       const collisions = packCollisions(this.data, pack);
-      area.innerHTML = `<h2 tabindex="-1">Import ${html(pack.name)}</h2><p>${html(pack.description)}</p><p>Version 1 · ${pack.snippets.length} snippets (including ${pack.snippets.filter((s) => s.kind === "widget").length} widget presets) · ${pack.badgeCollections.length} badge collections</p><p>Author: ${html(pack.author || "Not specified")} · License note: ${html(pack.license || "Not specified")}</p>${pack.homepage ? `<a href="${html(pack.homepage)}" target="_blank" rel="noopener noreferrer">Pack homepage</a>` : ""}<p>${collisions.length} existing collisions. Duplicate entries within the pack also use the selected policy.</p><ul>${collisions.map((c) => `<li>${html(c.name)} → ${html(c.matches.join(", "))}</li>`).join("")}</ul><label>Collision policy<select data-pack-mode aria-label="Collision policy"><option value="keep">Keep both (default)</option><option value="replace">Replace matching saved items</option><option value="skip">Skip conflicting items</option></select></label><label>Preview pack item<select data-pack-item aria-label="Preview pack item">${[...pack.snippets, ...pack.badgeCollections].map((c, i) => `<option value="${i}">${html(c.name)}</option>`).join("")}</select></label><button data-preview-pack>Render item preview (contacts image hosts)</button><label>Pack item Markdown<textarea data-pack-source aria-label="Pack item Markdown" readonly rows="5"></textarea></label><div class="pack-item-preview markdown-body"></div><button data-import-pack class="primary">Import reviewed pack</button><button data-cancel-pack>Cancel import</button>`;
+      const items = packItems(pack);
+      const trust = packTrustReview(pack, provenance);
+      area.innerHTML = `<h2 tabindex="-1">Import ${html(pack.name)}</h2><p>${html(pack.description)}</p><p>Version ${pack.version}${pack.migratedFrom ? ` · migrated from version ${pack.migratedFrom}` : ""} · ${pack.snippets.length} snippets · ${pack.extensions.length} extension manifests (${pack.extensions.reduce((total, manifest) => total + manifest.entries.length, 0)} entries) · ${pack.badgeCollections.length} badge collections</p><section aria-labelledby="pack-trust-title"><h3 id="pack-trust-title">Import trust review</h3><p>Source: ${html(trust.provenance.source)} · Author: ${html(trust.provenance.author)}</p><p>Claimed extension publishers: ${html(trust.publishers.map((publisher) => `${publisher.name} — ${publisher.url}`).join(", ") || "None")}</p><p>Declared inert capabilities: ${html(trust.capabilities.join(", ") || "None")}. Extension manifests cannot load or evaluate scripts.</p><p>${trust.externalUrls.length} external URLs. Opening a rendered preview or following a listed link may contact these hosts; importing does not.</p><ul data-pack-urls>${trust.externalUrls.map((url) => `<li><code>${html(url)}</code></li>`).join("") || "<li>None</li>"}</ul></section><p>License note: ${html(pack.license || "Not specified")}</p>${pack.homepage ? `<a href="${html(pack.homepage)}" target="_blank" rel="noopener noreferrer">Pack homepage</a>` : ""}<p>${collisions.length} existing collisions. Duplicate entries within the pack also use the selected policy.</p><ul>${collisions.map((c) => `<li>${html(c.name)} → ${html(c.matches.join(", "))}</li>`).join("")}</ul><label>Collision policy<select data-pack-mode aria-label="Collision policy"><option value="keep">Keep both (default)</option><option value="replace">Replace matching saved items</option><option value="skip">Skip conflicting items</option></select></label><label>Preview pack item<select data-pack-item aria-label="Preview pack item">${items.map((item, i) => `<option value="${i}">${html(item.name)} (${html(item.kind)})</option>`).join("")}</select></label><button data-preview-pack>Render item preview (contacts image hosts)</button><label>Pack item Markdown<textarea data-pack-source aria-label="Pack item Markdown" readonly rows="5"></textarea></label><div class="pack-item-preview markdown-body"></div><button data-import-pack class="primary">Import reviewed pack</button><button data-cancel-pack>Cancel import</button>`;
       const source = () => {
         const index = Number(area.querySelector("[data-pack-item]").value),
-          choice =
-            index < pack.snippets.length
-              ? { component: pack.snippets[index] }
-              : {
-                  collection:
-                    pack.badgeCollections[index - pack.snippets.length],
-                };
-        return choice.component || choice.collection
-          ? choiceMarkdown(choice)
-          : "";
+          choice = items[index];
+        return choice ? choiceMarkdown(choice) : "";
       };
       area.querySelector("[data-pack-source]").value = source();
       area.querySelector("[data-pack-item]").onchange = () => {

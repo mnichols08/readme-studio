@@ -10,4 +10,6 @@ Block IDs are stable on normal workspace reload and structured project open. Imp
 
 Future public schema changes require fixtures for every supported transition, exact-source assertions, round-trip coverage and explicit future-version behavior. Deprecations should retain source recovery, announce the replacement and avoid removing supported fields without a documented migration. Patch releases fix defects; minor releases add compatible capabilities; breaking public-schema behavior requires a major version and an explicit recovery path.
 
+Snippet-pack version 1 migrates to version 2 by retaining the validated metadata, snippets and badge collections exactly and adding an empty `extensions` collection. The migration is in memory: import never rewrites the selected file. New exports use version 2 so older readers reject the envelope instead of silently dropping extension manifests. Version 3 and other unknown versions are rejected.
+
 Local storage is not a public interchange API. Use versioned downloads for portability. Corrupted or unsupported browser storage must stay untouched until the user explicitly restores/replaces it; recovery downloads preserve the unreadable original where possible.

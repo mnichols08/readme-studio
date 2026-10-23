@@ -15,6 +15,10 @@ import {
 } from "../badges/collections.js";
 import { safeUrl } from "../markdown/url-safety.js";
 import { serializeBlock } from "../markdown/serialize.js";
+import {
+  externalUrlsFromMarkup,
+  validateExtensionManifest,
+} from "../extensions/manifest.js";
 export const PACK_LIMIT = 10_000_000;
 export function validatePack(raw) {
   if (typeof raw === "string" && raw.length > PACK_LIMIT)
@@ -27,22 +31,48 @@ export function validatePack(raw) {
   }
   if (typeof raw === "string" && raw.length > PACK_LIMIT)
     throw Error("Snippet packs are limited to 10 MB.");
-  if (!v || v.version !== 1 || v.type !== "readme-studio-snippet-pack")
-    throw Error("Expected a version-1 README Studio snippet pack.");
+  if (
+    !v ||
+    ![1, 2].includes(v.version) ||
+    v.type !== "readme-studio-snippet-pack"
+  )
+    throw Error(
+      "Expected a supported version-1 or version-2 README Studio snippet pack.",
+    );
+  const migratedFrom = v.version === 1 ? 1 : null;
+  if (v.version === 1 && v.extensions !== undefined)
+    throw Error("Version-1 snippet packs cannot contain extension manifests.");
   const name = plain(v.name, 120).trim();
   if (!name) throw Error("Name the snippet pack.");
   if (
     !Array.isArray(v.snippets) ||
     v.snippets.length > 500 ||
     !Array.isArray(v.badgeCollections ?? []) ||
-    (v.badgeCollections || []).length > 500
+    (v.badgeCollections || []).length > 500 ||
+    !Array.isArray(v.extensions ?? []) ||
+    (v.extensions || []).length > 50
   )
-    throw Error("Packs support up to 500 snippets and 500 badge collections.");
+    throw Error(
+      "Packs support up to 500 snippets, 500 badge collections and 50 extension manifests.",
+    );
   const homepage = safeUrl(v.homepage || "");
   if (v.homepage && (!homepage || !/^https?:\/\//.test(homepage)))
     throw Error("Pack homepage needs an HTTP(S) URL.");
+  const extensions = (v.extensions || []).map(validateExtensionManifest);
+  if (
+    v.snippets.length +
+      extensions.reduce(
+        (total, manifest) => total + manifest.entries.length,
+        0,
+      ) >
+    500
+  )
+    throw Error(
+      "Packs support up to 500 combined snippets and extension entries.",
+    );
   return {
-    version: 1,
+    ...(migratedFrom ? { migratedFrom } : {}),
+    version: 2,
     type: "readme-studio-snippet-pack",
     name,
     description: plain(v.description ?? "", 2000),
@@ -50,6 +80,7 @@ export function validatePack(raw) {
     homepage,
     license: plain(v.license ?? "", 300),
     snippets: v.snippets.map(normalizeComponent),
+    extensions,
     badgeCollections: (v.badgeCollections || []).map((c) => {
       plain(c.name, 120);
       return validateCollection(c, { preserveId: true });
@@ -59,11 +90,66 @@ export function validatePack(raw) {
 export function exportPack(metadata, snippets = [], badgeCollections = []) {
   return validatePack({
     ...metadata,
-    version: 1,
+    version: 2,
     type: "readme-studio-snippet-pack",
     snippets,
     badgeCollections,
+    extensions: [],
   });
+}
+export function packItems(pack) {
+  pack = validatePack(pack);
+  return [
+    ...pack.snippets.map((component) => ({
+      component,
+      name: component.name,
+      kind: "snippet",
+    })),
+    ...pack.extensions.flatMap((manifest) =>
+      manifest.entries.map((component) => ({
+        component,
+        manifest,
+        name: component.name,
+        kind: `extension · ${manifest.name}`,
+      })),
+    ),
+    ...pack.badgeCollections.map((collection) => ({
+      collection,
+      name: collection.name,
+      kind: "badge collection",
+    })),
+  ];
+}
+export function packTrustReview(pack, { source = "Pasted JSON" } = {}) {
+  pack = validatePack(pack);
+  source = String(source)
+    .slice(0, 300)
+    .replace(/[<>\x00-\x08\x0b-\x1f\x7f]/g, "�");
+  const urls = new Set();
+  const addUrl = (value) => {
+    for (const url of externalUrlsFromMarkup(value || "")) urls.add(url);
+  };
+  addUrl(pack.homepage);
+  for (const item of packItems(pack)) {
+    if (item.component) addUrl(item.component.attribution?.url);
+    for (const url of externalUrlsFromMarkup(choiceMarkdown(item))) addUrl(url);
+  }
+  for (const manifest of pack.extensions) addUrl(manifest.publisher.url);
+  return {
+    provenance: {
+      source,
+      author: pack.author || "Not specified",
+      homepage: pack.homepage || "Not specified",
+    },
+    capabilities: [
+      ...new Set(pack.extensions.flatMap((manifest) => manifest.capabilities)),
+    ].sort(),
+    publishers: pack.extensions.map((manifest) => ({
+      name: manifest.publisher.name,
+      url: manifest.publisher.url,
+    })),
+    externalUrls: [...urls].sort(),
+  };
 }
 export function packChoices(data, draft) {
   const library = validateComponents(data.componentLibrary);
@@ -127,11 +213,13 @@ export function packCollisions(data, pack) {
   const library = validateComponents(data.componentLibrary),
     collections = validateCollections(data.badgeCollections);
   return [
-    ...pack.snippets.map((v) => ({
-      name: v.name,
-      kind: "snippet",
-      matches: matches(library.snippets, v).map((x) => x.name),
-    })),
+    ...packItems(pack)
+      .filter((item) => item.component)
+      .map(({ component: v }) => ({
+        name: v.name,
+        kind: "snippet",
+        matches: matches(library.snippets, v).map((x) => x.name),
+      })),
     ...pack.badgeCollections.map((v) => ({
       name: v.name,
       kind: "badge collection",
@@ -171,10 +259,13 @@ export function importPack(data, input, mode = "keep") {
   const pack = validatePack(input),
     library = validateComponents(data.componentLibrary),
     collections = validateCollections(data.badgeCollections);
+  const snippets = packItems(pack)
+    .filter((item) => item.component)
+    .map((item) => item.component);
   return {
     componentLibrary: validateComponents({
       ...library,
-      snippets: mergeItems(library.snippets, pack.snippets, mode),
+      snippets: mergeItems(library.snippets, snippets, mode),
     }),
     badgeCollections: validateCollections({
       version: 1,
