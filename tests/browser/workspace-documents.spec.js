@@ -270,6 +270,23 @@ test("a stale review or failed batch write creates no suite document", async ({
   await page.getByRole("button", { name: "Close dialog" }).click();
   suite = await openReviewedSuite();
   await page.evaluate(() => {
+    document.querySelector("app-shell").store.draft.name = "README.md";
+  });
+  await suite
+    .getByRole("button", { name: "Create reviewed local documents" })
+    .click();
+  await expect(suite.locator("[data-status]")).toContainText(
+    "The workspace changed",
+  );
+  expect(
+    await page.evaluate(
+      () => document.querySelector("app-shell").data.drafts.length,
+    ),
+  ).toBe(1);
+
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  suite = await openReviewedSuite();
+  await page.evaluate(() => {
     const original = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key, value) {
       if (key === "readme-studio:v1")

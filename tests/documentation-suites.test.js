@@ -154,6 +154,27 @@ describe("documentation suite templates", () => {
         ],
       }),
     ).toThrow(/too large/);
+    expect(() =>
+      validateDocumentationSuite({
+        ...manifest,
+        documents: [{ ...manifest.documents[0], markdown: "€".repeat(33_334) }],
+      }),
+    ).toThrow(/too large/);
+
+    const aggregate = createDocumentationSuite("api", [
+      "readme",
+      "contributing",
+      "security",
+      "api",
+      "architecture",
+    ]);
+    aggregate.documents = aggregate.documents.map((item) => ({
+      ...item,
+      markdown: "€".repeat(30_000),
+    }));
+    expect(() => validateDocumentationSuite(aggregate)).toThrow(
+      /suite is too large/,
+    );
   });
   it("plans independent local drafts atomically and refuses path collisions", () => {
     const existing = newDraft("Existing source");

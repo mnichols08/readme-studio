@@ -1701,9 +1701,13 @@ export class AppShell extends HTMLElement {
   }
 
   documentationSuiteSnapshot() {
-    return JSON.stringify(
-      this.data.drafts.map((draft) => draftSnapshot(draft)),
-    );
+    return JSON.stringify({
+      active: this.data.active,
+      drafts: this.data.drafts.map((draft) => ({
+        name: draft.name,
+        snapshot: draftSnapshot(draft),
+      })),
+    });
   }
   async documentationSuite() {
     await import("./documentation-suite.js");

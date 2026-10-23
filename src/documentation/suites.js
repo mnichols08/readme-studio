@@ -97,6 +97,7 @@ const profiles = Object.freeze({
     "deployment",
   ],
 });
+const utf8 = new TextEncoder();
 
 export const documentationSuiteProjectTypes = Object.freeze(
   Object.keys(profiles),
@@ -135,6 +136,7 @@ export function validateDocumentationSuite(value) {
   if (ids.length > 8 || new Set(ids).size !== ids.length)
     throw Error("Choose each documentation file once, up to eight files.");
   const expected = createDocumentationSuite(value.projectType, ids);
+  let totalBytes = 0;
   const documents = expected.documents.map((template, index) => {
     const item = value.documents[index];
     if (!item || item.path !== template.path)
@@ -143,13 +145,13 @@ export function validateDocumentationSuite(value) {
       throw Error(`The ${template.id} document template was changed.`);
     if (typeof item.markdown !== "string" || !item.markdown.trim())
       throw Error(`The ${template.path} document needs starting Markdown.`);
-    if (item.markdown.length > 100_000)
+    const bytes = utf8.encode(item.markdown).byteLength;
+    if (bytes > 100_000)
       throw Error(`The ${template.path} document is too large.`);
+    totalBytes += bytes;
     return { ...template, markdown: item.markdown };
   });
-  if (
-    documents.reduce((size, item) => size + item.markdown.length, 0) > 400_000
-  )
+  if (totalBytes > 400_000)
     throw Error("The documentation suite is too large.");
   return { version: 1, projectType: value.projectType, documents };
 }
