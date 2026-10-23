@@ -44,6 +44,7 @@ export class RepositoryAudit extends HTMLElement {
     this.state.stackResults ||= new Map();
     this.preferences = new AuditDecisions();
     this.pendingTypeOverrides = new Set();
+    this.decisionError = "";
     this.innerHTML = `<h1>Repository README audit</h1><p>Find documentation that needs attention using evidence, not scores. Only public owned repositories are listed. README content is analyzed locally; nothing is published.</p><form data-load><label>GitHub username<input name="username" autocomplete="off" required maxlength="200" value="${h(this.state.username)}"></label><button type="submit">Load repositories</button></form><p class="hint">100 repositories per page, up to 1,000. Three concurrent README requests. GitHub's unauthenticated rate limit may stop larger scans. Use Check history and links on a result for optional extra requests to GitHub and linked hosts (up to 20 URLs). Results and a bounded source cache stay in this tab; cached requests expire after five minutes.</p><div class="audit-controls"><label><input type="checkbox" data-forks ${this.state.includeForks ? "checked" : ""}> Include forks</label><label><input type="checkbox" data-archived ${this.state.includeArchived ? "checked" : ""}> Include archived repositories</label><label><input type="checkbox" data-fresh> Fetch fresh README content</label><button data-more>Load next 100 repositories</button><button data-select>Select all filtered repositories</button><button data-clear>Clear selection</button><button data-scan>Audit selected</button><button data-cancel disabled>Cancel audit</button></div><section class="audit-controls"><h2>Stack Intelligence</h2><p>Opt in to read root package.json, Cargo.toml, pyproject.toml, requirements.txt and go.mod files from selected public repositories. This contacts GitHub only. No dependency installation, package scripts, repository code or build tools are run. Root manifests only: up to six requests per repository; rate limits may pause scans.</p><label><input type="checkbox" data-stack-consent> Allow read-only manifest analysis for this session</label><label><input type="checkbox" data-stack-nested disabled aria-describedby="stack-nested-hint"> Include nested manifests (monorepo)</label><p class="hint" id="stack-nested-hint">Reads the default branch head and one repository tree listing, the root pnpm-workspace.yaml and go.work workspace files when present, then manifests up to four directories deep, mapped to workspace members and nested projects. Dependency folders such as node_modules and vendor are skipped. Up to 24 requests per repository; at most 25 repositories per nested run.</p><label><input type="checkbox" data-stack-fresh> Fetch fresh manifests</label><button data-stack-scan disabled>Analyze selected manifests</button></section><p data-status role="status" aria-live="polite"></p><stack-results></stack-results><p data-count></p><div class="audit-pagination"><button data-audit-view="audit" aria-pressed="true">Audit results</button><button data-audit-view="queue" aria-pressed="false">README Attention Queue</button></div><section data-audit-results><h2 tabindex="-1">Repository audit results</h2><div class="audit-table-wrap"><table class="audit-table"><caption>Public repository documentation evidence</caption><thead><tr><th scope="col">Select / Repository</th><th scope="col">README state and evidence</th><th scope="col">Activity / Language</th><th scope="col">Actions</th></tr></thead><tbody></tbody></table></div><div class="audit-pagination"><button data-prev>Previous results</button><span data-page></span><button data-next>Next results</button></div></section><readme-attention-queue hidden></readme-attention-queue><p>Improve README opens a project-specific template with reviewed repository suggestions. Existing README source is preserved by default; missing READMEs can start from the template. Project types and English documentation signals are suggestions. Missing topics are commonly useful, never universally required; evidence is not a judgment of the project or its developer.</p>`;
     this.querySelectorAll("[data-audit-view]").forEach(
       (button) =>
@@ -233,6 +234,7 @@ export class RepositoryAudit extends HTMLElement {
       } catch (error) {
         this.pendingTypeOverrides.delete(key);
         this.state.typeOverrides.delete(key);
+        this.decisionError = error.message;
         this.status(error.message);
       }
     }
@@ -425,6 +427,7 @@ export class RepositoryAudit extends HTMLElement {
       this.list();
     }
     this.busy = true;
+    this.decisionError = "";
     this.controller = new AbortController();
     this.controls();
     this.status("Loading public owned repositories…");
@@ -506,7 +509,7 @@ export class RepositoryAudit extends HTMLElement {
       });
       if (this.isConnected)
         this.status(
-          `${summary.cancelled ? "Audit cancelled" : summary.stopped ? "Audit paused" : "Audit complete"}: ${count} of ${total} checked; ${failures} not assessed; ${summary.remaining} not checked. ${retained} completed assessments retained. ${summary.stopped || "Results retained in this tab."}`,
+          `${summary.cancelled ? "Audit cancelled" : summary.stopped ? "Audit paused" : "Audit complete"}: ${count} of ${total} checked; ${failures} not assessed; ${summary.remaining} not checked. ${retained} completed assessments retained. ${summary.stopped || "Results retained in this tab."}${this.decisionError ? ` ${this.decisionError}` : ""}`,
         );
     } catch (error) {
       if (this.isConnected) this.status(`Audit stopped. ${error.message}`);

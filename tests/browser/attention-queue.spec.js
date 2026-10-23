@@ -364,6 +364,46 @@ test("damaged and unwritable attention storage stays visible and does not lose d
   await expect(queue.locator("[data-item]")).toHaveCount(1);
 });
 
+test("a failed pre-audit type save remains visible after scan completion", async ({
+  page,
+}) => {
+  await page.route("https://api.github.com/**", (route) =>
+    route.fulfill({
+      json: route.request().url().includes("/users/")
+        ? [repo("unsaved-type")]
+        : file(basic),
+    }),
+  );
+  await audit(page);
+  const auditPanel = page.locator("repository-audit");
+  await auditPanel
+    .getByRole("button", { name: "Audit results", exact: true })
+    .click();
+  const type = page.getByLabel("Project type for example/unsaved-type", {
+    exact: true,
+  });
+  await type.selectOption("web-app");
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "readme-studio:audit-decisions:v1")
+        throw new DOMException("Quota", "QuotaExceededError");
+      return original.call(this, key, value);
+    };
+  });
+  await page
+    .getByRole("button", { name: "Select all filtered repositories" })
+    .click();
+  await page
+    .getByRole("button", { name: "Audit selected", exact: true })
+    .click();
+
+  await expect(auditPanel.locator("[data-status]")).toContainText(
+    "Your decision was not applied",
+  );
+  await expect(type).toHaveValue("auto");
+});
+
 test("improvement plans explain evidence, move focus after Skip and Dismiss, and drop dismissed gaps from the queue at 320px", async ({
   page,
 }) => {
