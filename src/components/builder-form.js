@@ -7,6 +7,7 @@ import {
 import { calloutStyles } from "../styling/blocks.js";
 import { explicitOverride } from "../themes/theme-resolver.js";
 import { html, serializeBlock } from "../markdown/serialize.js";
+import { blockTypes as sharedBlockTypes } from "../markdown/block-types.js";
 import { render } from "../markdown/render.js";
 import technologies from "../data/technologies.json";
 import { snippets } from "../data/snippets.js";
@@ -70,32 +71,7 @@ const socialNames = [
   "Email",
   "Custom",
 ];
-export const blockTypes = {
-  hero: "Hero",
-  about: "About Me",
-  stack: "Tech Stack",
-  social: "Social Links",
-  projects: "Projects",
-  widget: "Dynamic Widgets",
-  learning: "Current Learning",
-  writing: "Writing / Blog",
-  contact: "Contact",
-  divider: "Divider",
-  custom: "Custom Markdown",
-  badge: "Badge",
-  badges: "Badge Row",
-  picture: "Light / Dark Image",
-  callout: "Callout",
-  details: "Collapsible Details",
-  code: "Code Sample",
-  columns: "Two Columns",
-  ...Object.fromEntries(
-    Object.entries(documentationSections).map(([type, definition]) => [
-      type,
-      definition.name,
-    ]),
-  ),
-};
+export const blockTypes = sharedBlockTypes;
 export function defaults(type) {
   if (documentationSections[type]) return documentationDefaults(type);
   if (type === "callout") return { style: "note", title: "", body: "" };

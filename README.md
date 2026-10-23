@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.6.** A machine-local, content-free Publish journal now makes ambiguous GitHub writes recoverable: Studio reads the remote Result SHA before offering any retry, records already-applied writes without duplicating them, and requires a new approval before retrying only files proven not written. [Publishing recovery](docs/github-publishing.md#ambiguous-write-recovery-196) · [Recovery decision](docs/adr/epic69-03-ambiguous-writes-are-reconciled-from-a-machine-local-publish-journal.md)
+**Version 1.9.7.** Ownership review now prevents a stale builder or component form from overwriting Markdown changed after the form opened. Restorable Detachments show current and visual source plus a unified diff; keeping Markdown is the default, while restoring the reviewed visual version is one Undoable step. [Ownership review](docs/editing.md#ownership-review) · [Conflict decision](docs/adr/epic63-03-ownership-conflicts-are-reviewed-after-the-edit-not-while-typing.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
