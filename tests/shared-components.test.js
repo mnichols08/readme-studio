@@ -92,8 +92,14 @@ describe("reviewed shared documentation", () => {
     expect(plan.entries).toEqual([]);
     expect(plan.skipped[0].reason).toContain("locally edited");
     const store = new Store(linked(draft(), lib.items[0]));
+    // Appending after the shared block keeps it linked; editing inside it
+    // detaches it with a Detachment record.
     store.raw(store.draft.markdown + "\nMy note");
+    expect(store.draft.blocks.some((b) => b.sharedComponent)).toBe(true);
+    store.undo();
+    store.raw(store.draft.markdown.replace("privately", "privately, please"));
     expect(store.draft.blocks.some((b) => b.sharedComponent)).toBe(false);
+    expect(store.draft.metadata.detachments[0].kinds).toEqual(["shared"]);
     store.undo();
     expect(store.draft.blocks[1].sharedComponent.componentId).toBe(
       lib.items[0].id,

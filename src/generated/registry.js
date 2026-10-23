@@ -162,8 +162,18 @@ export function generatedRegistry(draft) {
     }
   return units;
 }
-export function detachGenerated(draft) {
+// With blockIds, only units driven by those Blocks are detached, so untouched
+// generated sections keep their ownership.
+export function detachGenerated(draft, blockIds) {
   return generatedRegistry(draft)
+    .filter(
+      (u) =>
+        !blockIds ||
+        (u.ownership !== "detached" &&
+          [u.blockId, ...(Array.isArray(u.blockIds) ? u.blockIds : [])].some(
+            (id) => blockIds.has(id),
+          )),
+    )
     .map((u) => ({
       ...u,
       ownership: "detached",

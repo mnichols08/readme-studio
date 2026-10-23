@@ -495,6 +495,9 @@ select {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.block-open small.detached {
+  font-style: italic;
+}
 .block-actions {
   display: flex;
   justify-content: flex-end;

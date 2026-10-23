@@ -13,6 +13,7 @@ import {
   validateDraft,
   saveDrafts,
   readDrafts,
+  withoutDetachedCopies,
 } from "../src/state/drafts.js";
 import { render } from "../src/markdown/render.js";
 import { template, templateNames } from "../src/data/templates.js";
@@ -343,6 +344,25 @@ describe("conservative profile autofill", () => {
       { ...p, name: "Another update" },
     );
     expect(third.markdown).toContain("# My custom name");
+  });
+  it("does not add back a removed section after a project file blanks its text", async () => {
+    const p = await profile();
+    const d = newDraft("Draft", template("Minimal"));
+    const first = autofillProfile(d, p);
+    const bio = first.blocks.find((b) => b.profileAutofill?.kind === "bio");
+    const removed = {
+      ...d,
+      ...first,
+      blocks: first.blocks.filter((b) => b !== bio),
+    };
+    removed.markdown = serializeBlocks(removed.blocks);
+    const portable = withoutDetachedCopies(removed);
+    expect(portable.metadata.githubProfile.sections.bio).toBe("");
+    const next = autofillProfile(portable, p);
+    expect(next.preserved).toContain("bio");
+    expect(next.blocks.some((b) => b.profileAutofill?.kind === "bio")).toBe(
+      false,
+    );
   });
   it("keeps optional autofill idempotent including project headings", async () => {
     const p = await profile();

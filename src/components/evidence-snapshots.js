@@ -255,7 +255,7 @@ export class EvidenceSnapshots extends HTMLElement {
     section.hidden = false;
     section.innerHTML = `<h2 tabindex="-1">Review drift fixes</h2>
       <p>Each proposal edits one line of the Markdown that was checked. Read the evidence, edit the proposed line if needed and approve each change you want. Unapproved lines stay exactly as they are. Nothing is applied until you choose Apply, and nothing is published: Publish to GitHub stays a separate step with its own review. Undo restores the previous Markdown.</p>
-      ${convertsBuilder(this.state?.draft) ? '<p class="issue" data-fix-builder>Applying converts this draft to one Custom Markdown block, so builder sections, components and generated content can no longer overwrite the fixes. Undo restores the previous Markdown and builder ownership.</p>' : ""}
+      ${convertsBuilder(this.state?.draft) ? '<p class="issue" data-fix-builder>Applying detaches any builder section, component or generated content whose lines change: it becomes Custom Markdown, so stale settings can no longer overwrite the fixes. Untouched sections keep their ownership. Undo restores the previous Markdown and builder ownership.</p>' : ""}
       <p class="hint">Uncertain findings may be correct as written. Unknown results and matches have no proposals${excluded ? ` (${excluded} not proposed)` : ""}. If your Markdown changes before you apply, nothing is applied.</p>
       ${notes.length ? `<ul>${notes.map((note) => `<li>${html(note)}</li>`).join("")}</ul>` : ""}
       <ol data-proposals>${proposals

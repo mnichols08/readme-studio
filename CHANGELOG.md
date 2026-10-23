@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.5
+
+- Make raw Markdown edits source-preserving (#77, #118): only the Blocks and Seams an edit touches change, while every byte outside that scope—including CRLF, BOM, trailing whitespace, fenced code and raw HTML—stays identical. Untouched builder, component, generated, shared, profile and banner Blocks keep visual ownership.
+- Turn each touched Owned block into exact Custom Markdown and add a visible, bounded Detachment record. Keyboard typing, multi-range reviewed changes and moved-plus-edited sections follow the same rules; Undo restores the prior draft in one step.
+- Keep Detachment records with autosave, workspace backups and Studio projects without placing them in exported Markdown. Portable files use explicit metadata field allowlists and omit removed labels, generated text/options, profile text, detached banner settings and generated banner assets.
+- Add a named byte-level round-trip CI gate (#119) with SHA-256-pinned CRLF, mixed-EOL, BOM, no-final-newline, trailing-whitespace, fenced-code and raw-HTML fixtures; exact Studio-project/workspace round trips; and deterministic seeded edit cases.
+- Preserve blank lines typed before a builder section when its form is saved, and document source ownership, Detachment, portable-data privacy and the round-trip contract.
+
 ## 1.9.4
 
 - Add a reviewed change-set manifest before every GitHub publish (#98, #156). The review identifies the exact owner, repository, branch and checked head commit, then lists every README, asset and workflow write with its action, path, Base SHA, Result SHA and unified diff.

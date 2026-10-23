@@ -25,7 +25,7 @@ import {
   validateCollections,
   recoverCollections,
 } from "../badges/collections.js";
-import { validateDraft } from "./drafts.js";
+import { validateDraft, withoutDetachedCopies } from "./drafts.js";
 import { validateActivity } from "../workspace/commands.js";
 import { validateGuide, recoverGuide } from "../workspace/guide.js";
 export const BACKUP_LIMIT = 50_000_000;
@@ -114,7 +114,12 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
 }
 export function createBackup(data) {
   return {
-    ...portableData(data),
+    ...portableData({
+      ...data,
+      ...(Array.isArray(data?.drafts)
+        ? { drafts: data.drafts.map(withoutDetachedCopies) }
+        : {}),
+    }),
     version: 1,
     createdAt: new Date().toISOString(),
   };

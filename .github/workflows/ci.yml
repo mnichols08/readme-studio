@@ -24,6 +24,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Round-trip gate
+        run: npm run test:round-trip
       - run: npm test
       - run: npm run build
       - run: npm run report:bundle

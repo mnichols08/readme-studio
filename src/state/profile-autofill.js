@@ -104,8 +104,9 @@ export function autofillProfile(draft, p, options = profileOptions) {
       return;
     }
     // Manual Markdown edits relinquish ownership; don't append the same generated section again.
+    // An empty entry is a section whose text was left out of a download.
     const prior = previous?.sections?.[kind];
-    if (prior) {
+    if (typeof prior === "string") {
       preserved.push(kind);
       return;
     }

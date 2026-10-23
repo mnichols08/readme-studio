@@ -1,7 +1,6 @@
-import { detachGenerated } from "../generated/registry.js";
 import { themeBlocks } from "../themes/theme-resolver.js";
-import { createBlock, serializeBlocks } from "../markdown/serialize.js";
-import { uniformContext } from "../markdown/source-context.js";
+import { serializeBlocks } from "../markdown/serialize.js";
+import { patchBlocks } from "../markdown/source-patch.js";
 export const HISTORY_LIMIT = 80;
 export const HISTORY_BYTES = 8_000_000;
 export class Store extends EventTarget {
@@ -43,41 +42,17 @@ export class Store extends EventTarget {
     this.draft.updated = Date.now();
     this.dispatchEvent(new CustomEvent("change", { detail: source }));
   }
+  // A raw edit replaces only the Blocks it touched (ADR epic63-01) and returns
+  // the patch result so the caller can announce any Detachment.
   raw(markdown) {
     if (markdown === this.draft.markdown) return;
     this.checkpoint();
-    let detached = [];
-    try {
-      detached = detachGenerated(this.draft);
-    } catch {
-      /* Malformed optional ownership must never block manual source editing. */
-    }
-    if (detached.length)
-      this.draft.metadata = {
-        ...this.draft.metadata,
-        detachedGenerated: detached,
-      };
-    const sourceContext = uniformContext(this.draft);
-    const current =
-      this.draft.blocks.length === 1 && this.draft.blocks[0].type === "custom"
-        ? this.draft.blocks[0]
-        : null;
-    delete this.draft.metadata.bannerReference;
+    const result = patchBlocks(this.draft, markdown);
     this.draft.markdown = markdown;
-    this.draft.blocks = [
-      current
-        ? { ...current, settings: { markdown }, sourceContext }
-        : { ...createBlock("custom", { markdown }), sourceContext },
-    ];
-    for (const b of this.draft.blocks) {
-      delete b.sharedComponent;
-      delete b.githubGenerated;
-      delete b.profileAutofill;
-      delete b.profileIdentity;
-      delete b.profileIntro;
-      delete b.profileLinks;
-    }
+    this.draft.blocks = result.blocks;
+    this.draft.metadata = result.metadata;
     this.emit("raw");
+    return result;
   }
   blocks(blocks, metadata = this.draft.metadata) {
     this.checkpoint();

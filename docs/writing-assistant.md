@@ -11,7 +11,7 @@ Version 1.4.3 adds provider selection and safety hardening to optional, context-
 5. Inspect and edit **Proposed**. Generation never changes the draft. You can also paste a proposal manually without connecting AI.
 6. Choose **Review diff**, inspect the complete current/resulting README and line diff, approve the exact change, then **Apply**.
 
-Changing the proposal or inputs invalidates approval. A draft changed elsewhere cannot be overwritten: reopen the assistant against the current draft. Applying replaces only the chosen range; surrounding source remains exact. Check heading spacing when drafting at the cursor. The existing source-edit path converts builder content to Custom Markdown to avoid stale settings overwriting edits; Undo restores source and ownership. AI metadata is not embedded in exported Markdown.
+Changing the proposal or inputs invalidates approval. A draft changed elsewhere cannot be overwritten: reopen the assistant against the current draft. Applying replaces only the chosen range; surrounding source remains exact. Check heading spacing when drafting at the cursor. The existing source-edit path turns only the builder, component or generated sections whose lines change into Custom Markdown, so stale settings cannot overwrite edits, and names them in the status; untouched sections keep their ownership. Undo restores source and ownership. AI metadata is not embedded in exported Markdown.
 
 The assistant requests fact-preserving edits but cannot guarantee correctness. Review claims, URLs, commands, code and placeholders. Expansion is not permission to invent project capabilities or developer proficiency.
 

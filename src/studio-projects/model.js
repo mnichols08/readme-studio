@@ -1,7 +1,11 @@
 import { portableData } from "../state/portable-data.js";
 export { portableData } from "../state/portable-data.js";
 import { version as appVersion } from "../../package.json";
-import { newDraft, validateDraft } from "../state/drafts.js";
+import {
+  newDraft,
+  validateDraft,
+  withoutDetachedCopies,
+} from "../state/drafts.js";
 import { createBlock, serializeBlocks } from "../markdown/serialize.js";
 import { workspaceSettings } from "../state/workspace-backup.js";
 import { validateComponents } from "../components-library/storage.js";
@@ -26,6 +30,7 @@ const metadataKeys = [
   "importSource",
   "importHistory",
   "detachedGenerated",
+  "detachments",
   "dismissedSuggestions",
   "publishing",
   "studioProject",
@@ -61,7 +66,8 @@ export function createProject(
   embedded,
   now = new Date().toISOString(),
 ) {
-  const meta = metadata(draft.metadata),
+  const portable = withoutDetachedCopies(draft);
+  const meta = metadata(portable.metadata),
     createdAt = meta.studioProject?.createdAt || now;
   meta.studioProject = { createdAt };
   const project = {
@@ -73,7 +79,7 @@ export function createProject(
     updatedAt: now,
     document: {
       markdown: draft.markdown,
-      blocks: portableData(draft.blocks),
+      blocks: portableData(portable.blocks),
       metadata: meta,
     },
     settings: workspaceSettings(settings),

@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.4.** GitHub publishing now presents an immutable, reviewable change-set manifest with the exact target commit, per-file Base and Result SHAs, diffs, and explicit approval before any write. [Change-set review](docs/github-publishing.md#change-set-review) · [Publishing security](docs/security.md#optional-github-publishing-service)
+**Version 1.9.5.** Raw Markdown edits now preserve every untouched source byte and visual owner, detach only the blocks they change, and carry visible Detachment records through local drafts and portable files without retaining removed text. [Source-preserving edits](docs/editing.md#source-preserving-raw-edits) · [Round-trip identity](docs/adr/epic63-04-round-trip-identity-is-a-byte-level-ci-gate.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 
@@ -29,7 +29,7 @@ Guided start asks whether you want to write a profile README, write a repository
 - Save portable `.readme-studio.json` projects or export Markdown, packs and full workspace backups.
 - Optionally publish reviewed README, asset and workflow changes through a separately configured GitHub App service. Publishing starts read-only and unlocks only after a [Preflight](docs/github-publishing.md#preflight) of app, permission and branch access passes. A [change set review](docs/github-publishing.md#change-set-review) lists every file write with its Base and Result SHA, and publishing needs an explicit approval of that exact set.
 
-Manual Markdown remains available. Raw edits detach structured ownership when synchronization is unsafe. Themes guide generated content; they cannot style GitHub itself. The app light/dark switch updates preview too, with a separate preview override.
+Manual Markdown remains available. Raw edits change only the sections they touch: untouched builder sections keep their visual ownership, and any section that is detached is named in a status message and in the Sections list. Themes guide generated content; they cannot style GitHub itself. The app light/dark switch updates preview too, with a separate preview override.
 
 ## Your data
 

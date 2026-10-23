@@ -288,7 +288,7 @@ test("rejects reviewed fixes when the document's target changed since the check"
   ).toBeFocused();
 });
 
-test("says before and after Apply that a builder draft becomes Custom Markdown, and Undo restores its sections", async ({
+test("says before Apply that changed builder sections detach, keeps untouched sections, and Undo restores", async ({
   page,
 }) => {
   // The sample profile's builder sections plus one Custom Markdown block
@@ -337,20 +337,22 @@ test("says before and after Apply that a builder draft becomes Custom Markdown, 
   await panel.getByRole("button", { name: /Review fixes/ }).click(firstRead);
   const fixes = panel.locator("[data-fixes]");
   await expect(fixes.locator("[data-fix-builder]")).toContainText(
-    "Applying converts this draft to one Custom Markdown block",
+    "Applying detaches any builder section, component or generated content whose lines change",
   );
   const proposal = fixes
     .locator("[data-proposal]")
     .filter({ hasText: "npm run test-unit" });
   await proposal.getByRole("checkbox").check();
   await fixes.locator("[data-fix-apply]").click();
+  // The fix touched only the Custom Markdown block: every builder section
+  // keeps its ownership and nothing is reported as detached.
   await expect(panel.locator("[data-status]")).toContainText(
-    "The draft is now one Custom Markdown block.",
+    "Undo in the editor restores the previous Markdown.",
   );
-  await expect(panel.locator("[data-status]")).toContainText(
-    "Undo in the editor restores the previous Markdown and builder ownership.",
+  await expect(panel.locator("[data-status]")).not.toContainText(
+    "Custom Markdown",
   );
-  expect(await types()).toEqual(["custom"]);
+  expect(await types()).toEqual(before);
   expect(await markdown(page)).toBe(
     original.replace("npm run test-unit", "npm run test:unit"),
   );

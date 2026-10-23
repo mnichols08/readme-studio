@@ -10,11 +10,13 @@ export const contextKey = (c) =>
 export function documentSegments(draft) {
   let start = 0;
   return draft.blocks.map((block, index) => {
-    const source =
-      (index ? (block.separator ?? "\n\n") : "") + serializeBlock(block);
+    const separator = index ? (block.separator ?? "\n\n") : "";
+    const source = separator + serializeBlock(block);
     const entry = {
       source,
       start,
+      // Where the Block's own text begins, after its Seam.
+      contentStart: start + separator.length,
       end: start + source.length,
       sourceContext: contextForBlock(block, draft.metadata),
     };

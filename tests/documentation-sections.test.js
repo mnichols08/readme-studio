@@ -145,9 +145,16 @@ it("supports undo/redo and raw edit detachment without losing source", () => {
   expect(store.draft.markdown).toBe("");
   store.redo();
   expect(store.draft.markdown).toBe(source);
+  // Text appended after a builder block never detaches it.
   store.raw(source + "\nManual addition");
-  expect(store.draft.blocks[0].type).toBe("custom");
+  expect(store.draft.blocks[0].type).toBe("doc-testing");
+  expect(store.draft.blocks[1].type).toBe("custom");
   expect(store.draft.markdown).toBe(source + "\nManual addition");
+  // Editing inside the builder block detaches it.
+  store.raw(source.replace("npm test", "pnpm test") + "\nManual addition");
+  expect(store.draft.blocks[0].type).toBe("custom");
+  expect(store.draft.metadata.detachments).toHaveLength(1);
+  store.undo();
   store.undo();
   expect(store.draft.blocks[0].type).toBe("doc-testing");
 });

@@ -52,7 +52,7 @@ export class WritingAssistant extends HTMLElement {
       <p data-status role="status"></p>
       <writing-comparison hidden></writing-comparison>
       <label>Proposed<textarea data-proposed rows="8" maxlength="64000" placeholder="Generate a proposal, or paste and edit one here without connecting AI."></textarea></label>
-      <p>AI can make mistakes. Verify facts, links and commands. Applying uses source editing and converts builder-owned content to Custom Markdown; Undo restores source and ownership.</p>
+      <p>AI can make mistakes. Verify facts, links and commands. Applying uses source editing: builder, component or generated sections whose lines change become Custom Markdown, and untouched sections keep their ownership. Undo restores source and ownership.</p>
       <button data-review>Review diff</button>
       <section data-review-panel hidden><h2>Diff</h2>${sourceDiffMarkup({ beforeLabel: "Current README", afterLabel: "Proposed README", label: "Writing assistant diff" })}
       <label><input type="checkbox" data-approve> I reviewed Original, Proposed and Diff</label><button data-apply disabled>Apply</button></section>`;
