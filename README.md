@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.23.** Portable snippet packs now migrate safely to a version-2 format that can carry declarative, non-executing extension manifests. Every import exposes provenance, inert capabilities and external URLs before confirmation; hostile manifests are rejected and import remains offline. [Portable snippet packs](docs/snippet-packs.md) · [Security boundaries](docs/security.md)
+**Version 1.9.24.** Release candidates now produce a commit-bound acceptance artifact, recovery failures have a repeatable drill, and voluntary product feedback can be reviewed and downloaded as a redacted local file without telemetry. Human screen-reader and live-publishing gates remain explicitly pending until an operator records evidence. [Recovery drills](docs/recovery-drills.md) · [Privacy](docs/privacy.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

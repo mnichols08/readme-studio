@@ -452,7 +452,7 @@ export function installWorkspace(app) {
     }
     if (action === "settings") {
       app.modal(
-        `<h1>Workspace settings</h1><fieldset><legend>Editor</legend><label>Editor font size<select data-setting="editorFont"><option value="13">Small</option><option value="15">Medium</option><option value="18">Large</option></select></label></fieldset><fieldset><legend>Preview</legend><label>Default preview width<select data-setting="preview"><option value="1012">Desktop</option><option value="760">Narrow</option><option value="640">Tablet</option><option value="375">Mobile</option></select></label></fieldset><fieldset><legend>Accessibility</legend><label class="check"><input type="checkbox" data-setting="reduceMotion">Reduce motion</label><p>System reduced-motion preferences are also respected. Escape closes dialogs; Shift+Tab leaves the editor.</p></fieldset><fieldset><legend>Guidance</legend><label class="check"><input type="checkbox" data-guide-setting="nextSteps">Show next steps after imports, audits and templates</label><p>Next steps only open existing tools. Search workspace always lists every tool.</p></fieldset><fieldset><legend>GitHub</legend><p>Connection is optional. Publishing always requires a separate review.</p><button data-action="publish-github">Open publishing</button></fieldset><fieldset><legend>Storage</legend><button data-action="backup-all">Download all drafts backup</button><button data-action="restore">Restore backup</button></fieldset><details><summary>Advanced</summary><p>Analysis runs locally. Download a backup before clearing browser data.</p><a href="https://github.com/mnichols08/readme-studio/blob/main/docs/contributing.md" target="_blank" rel="noopener noreferrer">Contributor documentation</a></details>`,
+        `<h1>Workspace settings</h1><fieldset><legend>Editor</legend><label>Editor font size<select data-setting="editorFont"><option value="13">Small</option><option value="15">Medium</option><option value="18">Large</option></select></label></fieldset><fieldset><legend>Preview</legend><label>Default preview width<select data-setting="preview"><option value="1012">Desktop</option><option value="760">Narrow</option><option value="640">Tablet</option><option value="375">Mobile</option></select></label></fieldset><fieldset><legend>Accessibility</legend><label class="check"><input type="checkbox" data-setting="reduceMotion">Reduce motion</label><p>System reduced-motion preferences are also respected. Escape closes dialogs; Shift+Tab leaves the editor.</p></fieldset><fieldset><legend>Guidance</legend><label class="check"><input type="checkbox" data-guide-setting="nextSteps">Show next steps after imports, audits and templates</label><p>Next steps only open existing tools. Search workspace always lists every tool.</p></fieldset><fieldset><legend>GitHub</legend><p>Connection is optional. Publishing always requires a separate review.</p><button data-action="publish-github">Open publishing</button></fieldset><fieldset><legend>Storage</legend><button data-action="backup-all">Download all drafts backup</button><button data-action="restore">Restore backup</button></fieldset><fieldset><legend>Voluntary feedback</legend><p>Create a redacted diagnostic file locally. Studio never sends it.</p><button data-action="feedback-diagnostics">Open local feedback export</button></fieldset><details><summary>Advanced</summary><p>Analysis runs locally. Download a backup before clearing browser data.</p><a href="https://github.com/mnichols08/readme-studio/blob/main/docs/contributing.md" target="_blank" rel="noopener noreferrer">Contributor documentation</a></details>`,
       );
       app.querySelectorAll("[data-setting]").forEach((e) => {
         const key = e.dataset.setting;
@@ -473,6 +473,23 @@ export function installWorkspace(app) {
         app.save();
         app.renderNextSteps();
       };
+      return true;
+    }
+    if (action === "feedback-diagnostics") {
+      app.modal(
+        '<h1>Local feedback export</h1><p data-feedback-loading role="status">Loading local feedback tools…</p>',
+      );
+      const loading = app.querySelector("[data-feedback-loading]");
+      import("../feedback/dialog.js")
+        .then(({ openFeedbackDiagnostics }) => {
+          if (loading.isConnected && app.dialog.open)
+            openFeedbackDiagnostics(app);
+        })
+        .catch(() => {
+          if (loading.isConnected)
+            loading.textContent =
+              "Local feedback tools could not load. Nothing was recorded; reload and try again.";
+        });
       return true;
     }
     const event = activityEntry(action);

@@ -2,6 +2,12 @@
 
 README Studio's core editor is local-first. Markdown rendering, section building, analysis, refactors and local exports run in the browser. There is no application analytics service or cloud draft account in this repository.
 
+## Voluntary local feedback
+
+**Local feedback export** is off until you open it and check its opt-in box. Opening or closing the tool creates no report and stores no preference, response or event. After opt-in, Studio builds a preview in tab memory from the app version, online/storage/reduced-motion states, coarse workspace count buckets and the answers you select. The tool accepts no free text and its strict allowlist never includes Markdown, draft names, repository names, browser identifiers, URLs, credentials or raw counts.
+
+Choosing **Download redacted diagnostic** creates a local JSON file. Studio does not upload it, choose a recipient or remember that it exists. Sharing that downloaded file is a separate action under your control. This is distinct from the bounded Local activity list: the feedback tool is deliberately excluded from that list so merely opening it leaves no persistent feedback trace.
+
 ## Stored in this browser
 
 Drafts, builder metadata, public GitHub snapshots, reusable badge collections, themes, snippets, favorites, recent choices and workspace preferences use browser storage. The optional local activity list stores bounded command identifiers and timestamps, not source or search terms. The [Guided start](guided-start.md) goal and [Next steps](next-steps.md) preference are stored with the workspace and included in all-drafts backups, but not in Studio projects or exports. Which Next steps panel is showing is kept in memory only and never stored. Publishing recovery keeps a local pre-publish source checkpoint and a bounded list of non-secret commit references. Evidence snapshots store repository paths, Git revisions, capture times and a fingerprint of your Markdown, never repository file content; they are included in all-drafts backups but not in Studio projects. Optional Audit snapshots store bounded canonical repository, revision, time, state, type, check-coverage and finding identities (plus already-observed unavailable URLs), never README source, evidence prose or decisions; their separate local key is excluded from drafts, backups, projects and exports.

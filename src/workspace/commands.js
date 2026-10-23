@@ -51,6 +51,7 @@ export const commandGroups = {
     ["snippet-packs", "Snippet packs"],
     ["settings", "Settings"],
     ["activity", "Local activity"],
+    ["feedback-diagnostics", "Local feedback export"],
   ],
 };
 export const commands = Object.entries(commandGroups).flatMap(
