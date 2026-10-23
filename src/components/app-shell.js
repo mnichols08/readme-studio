@@ -1681,6 +1681,7 @@ export class AppShell extends HTMLElement {
     });
     panel.addEventListener("document-evidence", () => this.evidenceSnapshots());
     panel.addEventListener("document-suite", () => this.documentationSuite());
+    panel.addEventListener("document-links", () => this.documentLinkCheck());
     panel.addEventListener("document-new", () => {
       this.addDraft("Untitled document", []);
       this.closeDialog();
@@ -1753,6 +1754,74 @@ export class AppShell extends HTMLElement {
       }
     });
     panel.querySelector("[data-project-type]").focus();
+  }
+  async documentLinkCheck({ exportCurrent = false, exportAction } = {}) {
+    // A local/profile draft without a repository or suite path has no base
+    // against which a cross-document URL can resolve. Keep its established
+    // offline export path independent of a not-yet-loaded checker chunk.
+    if (
+      exportCurrent &&
+      !this.store.draft.metadata?.documentationSuite?.path &&
+      !documentTarget(this.store.draft)?.path
+    ) {
+      exportAction();
+      return;
+    }
+    const reviewSnapshot = exportCurrent
+      ? JSON.stringify({
+          active: this.data.active,
+          drafts: this.data.drafts.map((draft) => draftSnapshot(draft)),
+        })
+      : null;
+    const [{ checkDocumentLinks }] = await Promise.all([
+      import("../workspace/document-links.js"),
+      import("./document-link-check.js"),
+    ]);
+    if (
+      exportCurrent &&
+      reviewSnapshot !==
+        JSON.stringify({
+          active: this.data.active,
+          drafts: this.data.drafts.map((draft) => draftSnapshot(draft)),
+        })
+    ) {
+      this.notify("The workspace changed. Export again to run a fresh check.");
+      return;
+    }
+    const report = checkDocumentLinks(
+      this.data.drafts,
+      exportCurrent ? { sourceId: this.store.draft.id } : {},
+    );
+    const needsReview =
+      report.issues.length ||
+      report.truncatedDocuments ||
+      report.truncatedLinks ||
+      report.truncatedIssues ||
+      report.truncatedSources;
+    if (exportCurrent && !needsReview) {
+      exportAction();
+      return;
+    }
+    this.modal("<document-link-check></document-link-check>");
+    const panel = this.querySelector("document-link-check");
+    const exportSnapshot = exportCurrent ? reviewSnapshot : null;
+    panel.configure({ report, exportSnapshot });
+    panel.addEventListener("document-link-export", ({ detail }) => {
+      if (
+        detail.snapshot !==
+        JSON.stringify({
+          active: this.data.active,
+          drafts: this.data.drafts.map((draft) => draftSnapshot(draft)),
+        })
+      ) {
+        panel.querySelector("[data-status]").textContent =
+          "The workspace changed. Close this check and export again.";
+        return;
+      }
+      this.closeDialog();
+      exportAction();
+    });
+    panel.querySelector("[data-export], h1").focus();
   }
 
   saveCollections(items) {
@@ -3069,7 +3138,12 @@ export class AppShell extends HTMLElement {
         break;
       }
       case "download": {
-        const run = () => this.download(this.store.draft.markdown, "README.md");
+        const run = () =>
+          this.documentLinkCheck({
+            exportCurrent: true,
+            exportAction: () =>
+              this.download(this.store.draft.markdown, "README.md"),
+          });
         if (!this.unsavedSectionGuard(action, run)) run();
         break;
       }

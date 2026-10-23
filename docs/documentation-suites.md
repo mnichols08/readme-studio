@@ -12,6 +12,8 @@ The whole reviewed batch is validated and written to browser storage before the 
 
 Created files are independent **Local documents**. Their intended path and suite project type remain in workspace metadata and survive reloads and backups, but never enter exported Markdown. Suite creation makes no network request and does not publish. Repository association and GitHub publishing remain separate, explicitly reviewed workflows.
 
+Those intended paths also let the local [cross-document link check](document-link-checks.md) resolve navigation among suite files and detect old links after a path moves.
+
 ## Choosing a small suite
 
 Treat the project-type list as a menu, not a compliance checklist. Leave out contribution, security, support, architecture or deployment files when the project does not need them. Starting Markdown is guidance to replace with verified project information before sharing.

@@ -830,7 +830,7 @@ export function markdownAnchors(markdown) {
     for (const match of html.matchAll(
       /\s(?:id|name)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi,
     ))
-      anchors.add((match[1] ?? match[2] ?? match[3]).toLowerCase());
+      anchors.add(match[1] ?? match[2] ?? match[3]);
   });
   return [...anchors];
 }

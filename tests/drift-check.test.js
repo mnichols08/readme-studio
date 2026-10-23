@@ -637,7 +637,7 @@ describe("drift evaluation", () => {
       "## Getting Started!",
       "## Getting Started!",
       '<h2 id="Custom">Custom</h2>',
-      "[a](#getting-started) [b](#getting-started-1) [c](#custom) [d](#getting_started)",
+      "[a](#getting-started) [b](#getting-started-1) [c](#Custom) [d](#getting_started) [j](#custom)",
       "[e](#removed-section) [f](#top) [g](#readme) [h](#user-content-widget) [i](#L10)",
     ].join("\n\n");
     expect(markdownAnchors(markdown)).toEqual(
@@ -646,6 +646,7 @@ describe("drift evaluation", () => {
         "getting-started",
         "getting-started-1",
         "custom",
+        "Custom",
       ]),
     );
     const result = evaluateDrift(plan(markdown), null);
@@ -654,6 +655,7 @@ describe("drift evaluation", () => {
       ["#getting_started", "uncertain"],
       ["#getting-started", "matches"],
       ["#getting-started-1", "matches"],
+      ["#Custom", "matches"],
       ["#custom", "matches"],
       ["#user-content-widget", "matches"],
     ]);

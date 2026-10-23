@@ -201,4 +201,17 @@ describe("multi-README workspace", () => {
     expect(opened).toBe(1);
     expect(draft.markdown).toBe("# Existing exact source");
   });
+  it("opens the read-only cross-document link check", () => {
+    const draft = newDraft("Existing");
+    draft.markdown = "[Guide](docs/GUIDE.md)";
+    const el = document.createElement("workspace-documents");
+    el.configure([draft], draft.id);
+    let opened = 0;
+    el.addEventListener("document-links", () => opened++);
+
+    el.querySelector("[data-links]").click();
+
+    expect(opened).toBe(1);
+    expect(draft.markdown).toBe("[Guide](docs/GUIDE.md)");
+  });
 });
