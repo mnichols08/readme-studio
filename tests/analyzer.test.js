@@ -54,6 +54,21 @@ describe("source-aware analyzer", () => {
     );
     expect(a.issues.some((i) => i.ruleId === "heading-duplicate")).toBe(true);
   });
+  it("distinguishes generic media labels from meaningful and decorative alt", () => {
+    const analysis = analyzeDocument(
+      "![image](screenshot.png)\n\n![Architecture overview](architecture.svg)\n\n![](divider.svg)",
+    );
+    expect(
+      analysis.issues.filter((issue) => issue.ruleId === "image-alt-quality"),
+    ).toHaveLength(1);
+    expect(
+      analysis.issues.find((issue) => issue.ruleId === "image-alt-quality")
+        .message,
+    ).toMatch(/generic/i);
+    expect(
+      analysis.issues.filter((issue) => issue.ruleId === "image-alt"),
+    ).toHaveLength(1);
+  });
   it("shares immutable tokenization for the same source", () => {
     expect(parseSource("# same")).toBe(parseSource("# same"));
   });

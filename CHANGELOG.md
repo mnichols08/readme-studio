@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.19
+
+- Add a live Banner Builder accessibility review for meaningful alt text and light/dark primary, accent/title and muted-metadata contrast, with concise screen-reader status updates (#95, #150).
+- Flag empty alt text and generic labels such as `image`, `banner`, or `screenshot` while leaving all guidance advisory and preserving exact README Source.
+- Evaluate banner text colors against a conservative 4.5:1 target, report invalid/incomplete color input safely, and state the limits of the estimate instead of presenting it as WCAG certification.
+- Confirm generated SVG banners are static and exercise both operating-system and persistent in-app reduced-motion preferences across preview and reload (#151).
+
 ## 1.9.18
 
 - Deliver editable local themes, banner presets and combined brand kits for Story #94 and tasks #148/#149, with reviewed application, versioned JSON portability, backup/recovery and no silent README or remote writes.

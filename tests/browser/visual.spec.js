@@ -125,6 +125,95 @@ test("local theme-aware banners download safe SVG and insert portable markup", a
   await expect(page.locator('[data-banner="name"]')).toHaveValue("Ada 雪");
 });
 
+test("banner accessibility feedback covers alt, contrast and reduced-motion preview without editing source", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await start(page);
+  const editor = page.getByRole("textbox", {
+    name: "Markdown editor",
+    exact: true,
+  });
+  const source = await editor.inputValue();
+  await page.getByRole("button", { name: "Banner Builder" }).click();
+  const review = page.getByRole("region", {
+    name: "Banner accessibility review",
+  });
+  const announcement = page.locator(".banner-accessibility-status");
+  await expect(review).toContainText(/Alt text.*descriptive/i);
+  await expect(review).toContainText(/Light Primary text.*:1.*Pass/i);
+  await expect(review).toContainText(/Dark Primary text.*:1.*Pass/i);
+  await expect(review).not.toContainText(/Muted metadata/i);
+  await page
+    .getByLabel("Website / handle", { exact: true })
+    .fill("example.test");
+  await expect(review).toContainText(/Light Muted metadata.*:1/i);
+  await page.getByLabel("Website / handle", { exact: true }).fill("");
+  await expect(review).not.toContainText(/Muted metadata/i);
+  await expect(announcement).toContainText(
+    /Light Muted metadata.*no longer applies/i,
+  );
+  await page
+    .getByLabel("Generate variants", { exact: true })
+    .selectOption("light");
+  await expect(announcement).toContainText(
+    /Dark Primary text.*no longer applies to the current banner settings/i,
+  );
+  await expect(announcement).not.toContainText(/text is not rendered/i);
+  await expect(review).toContainText(/static.*no animation/i);
+
+  expect(
+    await page
+      .locator("button")
+      .first()
+      .evaluate((el) => getComputedStyle(el).transitionDuration),
+  ).toBe("0s");
+
+  await page.getByLabel("Banner alt text").fill("banner");
+  await expect(review).toContainText(/generic/i);
+  await expect(announcement).toContainText(/Alt text.*generic/i);
+  await expect(announcement).not.toContainText(/Primary|motion/i);
+  await page.getByLabel("Banner foreground hex").fill("ffffff");
+  await page.getByLabel("Banner light hex").fill("ffffff");
+  await expect(review).toContainText(/Light Primary text.*1\.0:1.*Review/i);
+  await expect(page.locator(".banner-preview img")).toHaveAttribute(
+    "alt",
+    "banner",
+  );
+  expect(
+    await page
+      .locator(".banner-preview img")
+      .evaluate((el) => getComputedStyle(el).animationName),
+  ).toBe("none");
+  await expect(editor).toHaveValue(source);
+
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  expect(
+    await page
+      .locator("button")
+      .first()
+      .evaluate((el) => getComputedStyle(el).transitionDuration),
+  ).not.toBe("0s");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await page
+    .locator(".workspace-tools")
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
+  await page.getByLabel("Reduce motion", { exact: true }).check();
+  await expect(page.locator("html")).toHaveClass(/reduce-motion/);
+  expect(
+    await page
+      .locator("button")
+      .first()
+      .evaluate((el) => getComputedStyle(el).transitionDuration),
+  ).toBe("0s");
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveClass(/reduce-motion/);
+  await expect(editor).toHaveValue(source);
+});
+
 test("section style overrides survive theme changes while Custom Markdown stays exact", async ({
   page,
 }) => {
