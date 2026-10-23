@@ -1,6 +1,6 @@
 # Batch review
 
-v1.5.3 connects the README Attention Queue with the multi-document workspace. Progress is local: reviewing a document does not assert that its remote README is fixed, published, or removed from future audit results.
+v1.5.3 connects the README Attention Queue with the multi-document workspace. v1.9.16 re-certifies its bounded queue and per-recipient apply boundary against the current regression suite. Progress is local: reviewing a document does not assert that its remote README is fixed, published, or removed from future audit results.
 
 ## Improve next
 
@@ -19,6 +19,8 @@ In Batch review, select **Include owner/repository** for the recipients. None is
 Existing local documents are reused. Missing local documents are fetched and saved one at a time, then Shared components opens with an editable **Contributing footer** prompt and only those document recipients preselected. Replace placeholder text with your real contribution guidance and save the shared definition. Saving the definition still changes no README.
 
 Choose **Preview insertion** to inspect every resulting document diff. Adjust recipients beside the diffs, explicitly approve the selected diffs, then apply locally. Independent Undo remains available. Adding the section does not mark items reviewed automatically.
+
+Changing recipients after preview clears approval. Excluded recipients are outside the apply plan: later edits to an excluded document do not block selected work, and Apply leaves its exact source unchanged. A changed selected recipient invalidates the whole reviewed plan before any document is written.
 
 There is no mass publish operation. Publish to GitHub remains a separate single-document flow requiring remote source review and confirmation. Batch review makes only read-only GitHub requests.
 

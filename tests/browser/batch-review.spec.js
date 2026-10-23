@@ -116,6 +116,25 @@ test("common contributing section opens selected sources and requires every resu
   await expect(
     shared.getByRole("button", { name: "Apply reviewed changes" }),
   ).toBeDisabled();
+  await shared
+    .getByRole("checkbox", { name: "Update repo-2 README" })
+    .uncheck();
+  await expect(shared.locator("[data-impact]")).toContainText(
+    "Affected: 2 READMEs · Selected: 1",
+  );
+  const excludedSource =
+    "# Excluded local edit\r\n\r\nKeep this byte-exact.\r\n";
+  await page.evaluate(async (source) => {
+    const app = document.querySelector("app-shell"),
+      draft = app.data.drafts.find(
+        (item) => item.metadata.repository === "example/repo-2",
+      ),
+      { createBlock } = await import("/src/markdown/serialize.js");
+    draft.markdown = source;
+    draft.blocks = [createBlock("custom", { markdown: source })];
+    draft.updated = Date.now();
+    app.save();
+  }, excludedSource);
   await shared.getByLabel("I reviewed all selected document diffs").check();
   await shared.getByRole("button", { name: "Apply reviewed changes" }).click();
   const changed = await page.evaluate(() =>
@@ -124,7 +143,19 @@ test("common contributing section opens selected sources and requires every resu
       .data.drafts.filter((d) => d.markdown.includes("Please open an issue"))
       .map((d) => d.metadata.repository),
   );
-  expect(changed).toEqual(["example/repo-0", "example/repo-2"]);
+  expect(changed).toEqual(["example/repo-0"]);
+  const excluded = () =>
+    page.evaluate(
+      () =>
+        document
+          .querySelector("app-shell")
+          .data.drafts.find(
+            (draft) => draft.metadata.repository === "example/repo-2",
+          ).markdown,
+    );
+  expect(await excluded()).toBe(excludedSource);
+  await page.reload();
+  await expect.poll(excluded).toBe(excludedSource);
   expect(
     await page.evaluate(() =>
       document

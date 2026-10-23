@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.16
+
+- Certify the existing bounded multi-repository review queue against Story #90 and task #144: at most 200 repository targets, one-at-a-time read-only source opening, local progress, explicit reviewed/skip decisions and no batch publishing.
+- Certify per-target common-section staging against task #145: every affected README has an exact before/after diff, recipients remain editable after preview, selection changes invalidate approval, and Apply requires a fresh explicit approval.
+- Add direct regression evidence that an excluded recipient may change after preview without blocking selected work, remains byte-for-byte unchanged by Apply, and a stale selected recipient fails the entire local write before mutation.
+- Retain the prior v1.5.3 implementation and public format unchanged; this release closes its outstanding roadmap trackers with current cross-browser evidence.
+
 ## 1.9.15
 
 - Add named, opt-in repository worksets under Save for grouping up to 100 canonical repository identities per set, with at most 50 sets in a workspace (#89, #142).

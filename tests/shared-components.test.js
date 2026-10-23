@@ -4,6 +4,7 @@ import {
   validateShared,
   saveShared,
   planShared,
+  selectSharedPlan,
   checkSharedPlan,
   recoverShared,
 } from "../src/workspace/shared-components.js";
@@ -80,6 +81,30 @@ describe("reviewed shared documentation", () => {
     const changed = saveShared(lib, { ...lib.items[0], markdown: "Different" });
     expect(() => checkSharedPlan(plan, [a], changed)).toThrow(
       /definition changed/,
+    );
+  });
+  it("checks and applies only explicitly selected recipient snapshots", () => {
+    const lib = library(),
+      included = draft("Included"),
+      excluded = draft("Excluded"),
+      preview = planShared(
+        [included, excluded],
+        lib.items[0],
+        [included.id, excluded.id],
+        "insert",
+      ),
+      selected = selectSharedPlan(preview, [included.id]);
+    expect(preview.entries).toHaveLength(2);
+    expect(selected.entries.map((entry) => entry.id)).toEqual([included.id]);
+    excluded.markdown = "# Excluded changed after preview";
+    expect(() =>
+      checkSharedPlan(selected, [included, excluded], lib),
+    ).not.toThrow();
+    expect(selected.entries[0].markdown).toContain("## Security");
+    expect(excluded.markdown).toBe("# Excluded changed after preview");
+    included.markdown = "# Included changed after preview";
+    expect(() => checkSharedPlan(selected, [included, excluded], lib)).toThrow(
+      /document changed/,
     );
   });
   it("skips local builder edits and detaches raw edits, while Undo restores the link", () => {
