@@ -12,7 +12,7 @@ const date = (value) => new Date(value).toISOString();
 export class AuditSnapshotHistory extends HTMLElement {
   connectedCallback() {
     this.snapshots = new AuditSnapshots();
-    this.innerHTML = `<section><h2>Audit snapshot history</h2><p>Optionally copy the audit results already on screen into bounded local history. Capturing does not fetch, re-audit, monitor, or schedule anything. README source, evidence prose, and your audit decisions are not saved.</p><button type="button" data-capture>Capture current audit results</button><p data-snapshot-status role="status" aria-live="polite"></p><div data-storage></div><div data-history></div><div data-compare></div><div data-diff></div></section>`;
+    this.innerHTML = `<section><h2 tabindex="-1">Audit snapshot history</h2><p>Optionally copy the audit results already on screen into bounded local history. Capturing does not fetch, re-audit, monitor, or schedule anything. README source, evidence prose, and your audit decisions are not saved.</p><button type="button" data-capture>Capture current audit results</button><p data-snapshot-status role="status" aria-live="polite"></p><div data-storage></div><div data-history></div><div data-compare></div><div data-diff></div></section>`;
     this.querySelector("[data-capture]").onclick = () => this.capture();
     this.onStorage = (event) => {
       if (event.key === null || event.key === AUDIT_SNAPSHOTS_KEY) {
@@ -119,7 +119,7 @@ export class AuditSnapshotHistory extends HTMLElement {
           ];
           (
             remaining[Math.min(index, remaining.length - 1)] ||
-            this.querySelector("[data-capture]")
+            this.querySelector("h2")
           )?.focus();
           this.status(
             "Audit snapshot deleted. Current audit results are unchanged.",
@@ -205,6 +205,7 @@ export class AuditSnapshotHistory extends HTMLElement {
       try {
         this.snapshots.reset();
         this.draw();
+        this.querySelector("h2").focus();
         this.status(
           "Damaged audit snapshots reset. Current results and drafts are unchanged.",
         );

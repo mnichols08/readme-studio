@@ -43,4 +43,20 @@ describe("audit snapshot history component", () => {
     element.setData({ ...state, username: "bravo" }, false);
     expect(element.querySelector("[data-diff]").textContent).toBe("");
   });
+
+  it("moves focus to the heading after resetting damaged storage", () => {
+    localStorage.setItem(AUDIT_SNAPSHOTS_KEY, "damaged");
+    const element = document.createElement("audit-snapshot-history");
+    document.body.append(element);
+    element.setData(
+      { username: "alpha", results: new Map(), typeOverrides: new Map() },
+      false,
+    );
+    element.querySelector("[data-confirm-reset]").checked = true;
+    const reset = element.querySelector("[data-reset]");
+    reset.focus();
+    reset.click();
+    expect(document.activeElement).toBe(element.querySelector("h2"));
+    expect(element.snapshots.error).toBe("");
+  });
 });
