@@ -14,6 +14,17 @@ const root = join(process.cwd(), "tests", "fixtures", "round-trip");
 const manifest = JSON.parse(readFileSync(join(root, "manifest.json"), "utf8"));
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const fixture = (name) => readFileSync(join(root, name));
+const normalizeIds = (value, ids) => {
+  const visit = (item) => {
+    if (typeof item === "string") return ids.get(item) || item;
+    if (Array.isArray(item)) return item.map(visit);
+    if (!item || typeof item !== "object") return item;
+    return Object.fromEntries(
+      Object.entries(item).map(([key, child]) => [key, visit(child)]),
+    );
+  };
+  return visit(value);
+};
 function normalizedBackup(backup) {
   const copy = structuredClone(backup);
   delete copy.appVersion;
@@ -26,33 +37,36 @@ function normalizedBackup(backup) {
       ids.set(block.id, `block:${draftIndex}:${blockIndex}`),
     );
   });
-  const visit = (value) => {
-    if (typeof value === "string") return ids.get(value) || value;
-    if (Array.isArray(value)) return value.map(visit);
-    if (!value || typeof value !== "object") return value;
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, visit(item)]),
-    );
-  };
-  return visit(copy);
+  return normalizeIds(copy, ids);
+}
+function normalizedProject(project) {
+  const copy = structuredClone(project);
+  delete copy.appVersion;
+  delete copy.updatedAt;
+  const ids = new Map(
+    copy.document.blocks.map((block, index) => [block.id, `block:${index}`]),
+  );
+  return normalizeIds(copy, ids);
 }
 
 describe("round-trip gate", () => {
-  it("pins every fixture byte-for-byte and rejects unlisted Markdown", () => {
-    expect(manifest.version).toBe(1);
+  it("pins every fixture byte-for-byte and rejects unlisted corpus files", () => {
+    expect(manifest.version).toBe(2);
     const listed = manifest.fixtures.map((entry) => entry.name).sort();
     const present = readdirSync(root)
-      .filter((name) => name.endsWith(".md"))
+      .filter(
+        (name) => name.endsWith(".md") || name.endsWith(".readme-studio.json"),
+      )
       .sort();
     expect(listed).toEqual(present);
     for (const entry of manifest.fixtures) {
-      expect(entry.kind).toBe("markdown");
+      expect(["markdown", "studio-project"]).toContain(entry.kind);
       expect(entry.covers).toEqual(expect.any(String));
       expect(sha256(fixture(entry.name)), entry.name).toBe(entry.sha256);
     }
   });
 
-  it.each(manifest.fixtures)(
+  it.each(manifest.fixtures.filter(({ kind }) => kind === "markdown"))(
     "$name survives Markdown, project, and workspace round trips",
     ({ name }) => {
       const source = fixture(name).toString("utf8");
@@ -95,6 +109,46 @@ describe("round-trip gate", () => {
           },
         ],
       });
+    },
+  );
+
+  it.each(manifest.fixtures.filter(({ kind }) => kind === "studio-project"))(
+    "$name preserves Studio JSON source, structure, ownership, and settings",
+    ({ name, blockTypes }) => {
+      const raw = fixture(name).toString("utf8");
+      const pinned = JSON.parse(raw);
+      const opened = inspectProject(raw);
+      expect(opened.mode).toBe("project");
+      expect(opened.source).toBe(pinned.document.markdown);
+      expect(serializeBlocks(opened.draft.blocks)).toBe(opened.source);
+      expect(opened.draft.blocks.map((block) => block.type)).toEqual(
+        blockTypes,
+      );
+
+      const recreated = createProject(
+        opened.draft,
+        opened.settings,
+        undefined,
+        pinned.updatedAt,
+      );
+      expect(normalizedProject(recreated)).toEqual(normalizedProject(pinned));
+      const reopened = inspectProject(JSON.stringify(recreated));
+      expect(reopened.mode).toBe("project");
+      expect(reopened.source).toBe(opened.source);
+      expect(reopened.draft.blocks).toEqual(opened.draft.blocks);
+
+      const backup = createBackup({
+        version: 1,
+        drafts: [opened.draft],
+        active: opened.draft.id,
+        settings: opened.settings,
+      });
+      const restored = validateWorkspace(backup, { preserveIds: true });
+      expect(restored.drafts[0].markdown).toBe(opened.source);
+      expect(restored.drafts[0].blocks).toEqual(opened.draft.blocks);
+      expect(normalizedBackup(createBackup(restored))).toEqual(
+        normalizedBackup(createBackup(validateWorkspace(backup))),
+      );
     },
   );
 });

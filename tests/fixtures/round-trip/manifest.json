@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "fixtures": [
     {
       "name": "bom.md",
@@ -42,6 +42,20 @@
       "kind": "markdown",
       "covers": "tabs, hard breaks, and trailing whitespace",
       "sha256": "4dcaa6a4217cbf78dd6fc67055e5daff8150b496f2572002eefee28d65066ee4"
+    },
+    {
+      "name": "studio-project.readme-studio.json",
+      "kind": "studio-project",
+      "covers": "Studio JSON with BOM, CRLF, raw HTML, and workspace preferences",
+      "blockTypes": ["custom"],
+      "sha256": "55310d14dfd2917c67a073f24a9472cad006223d18fef68e98333495f55a4fe9"
+    },
+    {
+      "name": "mixed-ownership.readme-studio.json",
+      "kind": "studio-project",
+      "covers": "builder, exact custom Markdown, component ownership, seams, and mixed line endings",
+      "blockTypes": ["hero", "custom", "component"],
+      "sha256": "f240986b7de047caef6e90397e60a427d46ccf11f5a34da067bd661a66ce3dfe"
     }
   ]
 }
