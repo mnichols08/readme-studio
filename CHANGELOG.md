@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.9.2
+
+- Stack Intelligence shows the Provenance of every detected declaration (#84, #132): Manifest path, section, line, branch, shortened blob SHA and when it was observed. The full blob SHA is available to screen readers. A cached result keeps its original Observed at.
+- Each declaration has a named Confidence basis (explicit, inherited, conditional or ambiguous) with one fixed explanation. Bases are never a number or ranking and never describe skill. Poetry dependencies declared `optional = true` are conditional, like Cargo and PEP 621 optional dependencies.
+- Each repository result has an "Uncertain stack results (N)" list (#133). It holds conditional and ambiguous declarations with their reason, and manifests that were found but not read, listed as "Not read — unknown". The count includes unread manifests beyond the listed paths, so it matches the discovery summary. Uncertain results still appear in place in the dependency list.
+- Results are marked Stale when the loaded repository list shows a newer push than the one the scan started from, or when they were observed more than 24 hours ago. Both push times come from GitHub, so a wrong local clock does not change the result. The text badge points to Fetch fresh manifests, and the summary line includes "Stale". This is worked out when results are shown, with no timers or extra requests.
+- Stack DNA evidence shows the same provenance and basis, and labels technologies with only conditional or ambiguous evidence as "only uncertain evidence".
+- In Stack-to-README review, each evidence line names its Confidence basis. Technologies with only uncertain evidence are left out of the Detected stack section and get no badge suggestion. They are offered separately, unselected, as "Technologies with only uncertain evidence", with a caveat.
+- Stack scan records are now version 5 and session-only. `observedAt` replaces `checkedAt`, which remains as an alias for one release. Records gain `pushedAt`, and dependency evidence items carry full Provenance with a named Confidence basis. The basis explanation is looked up when shown and is not stored with each item.
+- The "Found, not read" heading in Project boundaries is now "Not read — unknown".
+
+## 1.9.1
+
+- Add the usability scripts ([docs/usability-scripts.md](docs/usability-scripts.md)) (#76, #116): seven Usability scenarios (N1–N4 novice, E1–E3 experienced). Each has a start state, a success criterion and a step budget. The doc also has a facilitator protocol, consent and privacy statements, and a severity scale. There are no in-app analytics, telemetry or new storage (ADR 0006).
+- Add the Friction tracker ([docs/usability-findings.md](docs/usability-findings.md)). Scripted run, heuristic walkthrough and Participant session findings are kept in separate sections. No Participant sessions are recorded yet.
+- Add scripted runs (`tests/browser/usability-scenarios.spec.js`) that count author actions in each scenario. They attach a JSON result and fail when a scenario stops completing or goes over the step budget in the scripts doc. The E2 run also fails if any write request reaches GitHub. `tests/usability.test.js` checks that the scripts doc and tracker stay consistent, including findings tables placed under any other heading.
+- Guided start offers **Restore a backup** among its other ways to start (#117). It opens the existing restore dialog, which checks the file before anything changes.
+- A merge restore of a workspace backup now opens the backup's active draft and says which draft it opened, also when some incoming evidence snapshots did not fit the workspace limit. Every local draft is kept.
+- **Export README**, **Copy Markdown**, **Save Studio project**, **Download all drafts backup** and **Download draft backup** no longer silently leave out section edits that have not been saved. They ask first: save the section and continue, continue without the edits, or keep editing. Saving happens only on that choice and Undo reverses it. If the section's fields are invalid, no save is offered and Keep editing returns to the form's fields. If the form closes while the question is open, nothing is saved or exported and a notification says so.
+
+## 1.9.0
+
+- Stack Intelligence can include nested manifests in monorepos (#83). A separate, session-only **Include nested manifests (monorepo)** consent reads one repository tree listing. It maps Manifests to Project boundaries: the repository root, Workspace members (declared by package.json `workspaces`, `pnpm-workspace.yaml`, Cargo `[workspace]`, `go.work` or `[tool.uv.workspace]`) and Nested projects. Results list the boundaries, a "found / read / not read" summary, and dependencies grouped per boundary. Every file is read at the head commit the tree came from.
+- Bound Nested discovery (#130): at most 4 directory levels, dependency and build directories skipped, at most 15 nested Manifests read per repository (members first, deterministic order), at most 24 requests per repository and at most 25 repositories per nested run. If more repositories are selected, the scan is refused with an explanation rather than truncated. If GitHub truncates the tree, root Manifests and workspace declaration files are still found through the root listing, within the same 24-request budget.
+- Harden discovery against malicious paths, with tests (#131). Traversal, absolute, backslash, percent-encoded dot, control-character and over-long paths are rejected with notices. Symlinks, submodules, missing declared members and nested Manifests over 256 KB are never fetched. Workspace patterns that cannot be interpreted are reported, and matching takes bounded time for any pattern. Contents responses are checked for path, size, target and encoding.
+- The stack scan record is now version 4 (session-only). Manifests carry their full `path`, registry `file` and `project`. Dependencies merge per Project boundary. The cache separates nested and root-only results. Root-only analysis keeps its budget of one listing plus five Manifests.
+
 ## 1.8.0
 
 - Add the publishing Preflight (#97): an explicit, read-only check of the exact repository, branch and path before any write. It checks the publishing service, GitHub session, GitHub App installation, Contents permission, your push access, archive state, branch existence, path support and, for workflows, server opt-in plus Workflows: write. Branch protection, rulesets and committing to the default branch show as advisory warnings that never block.

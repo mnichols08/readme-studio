@@ -10,6 +10,10 @@ import { html, serializeBlock } from "../markdown/serialize.js";
 import { render } from "../markdown/render.js";
 import technologies from "../data/technologies.json";
 import { snippets } from "../data/snippets.js";
+import {
+  sectionMarkdown,
+  unsavedSection,
+} from "../workspace/unsaved-section.js";
 const field = (key, label, type = "text", options = null) => ({
   key,
   label,
@@ -135,7 +139,28 @@ export function defaults(type) {
 export class BuilderForm extends HTMLElement {
   set block(value) {
     this.value = structuredClone(value);
+    this.opened = sectionMarkdown(this.value);
     this.draw();
+  }
+  // Edits that would change the README but are not saved to it yet.
+  isDirty() {
+    return !!this.value && unsavedSection(this.opened, this.value);
+  }
+  // Whether the fields can produce Markdown, so Save section can succeed.
+  canSave() {
+    return !!this.value && sectionMarkdown(this.value) !== null;
+  }
+  // Saves the section as the submit button does; false when its fields are
+  // invalid, so nothing was saved.
+  save() {
+    if (!this.output()) return false;
+    this.dispatchEvent(
+      new CustomEvent("commit", {
+        detail: structuredClone(this.value),
+        bubbles: true,
+      }),
+    );
+    return true;
   }
   fields(fields, object, prefix = "") {
     return fields
@@ -358,13 +383,7 @@ export class BuilderForm extends HTMLElement {
       );
     this.querySelector("form").onsubmit = (e) => {
       e.preventDefault();
-      if (!this.output()) return;
-      this.dispatchEvent(
-        new CustomEvent("commit", {
-          detail: structuredClone(this.value),
-          bubbles: true,
-        }),
-      );
+      this.save();
     };
     this.oninput = (e) => {
       const p = e.target.dataset.path;

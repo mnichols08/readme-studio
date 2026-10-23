@@ -16,6 +16,8 @@ npm run format:check
 
 `npm run format` formats application, scripts, tests, and release documentation. Fixtures are deliberately excluded: their whitespace and malicious or malformed markup are test inputs. User-owned `roadmap.md` is excluded too. Fixture descriptions are in [tests/fixtures/README.md](../tests/fixtures/README.md).
 
+`tests/browser/usability-scenarios.spec.js` runs the Usability scenarios in [usability-scripts.md](usability-scripts.md) and fails when one stops completing or takes more author actions than its documented step budget. If a change adds or removes a step on purpose, update the budget in the scripts doc in the same commit and note why in [usability-findings.md](usability-findings.md); `tests/usability.test.js` checks that tracker. Scripted runs are never reported as Participant session results.
+
 GitHub calls and remote images are mocked in workflow tests. Performance tests seed a large editor document, dispatch a normal input event, then measure a real incremental keyboard edit. Measurements are attached as JSON artifacts; generous completion checks are preferable to millisecond thresholds. Playwright bulk `fill()` of very large strings can measure native insertion/tracing overhead rather than application handling. Do not mistake that for a render benchmark.
 
 Release branches run Chromium, Firefox, and WebKit in CI; other branches run Chromium. Only Chromium captures documentation screenshots so engines do not overwrite each other's artifacts. Failure traces are uploaded by CI. These automated checks complement manual keyboard, touch, and assistive-technology review; they do not certify accessibility.
