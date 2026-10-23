@@ -4,7 +4,9 @@ import {
   ownershipKind,
   readDetachments,
 } from "./source-patch.js";
-import { isBuilderBlockType, serializeBlock } from "./serialize.js";
+import { generatedRegistry } from "../generated/registry.js";
+import { isBuilderBlockType } from "./block-types.js";
+import { serializeBlock } from "./serialize.js";
 
 const source = (block) => {
   try {
@@ -27,8 +29,22 @@ const plan = (current, proposedBlock, record, label, kind) => ({
   proposedBlock: structuredClone(proposedBlock),
 });
 
-const validVisualCopy = (record) => {
+const validVisualCopy = (draft, record) => {
   const previous = record.previous;
+  let generatedIds;
+  try {
+    generatedIds = new Set(
+      generatedRegistry({
+        blocks: [previous],
+        metadata: draft.metadata,
+      }).flatMap((unit) => [
+        ...(unit.blockId ? [unit.blockId] : []),
+        ...(Array.isArray(unit.blockIds) ? unit.blockIds : []),
+      ]),
+    );
+  } catch {
+    return false;
+  }
   if (
     !previous ||
     typeof previous.id !== "string" ||
@@ -37,7 +53,7 @@ const validVisualCopy = (record) => {
     typeof previous.settings !== "object" ||
     record.labels.length !== 1 ||
     record.kinds.length !== 1 ||
-    ownershipKind(previous) !== record.kinds[0]
+    ownershipKind(previous, draft.metadata, generatedIds) !== record.kinds[0]
   )
     return false;
   return record.kinds[0] === "component"
@@ -58,7 +74,7 @@ function reviewRecord(draft, recordId, snapshot = null, targetBlockId = null) {
     throw Error(
       "This Detachment record is not Restorable. Keep the current Markdown or use Undo when it is still available.",
     );
-  if (!validVisualCopy(record))
+  if (!validVisualCopy(draft, record))
     throw Error("This Detachment record has an invalid visual version.");
   if (targetBlockId && record.blockId !== targetBlockId)
     throw Error(

@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { serializeBlocks } from "../src/markdown/serialize.js";
 import { Store } from "../src/state/store.js";
 import {
+  authorRepositories,
+  repositoryContext,
+} from "../src/github/repository-context.js";
+import {
   applyOwnershipReview,
   ownershipReviewForEdit,
   ownershipReviewForRecord,
@@ -22,7 +26,7 @@ const record = (previous = hero()) => ({
   version: 1,
   id: "record-1",
   blockId: "custom-1",
-  previousBlockIds: ["hero-1"],
+  previousBlockIds: [previous.id],
   labels: ["Ada"],
   kinds: ["builder"],
   at: "2026-10-22T00:00:00.000Z",
@@ -147,6 +151,44 @@ describe("ownership review", () => {
     ["a profile copy", { ...hero(), profileIntro: true }],
   ])("refuses %s in untrusted Restorable metadata", (_label, previous) => {
     const d = draft([detached()], { detachments: [record(previous)] });
+    expect(() => ownershipReviewForRecord(d, "record-1")).toThrow(
+      "invalid visual version",
+    );
+  });
+
+  it("refuses registry-derived generated project ownership", () => {
+    const previous = authorRepositories(
+      [
+        repositoryContext({
+          name: "demo",
+          full_name: "ada/demo",
+          description: "Generated description",
+          homepage: "",
+          topics: ["readme"],
+          language: "JavaScript",
+          default_branch: "main",
+          lastFetched: "2026-10-22T00:00:00.000Z",
+        }),
+      ],
+      { action: "projects" },
+    );
+    delete previous.githubGenerated;
+    const d = draft([detached()], { detachments: [record(previous)] });
+    expect(() => ownershipReviewForRecord(d, "record-1")).toThrow(
+      "invalid visual version",
+    );
+  });
+
+  it("refuses banner ownership derived from draft metadata", () => {
+    const previous = {
+      id: "banner-1",
+      type: "picture",
+      settings: { light: "assets/banner.svg", alt: "Banner" },
+    };
+    const d = draft([detached()], {
+      bannerReference: { blockId: "banner-1", source: "banner" },
+      detachments: [record(previous)],
+    });
     expect(() => ownershipReviewForRecord(d, "record-1")).toThrow(
       "invalid visual version",
     );

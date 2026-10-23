@@ -1,7 +1,4 @@
-import {
-  documentationSections,
-  serializeDocumentation,
-} from "../documentation/sections.js";
+import { serializeDocumentation } from "../documentation/sections.js";
 import { callout, details, codeSample, columns } from "../styling/blocks.js";
 import { present, divider } from "../styling/presentation.js";
 import { serializeShowcase } from "../projects/serialize-project.js";
@@ -19,27 +16,6 @@ export const text = (value = "") =>
   String(value)
     .replace(/[\\`*_[\]<>#]/g, "\\$&")
     .replace(/\r?\n/g, " ");
-const BUILDER_BLOCK_TYPES = new Set([
-  "hero",
-  "about",
-  "stack",
-  "social",
-  "projects",
-  "widget",
-  "learning",
-  "writing",
-  "contact",
-  "divider",
-  "badge",
-  "badges",
-  "picture",
-  "callout",
-  "details",
-  "code",
-  "columns",
-  ...Object.keys(documentationSections),
-]);
-export const isBuilderBlockType = (type) => BUILDER_BLOCK_TYPES.has(type);
 const destination = (value, image = false) =>
   safeUrl(value, { image }).replace(/[()\s]/g, (c) => encodeURIComponent(c));
 export { buildStaticBadge as badgeUrl } from "../badges/shields.js";
