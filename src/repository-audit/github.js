@@ -442,6 +442,10 @@ export const auditSession = {
   selected: new Set(),
   results: new Map(),
   typeOverrides: new Map(),
+  // Improvement plan decisions for this session only, keyed by canonical
+  // owner/name: skipped -> Set(finding ID), dismissed -> Map(ID -> revision).
+  skipped: new Map(),
+  dismissed: new Map(),
   includeForks: false,
   includeArchived: false,
   viewPage: 0,

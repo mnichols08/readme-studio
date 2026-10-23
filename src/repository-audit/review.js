@@ -1,9 +1,17 @@
 import { healthTargets, checkTarget } from "../github/health.js";
 import { cachedHealth, cacheHealth } from "../github/health-cache.js";
+import { sourceHash } from "../state/source-hash.js";
 
-import { historyFindings } from "./signals.js";
+import { finding, historyFindings } from "./signals.js";
 
-export async function reviewReadme(repo, readme, { client, signal } = {}) {
+// `reviewedAt` is when the checks finished; plans cite it for link, image and
+// history evidence instead of the time the audit read the README.
+export async function reviewReadme(repo, readme, options = {}) {
+  const review = await checks(repo, readme, options);
+  return { ...review, reviewedAt: options.client.now() };
+}
+
+async function checks(repo, readme, { client, signal } = {}) {
   const findings = [],
     notes = [];
   if (readme.source === null)
@@ -56,7 +64,11 @@ export async function reviewReadme(repo, readme, { client, signal } = {}) {
     checked++;
     if (result.state === "not found")
       findings.push(
-        `${target.image ? "Image" : "Link"} unavailable: ${target.url} (HTTP 404/410 at check time).`,
+        finding(
+          `${target.image ? "image" : "link"}:unavailable:${sourceHash(target.url)}`,
+          `${target.image ? "Image" : "Link"} unavailable: ${target.url} (HTTP 404/410 at check time).`,
+          { url: target.url },
+        ),
       );
     else if (!["reachable", "redirected"].includes(result.state)) unknown++;
     if (result.state === "rate limited") {

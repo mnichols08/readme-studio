@@ -1,6 +1,10 @@
 import { analyzeDocument } from "../analysis/analyze.js";
 import { parseSource } from "../analysis/source.js";
-import { documentationFacts, suggestProjectType } from "./project-types.js";
+import {
+  documentationFacts,
+  namesTopic,
+  suggestProjectType,
+} from "./project-types.js";
 import { safeUrl } from "../markdown/url-safety.js";
 
 import { placeholderFindings } from "./signals.js";
@@ -45,6 +49,13 @@ function prose(tokens, out = []) {
   }
   return out.filter((text) => words(text).length);
 }
+
+// Link text or address that names documentation. "API" counts in link text
+// only, because an API's own address is not documentation.
+const docsLabel =
+  /\b(?:docs?|documentation|api|reference|manual|wiki|guides?)\b/i;
+const docsUrl =
+  /\b(?:docs?|documentation|reference|manual|wiki|guides?)\b|readthedocs|docs\.rs|pkg\.go\.dev/i;
 
 // Explainable rules, not a score. Activity and popularity never affect the state.
 export function classifyReadme(source, repo = {}) {
@@ -98,13 +109,14 @@ export function classifyReadme(source, repo = {}) {
   const usage =
     sectionHas(usagePattern) ||
     /\b(?:run the|use the|usage:)\b[^.!?\n]{8,}/i.test(body);
-  const links = analysis.links.filter(
+  const projectLinks = analysis.links.filter(
     (l) =>
       l.kind !== "anchor" &&
       l.kind !== "mailto" &&
       safeUrl(l.url) &&
       !/!\[|<img\b/i.test(l.raw),
-  ).length;
+  );
+  const links = projectLinks.length;
   const supportingImages = analysis.images.filter(
     (image) =>
       !image.badge && !image.widget && safeUrl(image.url, { image: true }),
@@ -121,6 +133,16 @@ export function classifyReadme(source, repo = {}) {
     badges: analysis.badges.length,
     codeExamples: analysis.codeBlocks.length,
     projectLinks: links,
+    documentationLinks: projectLinks.filter(
+      (l) => docsLabel.test(l.label || "") || docsUrl.test(l.url),
+    ).length,
+    // Headings using any English topic term; none suggests another language.
+    topicHeadings: analysis.headings.filter(
+      ({ title }) =>
+        namesTopic(title) ||
+        setupPattern.test(title) ||
+        usagePattern.test(title),
+    ).length,
     setup,
     usage,
   };
