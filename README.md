@@ -2,7 +2,7 @@
 
 A local-first workspace for creating GitHub profile and repository READMEs. Build visually, edit Markdown directly, and export an ordinary `README.md` with no Studio runtime dependency.
 
-**Version 1.9.7.** Ownership review now prevents a stale builder or component form from overwriting Markdown changed after the form opened. Restorable Detachments show current and visual source plus a unified diff; keeping Markdown is the default, while restoring the reviewed visual version is one Undoable step. [Ownership review](docs/editing.md#ownership-review) · [Conflict decision](docs/adr/epic63-03-ownership-conflicts-are-reviewed-after-the-edit-not-while-typing.md)
+**Version 1.9.8.** The release gate now proves unchanged round trips against a byte-pinned compatibility corpus spanning raw Markdown, Studio JSON and mixed builder/Custom Markdown/component ownership. [Project compatibility](docs/project-schema.md#round-trip-compatibility) · [Identity decision](docs/adr/epic63-04-round-trip-identity-is-a-byte-level-ci-gate.md)
 
 ![README Studio workspace](docs/screenshots/studio-desktop.png)
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.8
+
+- Complete the Round-trip corpus with SHA-256-pinned Studio-project fixtures for raw source and mixed builder/Custom Markdown/component ownership (#79, #122).
+- Verify exact Markdown, Block order and types, Seams, component metadata, workspace preferences and project/workspace re-exports. The corpus refuses unlisted or changed fixture bytes instead of silently accepting normalized output.
+- Keep `npm run test:round-trip` as an early, named CI release gate on pull requests, `main` and version tags. It covers the full pinned corpus plus deterministic seeded single-range edits (#123).
+
 ## 1.9.7
 
 - Add Ownership review for stale builder and component saves (#78, #120). Current Markdown, the proposed visual version and a unified diff are shown before anything can replace source changed after the form opened.
