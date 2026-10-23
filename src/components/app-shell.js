@@ -62,8 +62,6 @@ import {
   instanceBlock,
   detachBlock,
 } from "../component-instances/ownership.js";
-import "./snippet-pack-dialog.js";
-import { importPack } from "../snippets/pack-schema.js";
 import "./widget-hub.js";
 import "./component-library.js";
 import "./example-export-check.js";
@@ -201,6 +199,7 @@ export class AppShell extends HTMLElement {
     this.data.badgeCollections ||= { version: 1, items: [] };
     this.data.guide = validateGuide(this.data.guide);
     this.draw();
+    this.loadSnippetPackModule();
     this.load(this.data.active);
     this.mobile(this.data.settings.pane || "build", false);
     window.addEventListener("pagehide", () => this.save());
@@ -2107,20 +2106,42 @@ export class AppShell extends HTMLElement {
       customizer.status(e.message);
     }
   }
-  openSnippetPacks() {
-    this.modal("<snippet-pack-dialog></snippet-pack-dialog>");
-    this.dialog.classList.add("import-modal");
-    this.querySelector("snippet-pack-dialog").configure(
-      this.data,
-      this.store.draft,
-    );
+  loadSnippetPackModule() {
+    if (this.snippetPackModule) return this.snippetPackModule;
+    const request = import("./snippet-pack-dialog.js");
+    this.snippetPackModule = request;
+    request.catch(() => {
+      if (this.snippetPackModule === request) this.snippetPackModule = null;
+    });
+    return request;
   }
-  applySnippetPack({ pack, mode }) {
+  async openSnippetPacks() {
+    this.modal(
+      '<section data-snippet-pack-loading><h1>Portable snippet packs</h1><p role="status">Loading snippet-pack tools…</p></section>',
+    );
+    const loading = this.querySelector("[data-snippet-pack-loading]");
+    try {
+      await this.loadSnippetPackModule();
+      if (!loading.isConnected || !this.dialog.open) return;
+      this.modal("<snippet-pack-dialog></snippet-pack-dialog>");
+      this.dialog.classList.add("import-modal");
+      this.querySelector("snippet-pack-dialog").configure(
+        this.data,
+        this.store.draft,
+      );
+    } catch {
+      if (!loading.isConnected || !this.dialog.open) return;
+      loading.innerHTML =
+        '<h1>Portable snippet packs</h1><p role="alert">Snippet-pack tools could not load. Your workspace is unchanged. Close this dialog and try again.</p>';
+    }
+  }
+  async applySnippetPack({ pack, mode }) {
     try {
       if (this.storageBlocked)
         throw Error(
           "Storage recovery is active. Restore storage before importing reusable snippets.",
         );
+      const { importPack } = await import("../snippets/pack-schema.js");
       const next = importPack(this.data, pack, mode);
       saveDrafts({
         ...this.data,

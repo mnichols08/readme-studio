@@ -242,6 +242,40 @@ test("snippet packs preview, import examples, keep collisions, export and import
   await expect(fresh.locator(".component-results article")).toHaveCount(6);
   await freshContext.close();
 });
+test("a delayed snippet-pack preload cannot replace a newer dialog", async ({
+  page,
+}) => {
+  let release;
+  const delayed = new Promise((resolve) => (release = resolve));
+  await page.route(
+    "**/src/components/snippet-pack-dialog.js*",
+    async (route) => {
+      await delayed;
+      await route.continue();
+    },
+  );
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page
+    .getByRole("button", { name: "Explore the sample profile" })
+    .click();
+  await page
+    .getByRole("button", { name: "Snippet packs", exact: true })
+    .click();
+  await expect(page.getByText("Loading snippet-pack tools…")).toBeVisible();
+  await page.locator("app-shell").evaluate((shell) => shell.openWidgets());
+  await expect(
+    page.getByRole("heading", { name: "Dynamic Widget Hub", exact: true }),
+  ).toBeVisible();
+  const loaded = page.waitForResponse((response) =>
+    response.url().includes("/src/components/snippet-pack-dialog.js"),
+  );
+  release();
+  await loaded;
+  await expect(page.locator("snippet-pack-dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Dynamic Widget Hub", exact: true }),
+  ).toBeVisible();
+});
 test("malicious pack metadata and storage failure leave reusable state unchanged", async ({
   page,
 }) => {
@@ -282,6 +316,117 @@ test("malicious pack metadata and storage failure leave reusable state unchanged
       .locator("app-shell")
       .evaluate((el) => el.data.componentLibrary?.snippets.length || 0),
   ).toBe(0);
+});
+
+test("extension packs expose provenance and capabilities, import offline, and reject executable manifests", async ({
+  page,
+  context,
+}) => {
+  await start(page);
+  const sourceBefore = await page
+    .getByRole("textbox", { name: "Markdown editor", exact: true })
+    .inputValue();
+  await page.keyboard.press("Escape");
+  await context.setOffline(true);
+  await page
+    .getByRole("button", { name: "Snippet packs", exact: true })
+    .click();
+  const pack = {
+    version: 2,
+    type: "readme-studio-snippet-pack",
+    name: "Reviewed extensions",
+    author: "Ada",
+    homepage: "https://example.com/kit",
+    snippets: [],
+    badgeCollections: [],
+    extensions: [
+      {
+        version: 1,
+        type: "readme-studio-extension-manifest",
+        name: "Release cards",
+        description: "Declarative release Markdown",
+        publisher: {
+          name: "Ada",
+          url: "https://example.com/extensions",
+        },
+        capabilities: ["render-markdown", "external-media"],
+        entries: [
+          {
+            version: 1,
+            id: "release-card",
+            name: "Release card",
+            category: "Utilities",
+            description: "A portable release heading",
+            kind: "custom",
+            fields: [],
+            tags: ["release"],
+            template:
+              "## Release\n\n![Status](https://cdn.example.com/status.svg)",
+          },
+        ],
+      },
+    ],
+  };
+  await page
+    .getByLabel("Snippet pack JSON", { exact: true })
+    .fill(JSON.stringify(pack));
+  await page
+    .getByRole("button", { name: "Review snippet pack", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Import Reviewed extensions",
+      exact: true,
+    }),
+  ).toBeFocused();
+  await expect(
+    page.getByText("Import trust review", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Source: Pasted JSON · Author: Ada/),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      /Claimed extension publishers: Ada — https:\/\/example.com\/extensions/,
+    ),
+  ).toBeVisible();
+  await expect(page.getByText(/external-media, render-markdown/)).toBeVisible();
+  await expect(page.getByText(/cannot load or evaluate scripts/)).toBeVisible();
+  await expect(
+    page.getByText("https://cdn.example.com/status.svg", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Import reviewed pack", exact: true })
+    .click();
+  await expect(page.locator(".pack-status")).toContainText("imported locally");
+  await expect(
+    page.getByRole("textbox", { name: "Markdown editor", exact: true }),
+  ).toHaveValue(sourceBefore);
+  expect(
+    await page
+      .locator("app-shell")
+      .evaluate(
+        (el) =>
+          el.data.componentLibrary.snippets.find(
+            (snippet) => snippet.name === "Release card",
+          )?.template,
+      ),
+  ).toBe("## Release\n\n![Status](https://cdn.example.com/status.svg)");
+
+  pack.extensions[0].script = "globalThis.extensionExecuted = true";
+  await page
+    .getByLabel("Snippet pack JSON", { exact: true })
+    .fill(JSON.stringify(pack));
+  await page
+    .getByRole("button", { name: "Review snippet pack", exact: true })
+    .click();
+  await expect(page.locator(".pack-status")).toContainText(
+    "cannot include executable",
+  );
+  expect(
+    await page.evaluate(() => globalThis.extensionExecuted),
+  ).toBeUndefined();
+  await context.setOffline(false);
 });
 
 test("component customizer saves presets, duplicates independently and detaches on manual source editing", async ({

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.23
+
+- Advance portable snippet packs to version 2 while migrating version-1 fixtures without changing reusable source and rejecting unknown future versions (#106, #172, #173).
+- Add bounded, declarative extension manifests with allowlisted inert capabilities and existing component rendering; scripts, modules, handlers, active markup and unsafe URL schemes are rejected rather than evaluated (#107, #174, #175).
+- Add a pre-import trust review for provenance, publisher claims, capabilities and external URLs. Extension imports work offline, leave draft Markdown unchanged and reject hostile manifests before reusable state changes (#108, #176, #177).
+- Update the preview sanitizer and development toolchain to patched releases; the release dependency audit reports no known vulnerabilities.
+- Load snippet-pack tooling on demand, keeping the main application within its existing release bundle budget.
+
 ## 1.9.22
 
 - Certify edit, audit, import, export and optional publishing keyboard/focus/status contracts for Story #103 and tasks #166/#167, with a documented manual assistive-technology acceptance protocol and explicit limits on automated evidence.
