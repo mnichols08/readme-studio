@@ -13,6 +13,7 @@ const REPOSITORY_LIMIT = 1000;
 const FINDING_LIMIT = 60;
 const URL_LIMIT = 20;
 const STORAGE_LIMIT = 2_000_000;
+const MAX_DATE = 8_640_000_000_000_000;
 const PROJECT_TYPES = new Set(projectTypes.map((type) => type.id));
 const README_STATES = new Set([
   "missing",
@@ -93,6 +94,7 @@ export function validateSnapshot(snapshot) {
     snapshot.id.length > 300 ||
     !Number.isSafeInteger(snapshot.capturedAt) ||
     snapshot.capturedAt < 0 ||
+    snapshot.capturedAt > MAX_DATE ||
     !Number.isSafeInteger(snapshot.auditRules) ||
     snapshot.auditRules < 1 ||
     !Number.isSafeInteger(snapshot.planRules) ||
@@ -112,6 +114,7 @@ export function validateSnapshot(snapshot) {
       !validRevision(record.revision) ||
       !Number.isSafeInteger(record.observedAt) ||
       record.observedAt < 0 ||
+      record.observedAt > MAX_DATE ||
       !README_STATES.has(record.state) ||
       !PROJECT_TYPES.has(record.projectType) ||
       typeof record.manualType !== "boolean" ||

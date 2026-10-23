@@ -310,4 +310,33 @@ describe("audit snapshots", () => {
       "could not be read",
     );
   });
+
+  it("rejects timestamps outside the renderable Date range", () => {
+    const storage = memory();
+    const item = createAuditSnapshot({
+      account: "example",
+      capturedAt: 1,
+      records: [record("tool")],
+    });
+    item.capturedAt = 8_640_000_000_000_001;
+    item.id = `example:${item.capturedAt}`;
+    storage.setItem(
+      AUDIT_SNAPSHOTS_KEY,
+      JSON.stringify({ version: 1, items: [item] }),
+    );
+    expect(new AuditSnapshots(() => storage).error).toContain(
+      "could not be read",
+    );
+
+    item.capturedAt = 1;
+    item.id = "example:1";
+    item.repositories[0].observedAt = 8_640_000_000_000_001;
+    storage.setItem(
+      AUDIT_SNAPSHOTS_KEY,
+      JSON.stringify({ version: 1, items: [item] }),
+    );
+    expect(new AuditSnapshots(() => storage).error).toContain(
+      "could not be read",
+    );
+  });
 });

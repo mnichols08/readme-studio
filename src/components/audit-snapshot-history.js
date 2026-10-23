@@ -16,6 +16,7 @@ export class AuditSnapshotHistory extends HTMLElement {
     this.querySelector("[data-capture]").onclick = () => this.capture();
     this.onStorage = (event) => {
       if (event.key === null || event.key === AUDIT_SNAPSHOTS_KEY) {
+        this.clearComparison();
         this.snapshots.read();
         this.draw();
       }
@@ -43,6 +44,16 @@ export class AuditSnapshotHistory extends HTMLElement {
     return this.snapshots.items
       .filter((item) => item.account === account)
       .sort((a, b) => a.capturedAt - b.capturedAt);
+  }
+
+  fingerprint(items) {
+    return items.map((item) => item.id).join("|");
+  }
+
+  clearComparison() {
+    this.renderedFingerprint = "";
+    const target = this.querySelector("[data-diff]");
+    if (target) target.innerHTML = "";
   }
 
   capture() {
@@ -96,12 +107,20 @@ export class AuditSnapshotHistory extends HTMLElement {
           )
           .join("")}</ol>`
       : `<p>No audit snapshots are saved for this account.</p>`;
-    history.querySelectorAll("[data-delete]").forEach((button) => {
+    const deleteButtons = [...history.querySelectorAll("[data-delete]")];
+    deleteButtons.forEach((button, index) => {
       button.disabled = !!this.busy;
       button.onclick = () => {
         try {
           this.snapshots.remove(button.dataset.delete);
           this.draw();
+          const remaining = [
+            ...this.querySelectorAll("[data-history] [data-delete]"),
+          ];
+          (
+            remaining[Math.min(index, remaining.length - 1)] ||
+            this.querySelector("[data-capture]")
+          )?.focus();
           this.status(
             "Audit snapshot deleted. Current audit results are unchanged.",
           );
@@ -115,10 +134,13 @@ export class AuditSnapshotHistory extends HTMLElement {
 
   drawComparison(items) {
     const target = this.querySelector("[data-compare]");
+    const fingerprint = this.fingerprint(items);
+    if (this.renderedFingerprint && this.renderedFingerprint !== fingerprint)
+      this.clearComparison();
     if (items.length < 2) {
       target.innerHTML =
         "<p>Capture this account at least twice to compare explicit observations over time.</p>";
-      this.querySelector("[data-diff]").innerHTML = "";
+      this.clearComparison();
       return;
     }
     const options = items
@@ -152,6 +174,7 @@ export class AuditSnapshotHistory extends HTMLElement {
       }</section>`;
     this.querySelector("[data-diff]").innerHTML =
       `<p>Compared two saved observations. This is not live monitoring; Unknown means the evidence was not safely comparable.</p>${list("Added", result.added, (item) => findingTitle(item.id))}${list("Resolved", result.resolved, (item) => findingTitle(item.id))}${list("Unknown", result.unknown, (item) => `${item.id ? `${findingTitle(item.id)} · ` : ""}${item.reason}`)}`;
+    this.renderedFingerprint = this.fingerprint(this.accountItems());
     this.status("Audit snapshot comparison complete.");
   }
 

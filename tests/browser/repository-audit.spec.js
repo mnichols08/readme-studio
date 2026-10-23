@@ -77,6 +77,9 @@ test("captures explicit local audit snapshots and compares only fresh observatio
   await history
     .getByRole("button", { name: "Capture current audit results" })
     .click();
+  await history
+    .getByRole("button", { name: "Capture current audit results" })
+    .click();
   await history.getByRole("button", { name: "Compare snapshots" }).click();
   await expect(history).toContainText("Added (1)");
   await expect(history).toContainText("Replace Vite starter text");
@@ -84,13 +87,13 @@ test("captures explicit local audit snapshots and compares only fresh observatio
   await expect(history).toContainText("Review TODO text");
   await expect(history).toContainText("This is not live monitoring");
 
-  await history
-    .getByRole("button", { name: /Delete audit snapshot from/ })
-    .first()
-    .click();
-  await expect(
-    history.getByRole("button", { name: /Delete audit snapshot from/ }),
-  ).toHaveCount(1);
+  const deleteSnapshot = history.getByRole("button", {
+    name: /Delete audit snapshot from/,
+  });
+  await deleteSnapshot.first().click();
+  await expect(deleteSnapshot).toHaveCount(2);
+  await expect(deleteSnapshot.first()).toBeFocused();
+  await expect(history.locator("[data-diff]")).toBeEmpty();
   await expect(history.getByRole("status")).toContainText(
     "Current audit results are unchanged",
   );
