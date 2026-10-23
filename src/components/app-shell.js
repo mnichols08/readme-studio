@@ -3,6 +3,8 @@ import {
   validateBatch,
   decideBatch,
   nextBatchIndex,
+  recordBatchOpen,
+  reviewBatchRecovery,
 } from "../workspace/batch-review.js";
 import {
   validateShared,
@@ -147,6 +149,7 @@ const withDetachments = (message, result) =>
 export class AppShell extends HTMLElement {
   // Section form saves that reached the README (see unsavedSectionGuard).
   sectionCommits = 0;
+  batchOpened = new Set();
   connectedCallback() {
     let saved;
     try {
@@ -1206,13 +1209,19 @@ export class AppShell extends HTMLElement {
       }
       if (["reviewed", "skipped", "pending"].includes(action)) {
         const index = action === "pending" ? value : batch.current;
+        const item = batch.items[index];
+        const checkpointKey = item?.checkpoint
+          ? `${item.checkpoint.documentId}\0${item.checkpoint.at}`
+          : "";
         if (
           action === "reviewed" &&
-          findDocument(this.data.drafts, batch.items[index])?.id !==
-            this.store.draft.id
+          (findDocument(this.data.drafts, item)?.id !== this.store.draft.id ||
+            (reviewBatchRecovery(batch, this.data.drafts).items[index]
+              .status !== "current" &&
+              !this.batchOpened.has(checkpointKey)))
         )
           throw Error(
-            "Open the current batch document before marking it reviewed.",
+            "Reopen the current batch document before marking it reviewed.",
           );
         batch = decideBatch(batch, index, action);
         this.setBatch(batch);
@@ -1247,9 +1256,15 @@ export class AppShell extends HTMLElement {
         panel.status(
           `Opening ${documents.length + 1} of ${indexes.length}: ${batch.items[index].repository}. Existing local edits are preserved.`,
         );
-        documents.push(
-          await this.batchDocument(batch.items[index], panel.controller.signal),
+        const document = await this.batchDocument(
+          batch.items[index],
+          panel.controller.signal,
         );
+        documents.push(document);
+        batch = recordBatchOpen(batch, index, document);
+        const opened = batch.items[index].checkpoint;
+        this.batchOpened.add(`${opened.documentId}\0${opened.at}`);
+        this.setBatch(batch);
       }
       panel.controller.signal.throwIfAborted();
       this.setBatch({

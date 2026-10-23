@@ -16,6 +16,14 @@ _Avoid_: Connected, synced
 A workset repository with no matching document target in the current workspace. The identity remains in the workset so portable recovery is lossless; its absence does not trigger a fetch or create a document.
 _Avoid_: Deleted, unavailable, broken
 
+**Batch checkpoint**:
+The bounded local record of the document identity, target identity and exact Source fingerprint from one successful batch open. It contains no Source and authorizes no remote action.
+_Avoid_: Save point, publish checkpoint, remote state
+
+**Recovery review**:
+A local comparison of batch checkpoints with current workspace documents after an interruption. It reports matching, changed, missing, target-changed and not-yet-opened items without fetching, editing, publishing or replaying work.
+_Avoid_: Resume publish, synchronization, automatic recovery
+
 ## Language: documentation drift (Epic 13)
 
 **Source**:

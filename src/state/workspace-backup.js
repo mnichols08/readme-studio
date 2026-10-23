@@ -111,7 +111,7 @@ export function validateWorkspace(data, { preserveIds = false } = {}) {
     visualLibrary: validateVisualLibrary(data.visualLibrary),
     componentLibrary: validateComponents(data.componentLibrary),
     sharedComponents: validateShared(data.sharedComponents),
-    reviewBatch: validateBatch(data.reviewBatch),
+    reviewBatch: validateBatch(data.reviewBatch, documentIds),
     evidenceSnapshots: validateSnapshots(data.evidenceSnapshots, documentIds),
     ...(typeof data.createdAt === "string"
       ? { createdAt: data.createdAt }

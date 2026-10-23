@@ -210,3 +210,46 @@ test("failed next fetch retains progress and skips only the failed current item"
     ),
   ).toEqual(["reviewed", "skipped", "pending"]);
 });
+
+test("recovered batches detect local conflicts without fetching or replaying a publish", async ({
+  page,
+}) => {
+  await start(page);
+  await page.evaluate(() => {
+    const app = document.querySelector("app-shell");
+    app.store.raw("# Changed after the batch checkpoint\r\n");
+    app.save();
+  });
+  await page.reload();
+  let githubRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().startsWith("https://api.github.com/")) githubRequests++;
+  });
+  await page.route("https://api.github.com/**", (route) => route.abort());
+  await page.getByRole("button", { name: "Batch review", exact: true }).click();
+  const panel = page.locator("batch-review");
+  await expect(panel).toContainText("Recovery review");
+  await expect(panel).toContainText("Changed since last opened");
+  expect(githubRequests).toBe(0);
+  await panel
+    .getByRole("button", { name: "Mark reviewed & improve next" })
+    .click();
+  await expect(panel.locator("[data-status]")).toContainText(
+    "Reopen the current batch document",
+  );
+  expect(
+    await page.evaluate(
+      () => document.querySelector("app-shell").data.reviewBatch.items[0].state,
+    ),
+  ).toBe("pending");
+  expect(githubRequests).toBe(0);
+  await panel
+    .getByRole("button", { name: "Open example/repo-0", exact: true })
+    .click();
+  expect(githubRequests).toBe(0);
+  expect(
+    await page.evaluate(
+      () => document.querySelector("app-shell").store.draft.markdown,
+    ),
+  ).toBe("# Changed after the batch checkpoint\r\n");
+});
